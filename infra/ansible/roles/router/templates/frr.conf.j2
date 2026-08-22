@@ -1,0 +1,74 @@
+! =============================================================================
+!  {{ node }} — {{ desc }}
+!  자동 생성 (Ansible / roles/router). 직접 수정하면 다음 배포에 덮어써진다.
+!  단계: {{ lab_stage }}
+!
+!  확인 명령 (vtysh):
+!    show ip route            <- 라우팅 테이블
+!    show ip ospf neighbor    <- OSPF 인접
+!    show ip ospf interface   <- 인터페이스별 area/cost
+! =============================================================================
+{% set si = stages.index(lab_stage) %}
+{% set v6 = si >= stages.index('m5') %}
+{% set m3 = stages.index('m3') %}
+{% set m4 = stages.index('m4') %}
+{% set m9 = stages.index('m9') %}
+frr defaults traditional
+hostname {{ node }}
+log syslog informational
+service integrated-vtysh-config
+!
+{% if si >= m3 and si < m4 and static_routes_m3 %}
+! ---- M3 : 정적 라우팅 ----------------------------------------------------
+!  ※ 양방향으로 넣어야 통신이 된다. 한쪽만 넣으면 "가는 길은 있는데 오는 길이 없다".
+{% for r in static_routes_m3 %}
+ip route {{ r.prefix }} {{ r.via }}   ! {{ r.desc }}
+{% endfor %}
+!
+{% endif %}
+{% if si >= m4 and ospf_enabled %}
+! ---- M4 : OSPF -----------------------------------------------------------
+{% for i in lab_interfaces if i.active and i.ipv4 is defined and i.role in ['p2p', 'gateway', 'loopback'] %}
+interface {{ i.name }}
+{% if i.desc %} description {{ i.desc }}
+{% endif %}
+ ip ospf area {{ routing.ospf.area }}
+{% if i.ospf_cost is defined %}
+ ip ospf cost {{ i.ospf_cost }}         ! 주 경로 10 / 백업 100
+{% endif %}
+{% if v6 and i.ipv6 is defined %}
+ ipv6 ospf6 area {{ routing.ospf6.area }}
+{% if i.role in ['gateway', 'loopback'] or i.name in ospf_passive %}
+ ipv6 ospf6 passive
+{% endif %}
+{% endif %}
+!
+{% endfor %}
+router ospf
+ ospf router-id {{ loopback_ipv4 }}
+{% for p in ospf_passive %}
+ passive-interface {{ p }}              ! 사용자/서버망 — Hello 를 보낼 이유가 없다
+{% endfor %}
+{% for i in lab_interfaces if i.active and i.role | default('') == 'loopback' %}
+ passive-interface {{ i.name }}
+{% endfor %}
+{% if si >= m9 and edge_routing.ospf_default_originate | default(false) %}
+ default-information originate          ! 내부 라우터들이 기본 경로를 학습한다
+{% endif %}
+!
+{% if v6 %}
+router ospf6
+ ospf6 router-id {{ loopback_ipv4 }}
+!
+{% endif %}
+{% endif %}
+{% if si >= m9 and edge_routing.static is defined %}
+! ---- M9 : 인터넷 경계 ----------------------------------------------------
+!  경계는 IGP 로 풀지 않는다. 실무에서도 정적 default 또는 BGP 를 쓴다.
+{% for r in edge_routing.static if r.via %}
+ip route {{ r.prefix }} {{ r.via }}   ! {{ r.desc }}
+{% endfor %}
+{% endif %}
+!
+line vty
+!

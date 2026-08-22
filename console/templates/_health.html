@@ -1,0 +1,7 @@
+{# 어느 화면에서든 Proxmox 연결 상태를 볼 수 있게 헤더에 붙이는 칩. #}
+<button class="hchip {{ health.level if health else 'unknown' }}" id="pvechip"
+        title="Proxmox 연결 상태 — 클릭하면 자세히 본다">
+  <span class="hdot"></span>
+  <span class="htext">{% if health %}Proxmox {{ {'ok':'정상','warn':'주의','error':'오류'}[health.level] }}
+    {% else %}Proxmox 확인 중{% endif %}</span>
+</button>

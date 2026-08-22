@@ -1,0 +1,30 @@
+---
+# M2-01 : pc1 의 기본 경로 삭제
+#   증상  : pc1 만 아무 데도 못 간다. 링크 UP, 주소도 정상. pc2 는 멀쩡하다.
+#           ping 시 "Network is unreachable" — 패킷이 나가지도 않는다.
+#   정답  : ip route show 에 default 줄이 없다.
+#   노림수: 에러 메시지를 읽는 습관. "unreachable" 은 상대 문제가 아니라 내 문제다. (C1)
+- name: "scenario m02-01 :: pc1 기본 경로 누락"
+  hosts: pc1
+  become: true
+  gather_facts: false
+  vars:
+    gw: "{{ ipv4.segments.vlan10.gateway }}"
+  tasks:
+    - name: 기본 경로 삭제
+      ansible.builtin.command: "ip route del default"
+      changed_when: true
+      failed_when: false
+      when: scenario_action | default('break') == 'break'
+
+    - name: 기본 경로 복구
+      ansible.builtin.command: "ip route replace default via {{ gw }} dev eth1 proto static"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'pc1 의 기본 경로를 지웠다. 교육생에게는 "pc1 에서 아무 데도 안 된다"고만 알릴 것.'
+             if scenario_action | default('break') == 'break'
+             else 'pc1 기본 경로 복구 완료 (via ' ~ gw ~ ').' }}

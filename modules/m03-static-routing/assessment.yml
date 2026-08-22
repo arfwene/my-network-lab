@@ -1,0 +1,278 @@
+# M3 평가 — 퀴즈(경로 예측·판단) + 검사(양방향으로 넣었는가 · 뒷정리를 했는가) + 서술
+quiz:
+  pass_score: 80
+  questions:
+    - id: q1
+      type: single
+      text: |
+        라우터의 라우팅 테이블에 아래 세 줄이 있다.
+        `S>* 0.0.0.0/0 via 10.9.9.1`
+        `S>* {{ zone['site-b'] }} via {{ p2p['r1-r2'].addresses.r2 }}`
+        `S>* {{ cidr.vlan40 }} via 10.9.9.9`
+        `{{ ip.web }}` 로 가는 패킷은 어느 next-hop 으로 나가는가?
+      choices:
+        - "10.9.9.1 — 기본 경로가 항상 먼저 쓰인다"
+        - "{{ p2p['r1-r2'].addresses.r2 }} — 위에서부터 순서대로 매칭한다"
+        - "셋 다 매칭되므로 부하가 분산된다"
+        - "10.9.9.9 — 가장 긴 prefix 가 이긴다 (Longest Prefix Match)"
+      answer: [3]
+      explain: |
+        라우팅은 **가장 구체적인(prefix 가 긴) 경로**를 고른다. 순서도, 위아래도 상관없다.
+        `{{ cidr.vlan40 }}`(/24) > `{{ zone['site-b'] }}`(/19) > `0.0.0.0/0`(/0).
+        → 그래서 잘못 넣은 /32 하나가 요약 경로 전체를 무력화할 수 있다 (실습 2).
+
+    - id: q2
+      type: single
+      text: |
+        pc1 → web 으로 ping 을 보냈는데 무응답이다. web 에서 캡처해 보니
+        **echo request 는 정상적으로 도착하고 있었고, echo reply 도 나가고 있었다.**
+        무엇을 의심해야 하는가?
+      choices:
+        - "web 서버가 죽었다 — 응답이 안 오는 것은 서버가 멈췄다는 뜻이다"
+        - "pc1 의 방화벽이 들어오는 echo reply 를 막고 있다"
+        - "ICMP 는 원래 단방향이라 reply 가 안 오는 것이 정상이다"
+        - "가는 경로는 있으나 돌아오는 경로가 없다 — 리턴 경로를 확인한다"
+      answer: [3]
+      explain: |
+        **이것이 M3 에서 가장 중요한 판단이다.**
+        통신은 왕복이다. 가는 길만 넣고 오는 길을 안 넣으면 정확히 이 증상이 나온다.
+        요청이 도착했다는 것을 캡처로 확인한 순간, 문제 범위는 **리턴 경로 하나**로 좁혀진다.
+        정적 라우팅은 언제나 **양쪽에** 넣어야 한다.
+
+    - id: q3
+      type: single
+      text: |
+        `traceroute` 결과 중간 홉이 `* * *` 로 나온다. 그런데 최종 목적지까지는 응답이 온다.
+        무엇이 맞는가?
+      choices:
+        - "그 홉이 ICMP Time Exceeded 를 보내지 않을 뿐, 패킷은 지나가고 있다"
+        - "그 홉에서 패킷이 버려지고 있다. 절단 지점이므로 그 장비의 정책부터 확인해야 한다"
+        - "경로가 불안정해 그 구간만 간헐적으로 끊기고 있다는 뜻이다"
+        - "최종 응답은 다른 경로로 온 것이다. 비대칭 경로의 증거다"
+      answer: [0]
+      explain: |
+        `* * *` 는 **"그 홉이 응답을 안 했다"** 는 뜻이지 "패킷이 못 갔다"가 아니다.
+        원인: ICMP 차단 정책 · **ICMP rate limit** · 응답 소스 주소 문제.
+        마지막 줄까지 응답이 온다면 경로는 살아 있다.
+        → 이 오독으로 멀쩡한 구간을 파는 일이 실무에서 매우 흔하다 (실습 5).
+
+    - id: q4
+      type: single
+      text: "AD(Administrative Distance)와 메트릭(metric)의 차이로 옳은 것은?"
+      choices:
+        - "둘 다 같은 말이며, 벤더에 따라 부르는 이름만 다르다"
+        - "AD 는 홉 수로 잰 거리를, 메트릭은 링크의 지연시간을 뜻한다"
+        - "AD 는 동적 라우팅 프로토콜에만, 메트릭은 정적 경로에만 쓰이는 값이라 서로 비교되지 않는다"
+        - "AD 는 어느 출처(프로토콜)를 믿을지, 메트릭은 같은 출처 안에서 어느 경로가 나은지를 정한다"
+      answer: [3]
+      explain: |
+        같은 목적지를 정적(AD 1)과 OSPF(AD 110)가 동시에 알려 주면 **AD 가 낮은 정적이 이긴다.**
+        출처가 정해진 뒤, 그 안에서 여러 경로가 있으면 그때 메트릭(OSPF 는 cost)으로 고른다.
+        → M4 에서 정적 경로를 반드시 걷어내야 하는 이유가 이것이다. 안 걷으면 OSPF 가 학습해도 쓰이지 않는다.
+
+    - id: q5
+      type: multi
+      text: "`show ip route` 출력에서 아래 표시가 뜻하는 것을 **옳게** 짝지은 것을 모두 고르시오."
+      choices:
+        - "`S` 로 보이면 next-hop 이 죽어 있어도 항상 사용된다"
+        - "`S` — 정적 경로 (static)"
+        - "`C` — 직접 연결된 대역 (connected)"
+        - "`>` — 이 경로가 실제로 선택되어 커널에 올라갔다"
+      answer: [1, 2, 3]
+      explain: |
+        `>*` 가 붙지 않은 경로는 **테이블에 있을 뿐 쓰이지 않는다**(next-hop 을 해석하지 못하는 등).
+        "경로를 넣었는데 왜 안 되지" 의 절반이 여기서 갈린다. **`>` 를 먼저 볼 것.**
+
+    - id: q6
+      type: single
+      text: |
+        `{{ zone['site-b'] }}` 경로 한 줄이 `{{ cidr.vlan40 }}` 을 포함한다.
+        이렇게 요약 경로를 쓰는 실익으로 가장 정확한 것은?
+      choices:
+        - "요약된 대역은 라우터가 한 번에 조회하므로 조회 횟수가 줄어 패킷이 더 빨리 전달된다"
+        - "라우팅 테이블이 작아지고, 그 사이트에 대역을 추가해도 다른 라우터를 건드릴 필요가 없다"
+        - "내부 대역 구조가 밖으로 드러나지 않아 보안이 강화된다"
+        - "광고하는 경로 수가 줄어 링크 대역폭을 눈에 띄게 절약한다"
+      answer: [1]
+      explain: |
+        M2 과제 1 에서 "요약 가능하게 배치하라"고 한 이유가 여기서 회수된다.
+        Site-B 에 VLAN 을 하나 더 만들어도 r1 의 설정은 그대로다.
+        요약이 안 되는 설계는 대역을 추가할 때마다 **모든 라우터를 고쳐야 한다.**
+
+    - id: q7
+      type: single
+      text: |
+        정적 라우팅 대신 동적 라우팅(OSPF 등)을 선택하는 가장 타당한 이유는?
+      choices:
+        - "정적 라우팅은 패킷마다 테이블을 다시 계산해 전달이 느려진다"
+        - "정적 라우팅은 인증이 없어 경로를 위조당할 위험이 크다"
+        - "정적 라우팅으로는 여러 대역을 하나로 묶어 요약 광고를 할 수 없어 테이블이 커진다"
+        - "경로가 많아지면 사람이 유지할 수 없고, 장애 시 자동으로 우회하지 못한다"
+      answer: [3]
+      explain: |
+        정적 라우팅은 **예측 가능하고 단순**하다는 강점이 있다 (경계 · 소규모 · 특수 경로에 지금도 쓴다).
+        한계는 두 가지다 — ① 규모가 커지면 관리 불가 ② **링크가 죽어도 스스로 바꾸지 않는다.**
+        ②를 해결하는 것이 M4 다.
+
+    - id: q8
+      type: short
+      text: |
+        `ping -t 1 {{ ip.web }}` 을 pc1 에서 실행하면 어느 장비가 응답하는가? (노드 이름 하나)
+      answer: ["r1", "r1 게이트웨이", "r1(게이트웨이)", "게이트웨이", "게이트웨이(r1)",
+                "기본 게이트웨이", "gw", "default gateway"]
+      explain: |
+        TTL 1 로 나간 패킷은 **첫 번째 라우터에서 0 이 되어** 버려지고,
+        그 라우터가 ICMP Time Exceeded 를 돌려준다. 그것이 게이트웨이 r1 이다.
+        TTL 을 1,2,3… 으로 올리며 이 과정을 반복하는 것이 traceroute 다.
+
+    - id: q9
+      type: single
+      text: |
+        모든 라우터의 경로가 정상인데도 pc1 → web 통신만 안 된다.
+        r4 에서 web 으로는 ping 이 정상이다. 다음으로 무엇을 확인해야 하는가?
+      choices:
+        - "r1 의 경로를 다시 본다 — 출발지 쪽 라우터가 가장 의심스럽고 확인도 가장 빠르다"
+        - "스위치의 MAC 테이블을 본다 — L2 학습이 안 됐을 수 있다"
+        - "web 서버 자신의 기본 경로를 확인한다 — 리턴 경로는 라우터만의 문제가 아니다"
+        - "케이블을 교체한다 — 특정 구간만 실패하면 물리 문제다"
+      answer: [2]
+      explain: |
+        r4 ↔ web 은 **같은 대역**이라 경로 없이도 통한다. 그래서 서버의 기본 경로가 없어도 정상으로 보인다.
+        다른 대역에서 오는 요청에 답하려면 서버에도 돌아갈 길이 있어야 한다.
+        → 서버 담당자와 네트워크 담당자가 서로 "우리 쪽은 정상"이라고 말하는 전형적 상황이다.
+
+checks:
+  required: true
+  items:
+    - id: r1-route-to-siteb
+      kind: config
+      title: "r1 에 Site-B 요약 경로가 있는가 (가는 길)"
+      host: r1
+      run: "vtysh -c 'show ip route static'"
+      expect_all: ["{{ zone['site-b'] }}", "{{ p2p['r1-r2'].addresses.r2 }}"]
+      hint: |
+        vtysh 로 확인·설정한다.
+          vtysh -c "show ip route static"
+          sudo vtysh -c "conf t" -c "ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}"
+        설정 파일 기준으로 되돌리려면 sudo systemctl restart frr
+
+    - id: r2-routes-both
+      kind: config
+      title: "r2 에 양방향 경로가 다 있는가 (Site-A · Site-B)"
+      host: r2
+      run: "vtysh -c 'show ip route static'"
+      expect_all:
+        - "{{ zone['site-a'] }}"
+        - "{{ p2p['r1-r2'].addresses.r1 }}"
+        - "{{ zone['site-b'] }}"
+        - "{{ p2p['r2-r4'].addresses.r4 }}"
+      hint: "r2 는 가운데 라우터다. 양쪽으로 가는 경로가 **둘 다** 있어야 한다."
+
+    - id: r4-return-route
+      kind: config
+      title: "r4 에 Site-A 리턴 경로가 있는가 ★"
+      host: r4
+      run: "vtysh -c 'show ip route static'"
+      expect_all: ["{{ zone['site-a'] }}", "{{ p2p['r2-r4'].addresses.r2 }}"]
+      hint: |
+        이 한 줄이 없으면 요청은 도착하는데 응답이 돌아오지 못한다.
+        sudo vtysh -c "conf t" -c "ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}"
+
+    - id: r1-no-leftover
+      kind: config
+      title: "실습 2 에서 넣은 blackhole 경로를 정리했는가"
+      host: r1
+      run: "vtysh -c 'show ip route static'"
+      expect_none: ["blackhole", "{{ ip.web }}/32"]
+      hint: |
+        sudo vtysh -c "conf t" -c "no ip route {{ ip.web }}/32 blackhole"
+        더 긴 prefix 가 남아 있으면 요약 경로가 무력화된 채 다음 모듈로 간다.
+
+    - id: cross-site-ping
+      kind: connectivity
+      title: "pc1 → web 사이트 간 통신이 되는가"
+      host: pc1
+      run: "ping -c2 -W2 {{ ip.web }} >/dev/null && echo REACHABLE"
+      expect: "REACHABLE"
+      hint: |
+        순서대로 볼 것.
+          ① traceroute {{ ip.web }}  — 어디까지 가는가
+          ② 멈춘 홉의 라우터에서 show ip route  — 가는 경로가 있는가
+          ③ **반대 방향** 경로도 있는가 (리턴 경로)
+
+    - id: cross-site-http
+      kind: connectivity
+      title: "pc1 → web HTTP 응답이 오는가 ★"
+      host: pc1
+      run: "curl -sS -m5 -i http://{{ ip.web }}/health"
+      expect_all: ["200", "X-Lab-Node: web", "ok"]
+      hint: |
+        ping 이 되는데 HTTP 만 안 되면 경로가 아니라 서비스 문제다.
+        web 에서 systemctl status nginx 를 볼 것.
+
+    - id: path-as-designed
+      kind: state
+      title: "경로가 설계대로 r1 → r2 → r4 를 지나는가"
+      host: pc1
+      run: "traceroute -n -w1 -q1 -m6 {{ ip.web }}"
+      expect_all:
+        - "{{ gw.vlan10 }}"
+        - "{{ p2p['r1-r2'].addresses.r2 }}"
+        - "{{ p2p['r2-r4'].addresses.r4 }}"
+        - "{{ ip.web }}"
+      hint: |
+        홉이 하나라도 빠지거나 `* * *` 가 남아 있으면 실습 5 의 rate limit 을 되돌리지 않은 것이다.
+        r2 에서: sudo sysctl -w net.ipv4.icmp_ratelimit=1000
+
+    - id: r2-icmp-restored
+      kind: config
+      title: "실습 5 에서 건드린 ICMP rate limit 을 되돌렸는가"
+      host: r2
+      run: "cat /proc/sys/net/ipv4/icmp_ratelimit"
+      expect: "1000"
+      hint: |
+        sudo sysctl -w net.ipv4.icmp_ratelimit=1000
+        이걸 놔두면 다음 모듈에서 traceroute 가 계속 `* * *` 로 나와 엉뚱한 곳을 파게 된다.
+
+    - id: web-default-route
+      kind: config
+      title: "web 서버에 기본 경로가 있는가 (서버 쪽 리턴 경로)"
+      host: web
+      run: "ip route show default"
+      expect: "default via {{ gw.vlan40 }}"
+      hint: |
+        같은 대역인 r4 와는 경로 없이도 통하므로 "서버는 정상"으로 보인다.
+        다른 대역에서 온 요청에 답하려면 서버에도 돌아갈 길이 있어야 한다. sudo netplan apply
+
+written:
+  items:
+    - id: return-path
+      title: "리턴 경로를 어떻게 확인했는가 ★"
+      kind: text
+      review: optional
+      auto_pass: true
+      min_chars: 250
+      prompt: |
+        실습 4(리턴 경로 제거) 또는 장애 주입 중 하나를 골라, 아래 순서로 적을 것.
+        **결론이 아니라 판별 과정**을 남긴다.
+
+          1. 증상 — 무엇이 안 됐는가
+          2. 절단 지점 찾기 — 어디까지 갔는지 어떤 명령으로 확인했는가 (traceroute · 캡처)
+          3. **가는 길과 오는 길 중 어느 쪽이 문제인지 어떻게 판별했는가** ← 핵심
+          4. 원인과 조치, 그리고 되돌렸다는 사실
+      rubric:
+        - key: 증상
+          desc: "무엇이 안 됐는지 구체적으로 적었는가"
+          any: ["ping", "통신", "무응답", "실패", "안 됨", "HTTP", "타임아웃"]
+        - key: 절단지점
+          desc: "어디까지 갔는지 확인한 방법을 적었는가"
+          any: ["traceroute", "tcpdump", "캡처", "홉", "hop", "어디까지"]
+        - key: 방향판별
+          desc: "가는 길/오는 길을 구분한 근거를 댔는가"
+          any: ["리턴", "돌아", "reply", "응답", "역방향", "반대 방향", "왕복", "양방향"]
+        - key: 경로확인
+          desc: "라우팅 테이블을 근거로 삼았는가"
+          any: ["show ip route", "ip route", "라우팅 테이블", "next-hop", "next hop", "경로가 없"]
+        - key: 조치
+          desc: "고친 방법과 되돌린 사실을 적었는가"
+          any: ["복구", "추가", "삭제", "원복", "되돌", "다시 넣", "다시 추가", "ip route"]

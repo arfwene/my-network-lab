@@ -1,0 +1,280 @@
+# M8 평가 — 퀴즈(판별·책임 소재·연결 방향) + 검사(이름·HTTP·FTP 가 실제로 되는가)
+quiz:
+  pass_score: 80
+  questions:
+    - id: q1
+      type: single
+      text: |
+        "웹사이트가 안 열려요" 라는 신고를 받았다.
+        **DNS 문제인지 네트워크 문제인지** 가르는 가장 빠른 방법은?
+      choices:
+        - "서버 로그를 본다 — 요청이 서버까지 왔는지 확인한다"
+        - "이름 대신 IP 로 직접 접속해 본다 — 되면 DNS, 안 되면 네트워크·서비스"
+        - "브라우저를 재시작한다 — 캐시가 오래된 주소를 들고 있으면 그것만으로 실패한다"
+        - "케이블과 링크 상태를 확인한다 — 물리 계층부터 순서대로 본다"
+      answer: [1]
+      explain: |
+        **한 번의 시도로 문제 범위가 반으로 갈린다.**
+          IP 로는 된다  → 이름을 IP 로 바꾸는 과정(DNS)이 문제
+          IP 로도 안 된다 → 경로 · 방화벽 · 서비스 문제 (DNS 는 무죄)
+        "인터넷이 안 돼요" 라는 신고의 **1차 분기점**이며, 30초면 끝난다.
+
+    - id: q2
+      type: single
+      text: |
+        `dig +short web.{{ dns.zone }}` 은 **정상적으로 IP 를 돌려준다.**
+        그런데 그 이름으로 접속하면 실패한다. IP 로 직접 접속해도 실패한다. 무엇을 의심하는가?
+      choices:
+        - "DNS 서버 장애 — 응답이 늦어 접속이 실패한 것이다"
+        - "브라우저 캐시 — 오래된 주소를 들고 있는 것이다"
+        - "케이블 불량 — 물리 계층에서 패킷이 손실되는 것이다"
+        - "DNS 는 정상이다. 경로 · 방화벽 · 서비스 쪽 문제다"
+      answer: [3]
+      explain: |
+        이름이 풀렸다 = **DNS 는 자기 일을 다 했다.**
+        여기서 DNS 를 더 파는 것은 시간 낭비다. M6 의 감별표로 넘어가면 된다.
+
+    - id: q3
+      type: single
+      text: |
+        이름은 잘 풀리는데, **돌아온 IP 가 엉뚱한 주소**다. 접속은 당연히 안 된다.
+        무엇이 문제인가?
+      choices:
+        - "DNS 서버가 죽었다 — 응답 자체가 오지 않는다"
+        - "네트워크 경로 문제 — 그 주소로 갈 길이 없다"
+        - "DNS 레코드가 잘못 등록돼 있다"
+        - "클라이언트 설정 문제 — resolv.conf 가 틀렸다"
+      answer: [2]
+      explain: |
+        **"이름이 풀린다"와 "맞는 답이 왔다"는 다르다.**
+        서버 이전 후 레코드를 안 고쳤거나, 오타로 잘못 등록된 경우다.
+        → 그래서 `dig` 결과를 볼 때 **값까지 확인**해야 한다. 응답이 왔다고 넘어가면 안 된다.
+
+    - id: q4
+      type: multi
+      text: "DNS 레코드 타입의 설명으로 **옳은 것**을 모두 고르시오."
+      choices:
+        - "AAAA — 이름을 IPv6 주소로"
+        - "A — 이름을 IPv4 주소로"
+        - "CNAME — 이름을 다른 이름으로 (별칭)"
+        - "PTR — 이름을 IP 로 (A 와 같다)"
+        - "NS — 이 존을 책임지는 네임서버"
+      answer: [0, 1, 2, 4]
+      explain: |
+        PTR 은 **반대 방향**이다 — IP 를 이름으로 (역방향 조회).
+        메일 서버 검증이나 로그 분석에서 쓰이며, 정방향과 별개로 관리해야 한다.
+        CNAME 은 **다른 이름**을 가리키므로, 클라이언트가 그 이름을 **한 번 더** 조회하게 된다.
+
+    - id: q5
+      type: single
+      text: |
+        `telnet {{ ip.web }} 80` 으로 붙은 뒤 HTTP 요청을 손으로 쓰려 한다.
+        **HTTP/1.1 에서 반드시 필요한 헤더**는?
+      choices:
+        - "`User-Agent`"
+        - "`Host`"
+        - "`Accept`"
+        - "없다. 요청 줄만 있으면 된다"
+      answer: [1]
+      explain: |
+        한 IP 에 여러 사이트가 올라가는 것이 보통이라, 서버는 **어느 사이트로 온 요청인지**를 알아야 한다.
+        그것을 알려 주는 것이 `Host` 다. 없으면 **400 Bad Request** 가 온다.
+        → HTTPS 에서는 암호화 전에 이 정보를 알려 주기 위해 **SNI** 라는 장치가 따로 필요하다.
+
+    - id: q6
+      type: single
+      text: |
+        HTTP 응답이 **502 Bad Gateway** 다. 책임 소재는 어디인가?
+      choices:
+        - "클라이언트 요청이 잘못됐다 — 헤더나 본문 형식이 규격에 맞지 않은 것이다"
+        - "이름 해석 실패 — 프록시가 백엔드 이름을 못 풀었다"
+        - "경유 장비(프록시·로드밸런서)는 살아 있는데 그 뒤 백엔드에서 응답을 못 받았다"
+        - "네트워크 경로 없음 — 프록시까지 가는 길이 끊겼다"
+      answer: [2]
+      explain: |
+        4xx = 클라이언트 잘못 · 5xx = 서버 잘못이 큰 틀이지만, **502 / 504 는 특별하다.**
+        "앞단은 정상이고 그 **뒤**가 문제" 라는 뜻이라, 네트워크 엔지니어가 자주 불려 간다.
+        → 502(응답을 못 받음) vs 504(시간 초과)의 차이도 알아 둘 것 —
+        504 는 M6 감별표의 **②(DROP)** 나 **④(서비스 행)** 와 이어진다.
+
+    - id: q7
+      type: single
+      text: |
+        HTTPS 가 HTTP 에 비해 **네트워크 관점에서** 추가하는 것으로 옳은 것은?
+      choices:
+        - "TCP handshake 뒤에 TLS handshake 가 한 번 더 붙는다 — 인증서 교환과 키 합의"
+        - "TCP 연결이 필요 없어진다 — TLS 가 자체적으로 세션을 만들고 재전송까지 관리하기 때문"
+        - "포트 번호가 필요 없어진다 — 인증서가 서비스를 식별하기 때문이다"
+        - "헤더가 압축돼 패킷이 작아진다 — 그만큼 전송이 빨라진다"
+      answer: [0]
+      explain: |
+        연결 절차가 **두 단계**가 된다: TCP 3-way → TLS handshake → 그다음에야 HTTP.
+        진단 관점에서 중요한 점 두 가지 —
+        ① **페이로드를 캡처로 볼 수 없다** (헤더·SNI·인증서까지만 보인다)
+        ② 인증서 만료 · 이름 불일치가 **네트워크와 무관한 새 실패 원인**으로 추가된다.
+
+    - id: q8
+      type: single
+      text: |
+        FTP **Active** 모드에서 데이터 채널의 연결은 **누가 누구에게** 거는가?
+      choices:
+        - "서버 → 클라이언트 (서버의 20번 포트에서 역방향으로)"
+        - "클라이언트 → 서버 (제어 채널과 같은 방향으로)"
+        - "양쪽이 동시에 연결을 걸어 먼저 닿는 쪽을 쓴다"
+        - "제어 채널(21)을 그대로 재사용해 데이터를 보낸다"
+      answer: [0]
+      explain: |
+        **이것이 FTP 를 특별하게 만드는 지점이다.**
+        보통의 프로토콜은 클라이언트가 걸고 서버가 받는다. Active 모드의 데이터 채널만 **거꾸로** 간다.
+        Passive 는 정상 방향이다 — 서버가 "이 포트로 오세요"(227 응답)라고 알려 주고 클라이언트가 건다.
+
+    - id: q9
+      type: single
+      text: |
+        회사 방화벽 뒤에 있는 PC 에서 FTP Active 모드가 실패한다. 가장 정확한 이유는?
+      choices:
+        - "FTP 가 오래된 프로토콜이라 최신 방화벽이 기본 차단 목록에 넣어 두고 있기 때문이다"
+        - "서버가 클라이언트로 거는 역방향 연결을, 방화벽·NAT 가 '요청한 적 없는 접속' 으로 보고 막기 때문"
+        - "제어 채널 포트 21 이 회사 정책으로 기본 차단돼 있기 때문"
+        - "아이디·비밀번호가 평문이라 방화벽이 세션을 강제로 끊기 때문"
+      answer: [1]
+      explain: |
+        stateful 방화벽은 **안에서 나간 연결의 응답만** 자동으로 열어 준다 (M9).
+        Active 의 데이터 연결은 **밖에서 새로 들어오는 연결**이라 그 규칙에 걸리지 않는다.
+        → 그래서 현실의 FTP 는 거의 항상 **Passive** 다. M9 에서 NAT 를 붙여 직접 확인한다.
+
+    - id: q10
+      type: single
+      text: |
+        `telnet` 으로 서버에 로그인하는 것과 `ssh` 로 로그인하는 것의 차이를
+        **캡처 관점에서** 가장 정확히 말한 것은?
+      choices:
+        - "telnet 이 암호화 처리를 하지 않아 응답이 더 빠르고 패킷도 작게 보이기 때문"
+        - "ssh 는 커널이 처리하므로 tcpdump 로는 캡처되지 않는다"
+        - "telnet 은 아이디·비밀번호가 캡처에 그대로 보이고, ssh 는 알아볼 수 없다"
+        - "캡처 관점에서는 차이가 없고 포트 번호만 다르다"
+      answer: [2]
+      explain: |
+        ssh 도 **캡처는 된다.** 다만 내용이 암호화돼 있어 읽을 수 없을 뿐이다.
+        경로 중간의 누구든(스위치 관리자 · 미러링 권한자 · 침입자) 볼 수 있다는 것이 핵심이다.
+        → **telnet 은 앞으로 "포트가 열렸는지 보는 진단 도구" 로만 쓴다.**
+        이 랩에서는 같은 성질을 FTP 로 확인한다 (FTP 도 평문이다).
+
+checks:
+  required: true
+  items:
+    - id: resolv-conf
+      kind: config
+      title: "pc1 의 이름 서버 설정이 들어갔는가"
+      host: pc1
+      run: "cat /etc/resolv.conf"
+      expect_all: ["{{ dns.server }}", "{{ dns.zone }}"]
+      hint: |
+        M8 부터 이름 해석이 켜진다. 없으면 이 단계 설정이 안 올라온 것이다.
+        make config LAB=<N> STAGE=m8
+
+    - id: dns-a-record
+      kind: connectivity
+      title: "DNS 서버가 web 의 A 레코드를 정확히 답하는가"
+      host: pc1
+      run: "dig +short @{{ dns.server }} web.{{ dns.zone }} A"
+      expect: "{{ ip.web }}"
+      hint: |
+        응답이 오는 것과 **맞는 값이 오는 것**은 다르다.
+        빈 응답이면 서버·존 문제, 다른 값이면 레코드가 틀린 것이다.
+        dns 노드에서: sudo systemctl status named
+
+    - id: dns-via-resolver
+      kind: connectivity
+      title: "resolv.conf 를 통한 이름 해석이 되는가 (`dig` 없이)"
+      host: pc1
+      run: "getent hosts web.{{ dns.zone }}"
+      expect: "{{ ip.web }}"
+      hint: |
+        `dig @서버` 는 되는데 이것이 안 되면 **클라이언트 설정** 문제다.
+        (resolv.conf 의 nameserver 가 틀렸거나 systemd-resolved 가 가로채는 중)
+
+    - id: dns-cname
+      kind: connectivity
+      title: "CNAME(www)이 최종 A 레코드까지 따라가는가"
+      host: pc1
+      run: "dig +short www.{{ dns.zone }} A"
+      expect: "{{ ip.web }}"
+      hint: |
+        www 는 web 을 가리키는 별칭(CNAME)이다.
+        출력에 이름과 IP 가 함께 나오면 정상 — 클라이언트가 한 번 더 조회한 결과다.
+
+    - id: http-by-name
+      kind: connectivity
+      title: "**이름으로** HTTP 접속이 되는가 ★"
+      host: pc1
+      run: "curl -sS -m5 -i http://web.{{ dns.zone }}/health"
+      expect_all: ["200", "X-Lab-Node: web", "ok"]
+      hint: |
+        IP 로는 되는데 이것만 안 되면 DNS 문제다 (판별표의 첫 줄).
+        curl -sS -m5 -i http://{{ ip.web }}/health 와 비교해 볼 것.
+
+    - id: ftp-banner
+      kind: connectivity
+      title: "FTP 제어 채널(21)이 배너로 응답하는가"
+      host: pc1
+      run: "exec 3<>/dev/tcp/{{ ip.ftp }}/21 && head -1 <&3"
+      expect: "220"
+      hint: |
+        220 은 "서비스 준비됨" 이다. 아무것도 안 오면 ftp 노드에서:
+          sudo systemctl status vsftpd
+
+    - id: ftp-passive-transfer
+      kind: connectivity
+      title: "FTP Passive 모드로 파일을 실제로 받아오는가 ★"
+      host: pc1
+      run: "curl -sS -m10 -u ftpuser:labpass ftp://{{ ip.ftp }}/hello.txt"
+      expect: "my-network-lab"
+      hint: |
+        배너(21)는 뜨는데 이것만 안 되면 **데이터 채널** 문제다.
+        Passive 대역({{ services.ftp.passive_range }})이 막혔거나 pasv_enable 이 꺼진 것이다.
+        제어 채널과 데이터 채널은 **별개의 연결**이라는 것이 여기서 드러난다.
+
+    - id: vsftpd-config-restored
+      kind: config
+      title: "vsftpd 의 Passive 설정이 원래대로인가"
+      host: ftp
+      run: "grep -c '^pasv_enable=YES' /etc/vsftpd.conf || true"
+      expect: "1"
+      hint: |
+        장애 주입 m08-04 를 복구하지 않았을 수 있다.
+        make fix LAB=<N> SCENARIO=m08-04  또는  make config LAB=<N> STAGE=m8
+
+written:
+  items:
+    - id: dns-or-network
+      title: "DNS 실패인가 네트워크 실패인가 — 어떻게 갈랐는가 ★"
+      kind: text
+      review: optional
+      auto_pass: true
+      min_chars: 250
+      prompt: |
+        장애 주입(m08-01 ~ m08-03) 중 하나를 골라, **판별 과정**을 적을 것.
+        결론이 아니라 **무엇을 보고 무엇을 배제했는지**를 남긴다.
+
+          1. 증상 — 사용자가 뭐라고 신고했는가
+          2. **이름이 IP 로 풀렸는가** — 어떤 명령으로 확인했고 결과는 무엇이었는가
+          3. **IP 로 직접 접속하면 되는가** — 그 결과가 무엇을 배제해 주는가
+          4. 두 결과를 조합해 내린 결론 (DNS 인가 · 네트워크인가 · **레코드가 틀린 것**인가)
+          5. 원인과 조치, 그리고 되돌렸다는 사실
+      rubric:
+        - key: 이름해석
+          desc: "이름 해석 여부를 명령으로 확인했는가"
+          any: ["dig", "getent", "nslookup", "이름 해석", "이름이 풀"]
+        - key: IP직접
+          desc: "IP 직접 접속으로 대조했는가"
+          any: ["IP 로", "IP로", "직접 접속", "curl http://10", "주소로"]
+        - key: 판별
+          desc: "두 결과를 조합해 범위를 갈랐는가"
+          any: ["DNS 문제", "DNS 는 정상", "네트워크 문제", "레코드", "배제", "갈렸"]
+        - key: 근거
+          desc: "명령 결과를 근거로 적었는가"
+          any: ["응답", "출력", "결과", "돌아온", "타임아웃", "SERVFAIL", "NXDOMAIN"]
+        - key: 조치
+          desc: "고친 방법과 되돌린 사실을 적었는가"
+          any: ["복구", "수정", "재시작", "원복", "되돌", "다시 시작", "다시 넣", "resolv.conf"]

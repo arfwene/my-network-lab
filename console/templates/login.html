@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}로그인 · {{ site_name }}{% endblock %}
+{% block body %}
+<div class="login-wrap">
+  <form class="login" method="post" action="/login">
+    <h1>{{ site_name }}</h1>
+    <p class="sub">네트워크 엔지니어 교육 랩</p>
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    <label>아이디<input name="username" autocomplete="username" autofocus required></label>
+    <label>비밀번호<input name="password" type="password" autocomplete="current-password" required></label>
+    <button type="submit">들어가기</button>
+    <p class="hint">계정은 교육 담당자가 발급한다.</p>
+  </form>
+</div>
+{% endblock %}

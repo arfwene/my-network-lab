@@ -1,0 +1,263 @@
+# =============================================================================
+#  my-network-lab :: 토폴로지 정의 (Single Source of Truth)
+# =============================================================================
+#  이 파일 하나에서 아래가 전부 생성된다.
+#    - Terraform (Proxmox VM / 브리지)      : infra/terraform/
+#    - Ansible inventory + host_vars        : tools/gen-inventory.py
+#    - 모듈별 Mermaid 토폴로지 다이어그램      : tools/render-diagram.py
+#  주소 값은 ipam.yml 이 소유한다. 여기서는 "무엇이 무엇에 연결되는가"만 정의한다.
+# =============================================================================
+
+lab:
+  name: my-network-lab
+  version: "1.0"
+  description: 신입 네트워크 엔지니어 교육용 랩
+  platform: proxmox            # 이식 시 이 값만 aws 로 교체 (PLAN 6.5 R3)
+  domain: lab.local
+
+# -----------------------------------------------------------------------------
+# 기본값 — 노드별로 override 가능
+# -----------------------------------------------------------------------------
+defaults:
+  template: ubuntu-2404-lab    # 골든 템플릿 (필요 패키지 사전 설치 → 랩 노드는 인터넷 불필요)
+  cores: 1
+  memory: 512                  # MB
+  disk: 8                      # GB
+  onboot: false
+
+# -----------------------------------------------------------------------------
+# 관리망 (Out-of-Band) — PLAN 6.3.1 설계 규칙 2
+#   랩 네트워크가 완전히 죽어도 이 경로로는 항상 접속된다.
+#   랩 대역(10.10.0.0/16)과 라우팅으로 연결하지 않는다. 완전 분리.
+# -----------------------------------------------------------------------------
+management:
+  # 전 랩 공용 VLAN-aware 브리지 하나를 쓴다 (이름: config/site.yml 의 labs.naming.mgmt_bridge).
+  # 랩 N 의 관리망 = VLAN (vlan_base + N). 브리지가 태깅하므로 게스트는 untagged 만 본다
+  # → 랩끼리 서로의 관리망을 볼 수 없다 (VLAN hopping 불가). 브리지를 나눈 것과 격리 수준이 같다.
+  vlan_base: 3000              # 랩1 = VLAN 3001 ... 랩9 = VLAN 3009
+  interface: mgmt0             # 게스트 내부 인터페이스 이름 (MAC 기준 고정)
+  # 실제 대역은 config/site.yml 의 networks.management 에서 계산된다
+  note: |
+    랩 N 의 관리망은 config/site.yml 의 networks.management 를 /24 로 자른 N 번째 조각이다.
+    Proxmox 호스트가 그 대역의 .1 을, 점프 호스트가 .9 를 갖는다.
+    Ansible 과 Terraform 은 점프 호스트에서 실행한다.
+    주소를 바꾸려면 config/site.yml 의 networks.management 한 줄만 고치면 된다.
+
+# -----------------------------------------------------------------------------
+# 브리지(=랜선) — 링크 1개 = 격리된 브리지 1개, 물리 NIC 미연결
+#   번호 체계:  0xx 관리 | 1xx Site-A | 2xx Core P2P | 3xx Site-B | 4xx 외부
+#   Proxmox 는 브리지명을 vmbrN 으로만 허용하므로, 의미는 이 표가 소유한다.
+#
+#   ▸ 1인 1랩: 브리지는 Proxmox 호스트 전역 자원이므로 랩마다 번호를 분리해야 한다.
+#     물리 이름 = vmbr{lab_id}{id}      예) lab_id=1, id=101  ->  vmbr1101
+#                                          lab_id=3, id=009  ->  vmbr3009
+#     아래 id 는 "논리 번호"이며, 실제 이름은 Terraform 이 lab_id 로 조합한다.
+# -----------------------------------------------------------------------------
+bridges:
+  # 관리망은 여기 없다 — 랩 자원이 아니라 전 랩 공용 브리지의 VLAN 이다 (위 management 참조).
+
+  - {id: "101", alias: pc1-sw1,   zone: site-a, stage: m1, desc: "pc1 ↔ sw1  (access VLAN10)"}
+  - {id: "102", alias: pc2-sw1,   zone: site-a, stage: m1, desc: "pc2 ↔ sw1  (access VLAN20)"}
+  - {id: "103", alias: sw1-r1,    zone: site-a, stage: m2, desc: "sw1 ↔ r1   (802.1Q trunk)"}
+
+  - {id: "201", alias: r1-r2,     zone: core,   stage: m3, desc: "r1 ↔ r2    (주 경로)"}
+  - {id: "202", alias: r1-r3,     zone: core,   stage: m4, desc: "r1 ↔ r3    (백업 경로)"}
+  - {id: "203", alias: r2-r4,     zone: core,   stage: m3, desc: "r2 ↔ r4    (주 경로)"}
+  - {id: "204", alias: r3-r4,     zone: core,   stage: m4, desc: "r3 ↔ r4    (백업 경로)"}
+
+  - {id: "301", alias: r4-sw2,    zone: site-b, stage: m3, desc: "r4 ↔ sw2   (access VLAN40)"}
+  - {id: "302", alias: sw2-web,   zone: site-b, stage: m3, desc: "sw2 ↔ web"}
+  - {id: "303", alias: sw2-ftp,   zone: site-b, stage: m8, desc: "sw2 ↔ ftp"}
+  - {id: "304", alias: sw2-dns,   zone: site-b, stage: m8, desc: "sw2 ↔ dns"}
+
+  - {id: "401", alias: r4-edge,   zone: edge,   stage: m9, desc: "r4 ↔ edge  (내부 ↔ 경계)"}
+  - {id: "402", alias: edge-inet, zone: edge,   stage: m9, desc: "edge ↔ inet (공인 구간)"}
+
+# -----------------------------------------------------------------------------
+# VLAN
+# -----------------------------------------------------------------------------
+vlans:
+  - {id: 10,  name: SALES,  desc: "영업부 사용자망 (Site-A)"}
+  - {id: 20,  name: DEV,    desc: "개발부 사용자망 (Site-A)"}
+  - {id: 40,  name: SERVER, desc: "서버망 (Site-B)"}
+  - {id: 999, name: NATIVE, desc: "미사용. 트렁크 native VLAN 으로 지정 (실무 관례)"}
+
+# -----------------------------------------------------------------------------
+# 노드
+#   MAC 규칙: 52:54:00:<node_id>:00:<port>   (node_id = 관리망 IP 마지막 옥텟)
+#     → M1 에서 MAC 테이블을 읽을 때 어느 노드인지 즉시 식별 가능
+#   인터페이스 이름: mgmt0(관리) / eth1..ethN(랩). MAC 기준으로 고정 명명.
+# -----------------------------------------------------------------------------
+nodes:
+
+  # ---------------- Site-A : 지사 ----------------
+  - name: pc1
+    id: 0x11
+    role: host
+    zone: site-a
+    stage: m1
+    desc: "영업부 PC (VLAN10)"
+    interfaces:
+      - {name: eth1, bridge: "101", peer: sw1, mac: "52:54:00:11:00:01", vlan: 10, mode: access}
+
+  - name: pc2
+    id: 0x12
+    role: host
+    zone: site-a
+    stage: m1
+    desc: "개발부 PC (VLAN20)"
+    interfaces:
+      - {name: eth1, bridge: "102", peer: sw1, mac: "52:54:00:12:00:01", vlan: 20, mode: access}
+
+  - name: sw1
+    id: 0x21
+    role: switch
+    zone: site-a
+    stage: m1
+    desc: "지사 액세스 스위치 (Linux bridge, VLAN filtering)"
+    bridge_name: br0             # 노드 내부 브리지 이름
+    interfaces:
+      - {name: eth1, bridge: "101", peer: pc1, mac: "52:54:00:21:00:01", vlan: 10,       mode: access}
+      - {name: eth2, bridge: "102", peer: pc2, mac: "52:54:00:21:00:02", vlan: 20,       mode: access}
+      - {name: eth3, bridge: "103", peer: r1,  mac: "52:54:00:21:00:03", vlan: [10, 20], mode: trunk, native: 999, stage: m2}
+
+  - name: r1
+    id: 0x31
+    role: router
+    zone: site-a
+    stage: m2
+    memory: 768
+    desc: "지사 라우터 / VLAN 게이트웨이 (router-on-a-stick)"
+    interfaces:
+      - {name: eth1,    bridge: "103", peer: sw1, mac: "52:54:00:31:00:01", mode: trunk, native: 999}
+      - {name: eth1.10, parent: eth1, vlan: 10, desc: "VLAN10 게이트웨이"}
+      - {name: eth1.20, parent: eth1, vlan: 20, desc: "VLAN20 게이트웨이"}
+      - {name: eth2,    bridge: "201", peer: r2, mac: "52:54:00:31:00:02", stage: m3, desc: "주 경로"}
+      - {name: eth3,    bridge: "202", peer: r3, mac: "52:54:00:31:00:03", stage: m4, desc: "백업 경로"}
+      - {name: lo0,     type: loopback, desc: "OSPF router-id"}
+
+  # ---------------- Core : 백본 ----------------
+  - name: r2
+    id: 0x32
+    role: router
+    zone: core
+    stage: m3
+    memory: 768
+    desc: "코어 라우터 (주 경로) — OSPF cost 낮음"
+    interfaces:
+      - {name: eth1, bridge: "201", peer: r1, mac: "52:54:00:32:00:01"}
+      - {name: eth2, bridge: "203", peer: r4, mac: "52:54:00:32:00:02"}
+      - {name: lo0,  type: loopback}
+
+  - name: r3
+    id: 0x33
+    role: router
+    zone: core
+    stage: m4
+    memory: 768
+    desc: "코어 라우터 (백업 경로) — OSPF cost 높음. M4 경로 우회 실습의 핵심"
+    interfaces:
+      - {name: eth1, bridge: "202", peer: r1, mac: "52:54:00:33:00:01"}
+      - {name: eth2, bridge: "204", peer: r4, mac: "52:54:00:33:00:02"}
+      - {name: lo0,  type: loopback}
+
+  # ---------------- Site-B : 데이터센터 ----------------
+  - name: r4
+    id: 0x34
+    role: router
+    zone: site-b
+    stage: m3
+    memory: 768
+    desc: "DC 라우터 / 서버망 게이트웨이"
+    interfaces:
+      - {name: eth1, bridge: "203", peer: r2,   mac: "52:54:00:34:00:01"}
+      - {name: eth2, bridge: "204", peer: r3,   mac: "52:54:00:34:00:02", stage: m4}
+      - {name: eth3, bridge: "301", peer: sw2,  mac: "52:54:00:34:00:03", vlan: 40, mode: access, desc: "서버망 게이트웨이"}
+      - {name: eth4, bridge: "401", peer: edge, mac: "52:54:00:34:00:04", stage: m9, desc: "인터넷 경계"}
+      - {name: lo0,  type: loopback}
+
+  - name: sw2
+    id: 0x22
+    role: switch
+    zone: site-b
+    stage: m3
+    desc: "DC 서버 스위치 (VLAN40 단일)"
+    bridge_name: br0
+    interfaces:
+      - {name: eth1, bridge: "301", peer: r4,  mac: "52:54:00:22:00:01", vlan: 40, mode: access}
+      - {name: eth2, bridge: "302", peer: web, mac: "52:54:00:22:00:02", vlan: 40, mode: access}
+      - {name: eth3, bridge: "303", peer: ftp, mac: "52:54:00:22:00:03", vlan: 40, mode: access, stage: m8}
+      - {name: eth4, bridge: "304", peer: dns, mac: "52:54:00:22:00:04", vlan: 40, mode: access, stage: m8}
+
+  - name: web
+    id: 0x41
+    role: server
+    zone: site-b
+    stage: m3
+    memory: 768
+    services: [nginx]
+    desc: "웹 서버 (HTTP 80 / HTTPS 443)"
+    interfaces:
+      - {name: eth1, bridge: "302", peer: sw2, mac: "52:54:00:41:00:01", vlan: 40, mode: access}
+
+  - name: ftp
+    id: 0x42
+    role: server
+    zone: site-b
+    stage: m8
+    memory: 768
+    services: [vsftpd]
+    desc: "FTP 서버 (21 + passive 데이터 포트) — M8/M9 Active vs Passive 실습"
+    interfaces:
+      - {name: eth1, bridge: "303", peer: sw2, mac: "52:54:00:42:00:01", vlan: 40, mode: access}
+
+  - name: dns
+    id: 0x43
+    role: server
+    zone: site-b
+    stage: m8
+    memory: 768
+    services: [bind9]
+    desc: "DNS 서버 (lab.local 권한 서버)"
+    interfaces:
+      - {name: eth1, bridge: "304", peer: sw2, mac: "52:54:00:43:00:01", vlan: 40, mode: access}
+
+  # ---------------- Edge : 인터넷 경계 (M9) ----------------
+  - name: edge
+    id: 0x35
+    role: edge
+    zone: edge
+    stage: m9
+    memory: 768
+    desc: "NAT / 방화벽 경계 장비. 사설 ↔ 공인 경계선."
+    interfaces:
+      - {name: eth1, bridge: "401", peer: r4,   mac: "52:54:00:35:00:01", desc: "inside (사설)"}
+      - {name: eth2, bridge: "402", peer: inet, mac: "52:54:00:35:00:02", desc: "outside (공인)"}
+      - {name: lo0,  type: loopback}
+
+  - name: inet
+    id: 0x51
+    role: host
+    zone: edge
+    stage: m9
+    memory: 768
+    services: [nginx]
+    desc: "외부 인터넷 흉내. 공인 IP 만 보유 — 사설 IP 는 여기까지 오지 못한다."
+    interfaces:
+      - {name: eth1, bridge: "402", peer: edge, mac: "52:54:00:51:00:01"}
+      - {name: lo0,  type: loopback, desc: "외부 웹사이트 흉내 (공인 IP)"}
+
+# -----------------------------------------------------------------------------
+# 모듈별 성장 단계 — render-diagram.py 가 이 정보로 모듈별 토폴로지를 그린다
+# -----------------------------------------------------------------------------
+stages:
+  m1: {nodes: [pc1, pc2, sw1],  desc: "L2 · MAC · ARP · 스위칭"}
+  m2: {nodes: [r1],             desc: "VLAN 분리 + L3 게이트웨이 등장"}
+  m3: {nodes: [r2, r4, sw2, web], desc: "정적 라우팅으로 사이트 간 연결"}
+  m4: {nodes: [r3],             desc: "이중 경로 + OSPF"}
+  m5: {nodes: [],               desc: "전 구간 IPv6 dual-stack (노드 추가 없음)"}
+  m6: {nodes: [],               desc: "TCP/포트/세션 (기존 노드 활용)"}
+  m7: {nodes: [],               desc: "tcpdump 심화 (기존 노드 활용)"}
+  m8: {nodes: [ftp, dns],       desc: "DNS / HTTP / FTP"}
+  m9: {nodes: [edge, inet],     desc: "NAT · 방화벽 · 사설↔공인 경계"}
+  m10: {nodes: [],              desc: "장애 주입 캡스톤 (전체 토폴로지)"}

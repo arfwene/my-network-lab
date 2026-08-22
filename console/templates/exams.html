@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}시험 세션 · {{ site_name }}{% endblock %}
+{% block body %}
+<header class="top">
+  <div class="brand">{{ site_name }}</div>
+  <a class="ghost" href="/">← 랩으로</a>
+  <a class="ghost" href="/admin">계정 관리</a>
+  <a class="ghost" href="/admin/reviews">검토 큐{% if pending %} <b class="pill">{{ pending }}</b>{% endif %}</a>
+  <a class="ghost" href="/admin/settings">연결 설정</a>
+  <div class="spacer"></div>
+  {% include "_health.html" %}
+  <div class="who">{{ user.name | default(user.username) }}<span class="role">{{ user.role_label }}</span></div>
+  <a class="ghost" href="/logout">나가기</a>
+</header>
+
+<main class="admin">
+  {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+
+  <section class="card">
+    <h3>시험 세션 <small>{{ cfg.module | upper }} · {{ cfg.minutes }}분 · 장애 {{ cfg.faults }}개</small></h3>
+    <p class="note">
+      제한 시간이 끝나면 서버가 검사를 한 번 돌려 그 결과를 <b>확정본</b>으로 못 박는다.
+      그 뒤에 랩을 고쳐도 성적은 바뀌지 않는다.
+      마감된 랩은 콘솔의 실행 버튼도 잠기지만, <b>교육생은 SSH 로 노드에 직접 붙을 수 있다.</b>
+      그러니 잠금은 사고 방지 장치로만 보고, <b>성적은 확정본으로만 판단할 것.</b>
+    </p>
+    <p class="note">
+      <b>즉시 마감</b>은 마감 시각을 지금으로 당길 뿐이고, 확정 자체는 시간 초과와 같은 경로로
+      최대 {{ cfg.sweep_seconds }}초 안에 일어난다.
+      <b>취소</b>는 성적도 잠금도 남기지 않는다 — 준비 실수를 되돌릴 때만 쓴다.
+      관리자 계정은 잠금의 예외다(다음 응시 준비를 해야 하므로).
+    </p>
+  </section>
+
+  {% if not rows %}
+  <section class="card"><p class="note">아직 시험 기록이 없다.</p></section>
+  {% endif %}
+
+  {% for r in rows %}
+  <section class="card review">
+    <h3>
+      <span class="badge">lab{{ r.lab_id }}</span>
+      {{ r.username }}
+      {% if r.phase == 'open' %}<span class="badge warn">진행 중 · {{ (r.remaining // 60) }}분 남음</span>
+      {% elif r.phase == 'overtime' %}<span class="badge warn">확정 대기</span>
+      {% elif r.cancelled %}<span class="badge">취소됨</span>
+      {% elif r.total is none %}<span class="badge warn">확정 — 검사 못 돌림</span>
+      {% else %}<span class="badge {{ 'ok' if r.passed else 'off' }}">확정 {{ r.ok }}/{{ r.total }}</span>{% endif %}
+      <small>{{ r.module_id | upper }} · 시작 {{ r.started_at }} · 마감 {{ r.deadline_at }} (UTC)</small>
+    </h3>
+
+    <div class="autopre">
+      주입된 장애
+      {% for s in r.scenarios %}<span class="rub">{{ s }}</span>{% endfor %}
+      {% if r.closed_by %}<span class="muted">— 마감: {{ r.closed_by }} · {{ r.closed_at }}</span>{% endif %}
+    </div>
+
+    {% if r.frozen %}
+    <ul class="cresult">
+      {% for it in r.frozen['items'] %}
+      <li class="{{ 'ok' if it.ok else 'bad' }}">
+        <span class="mark">{{ '✔' if it.ok else '✘' }}</span>
+        <div><div class="t">{{ it.title }} <span class="muted">{{ it.host }}</span></div>
+          {% if not it.ok %}<div class="why">{{ it.reason }}</div>{% endif %}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% elif not r.open and not r.cancelled %}
+    <p class="note">확정 시점에 검사를 돌리지 못했다 — 랩 상태를 직접 확인할 것.</p>
+    {% endif %}
+
+    {% if r.open %}
+    <form method="post" action="/admin/exams/{{ r.id }}/extend" class="inline">
+      <label>연장 <input name="minutes" type="number" value="10" min="1" max="600" style="width:5em"></label>
+      <button class="btn" type="submit">분 연장</button>
+    </form>
+    <form method="post" action="/admin/exams/{{ r.id }}/close" class="inline">
+      <button class="btn warn" type="submit">즉시 마감</button>
+    </form>
+    <form method="post" action="/admin/exams/{{ r.id }}/cancel" class="inline">
+      <button class="btn" type="submit">취소 (성적 없음)</button>
+    </form>
+    {% endif %}
+  </section>
+  {% endfor %}
+</main>
+{% endblock %}

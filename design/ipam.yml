@@ -1,0 +1,283 @@
+# =============================================================================
+#  my-network-lab :: 주소 배분 규칙 (IPAM)
+# =============================================================================
+#  ▸ 여기에는 **절대 주소가 없다.** "어떻게 자를 것인가"만 있다.
+#    실제 주소는 config/site.yml 의 블록 + 이 규칙에서 계산된다 (tools/labdesign.py).
+#    → 회사가 다른 대역을 쓰더라도 config/site.yml 한 줄만 고치면 전부 따라 바뀐다.
+#
+#  ▸ 계산 결과를 눈으로 보려면:  python3 tools/show-ipam.py
+#  ▸ 이 파일은 M2 실습의 "설계 사례 참조본"이기도 하다.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 설계 근거 (M2 · C1 · C2 · C7 · C8 교재로 그대로 사용)
+# -----------------------------------------------------------------------------
+rationale:
+  block_choice: |
+    [사설 대역 선정 — C8]
+    회사에 할당된 사설 블록을 config/site.yml 의 networks.lab_block 으로 받는다.
+    192.168.0.0/24 · 192.168.1.0/24 는 공유기 기본값이라 전 세계에서 가장 많이 쓰인다.
+    이 대역을 쓰면 VPN 연동, 재택근무자 접속, 회사 합병 시 반드시 충돌한다.
+    → 실무에서는 "잘 안 쓰는 대역을 고르는 것"이 설계자의 첫 번째 일이다.
+    → 이 프로젝트는 그 검사를 tools/validate-site.py 로 자동화했다.
+       사내 사용 중 대역을 config/site.local.yml 의 forbidden 에 등록하면
+       겹치는 순간 배포가 중단된다.
+  hierarchy: |
+    [계층적 배분 — C2]
+    구역별로 /19 씩 끊어 배분한다. 목적은 "요약(summarization)".
+    r1 은 Site-A 의 VLAN10·VLAN20 을 개별 광고하지 않고 site-a 요약 대역 하나로 광고한다.
+    → 라우팅 테이블이 작아지고, 지사에 VLAN 을 추가해도 코어 설정을 건드릴 필요가 없다.
+    이것이 되려면 "인접한 대역끼리 같은 구역에 모여 있어야" 한다. 그래서 설계 순서가 중요하다.
+  p2p_mask: |
+    [P2P 링크에 /30 을 쓰는 이유 — C1]
+    라우터-라우터 링크에는 주소가 2개만 필요하다. /24 를 쓰면 254개 중 2개만 쓰고 버리는 셈.
+    그래서 /30(사용 가능 2개)을 쓴다. 실무에서는 /31(RFC3021)까지 쓴다.
+    ※ 대조: 아래 IPv6 는 같은 링크에 /64 를 넉넉히 쓴다.
+       "IPv4 는 아껴 쓰고 IPv6 는 읽기 쉽게 쓴다" — 주소 고갈이 설계를 어떻게 바꾸는지 보여주는 대비.
+  public_vs_private: |
+    [사설 / 공인 구분 — C7]
+    lab_block (사설, RFC1918) : 인터넷에서 라우팅되지 않는다. 밖으로 나가려면 NAT 필요.
+    public_*  (공인 역할)      : edge 바깥. 사설 IP 패킷은 여기까지 오지 못한다.
+    ※ 기본값으로 쓰는 203.0.113.0/24 · 198.51.100.0/24 · 192.0.2.0/24 는
+       RFC5737 문서·교육 전용 예약 대역이다. 실제 인터넷에서 쓰이지 않아 실습에 안전하다.
+       (실무 문서를 쓸 때도 이 대역을 쓸 것)
+    또한 ISP 는 회선용 /30 과 별도로 "서비스용 공인 블록"을 라우팅해 준다.
+    회선 주소에 서버 공개 IP 를 욱여넣을 수 없기 때문 — 이 구조를 그대로 재현했다.
+  management: |
+    [관리망 분리 — PLAN 6.3.1]
+    관리망은 랩 대역과 라우팅으로 절대 연결하지 않는다.
+    교육생이 랩을 완전히 망가뜨려도 접속은 살아 있어야 하기 때문이다 (실무의 콘솔 서버와 같은 개념).
+    ※ 함정 주의: 모든 검증은 반드시 랩 인터페이스(eth1~) 기준으로 한다.
+       관리망 때문에 "되는 것처럼 보이는" 착시를 M0 에서 명시적으로 경고한다.
+
+# =============================================================================
+# 1. 구역 배분 — networks.lab_block 을 어떻게 자를 것인가
+#    index = 해당 prefix 로 잘랐을 때 몇 번째 조각인가
+#    예) lab_block=10.10.0.0/16 을 /19 로 자르면
+#        index 0 = 10.10.0.0/19, 1 = 10.10.32.0/19, 2 = 10.10.64.0/19, 3 = 10.10.96.0/19
+# =============================================================================
+zones:
+  site-a:   {prefix: 19, index: 0, desc: "지사 사용자망"}
+  site-b:   {prefix: 19, index: 1, desc: "DC 서버망"}
+  core-p2p: {prefix: 19, index: 2, desc: "라우터 간 P2P 링크"}
+  loopback: {prefix: 19, index: 3, desc: "라우터 루프백 (router-id)"}
+  reserved: {prefix: 17, index: 1, desc: "증설 예비 (블록의 뒤쪽 절반)"}
+
+# =============================================================================
+# 2. 사용자 / 서버 세그먼트
+#    index = 소속 구역 안에서 몇 번째 /24 인가
+#    VLAN 번호와 index 를 일치시켜 두면 주소만 보고 VLAN 을 알 수 있다 (실무 관례)
+# =============================================================================
+segments:
+  vlan10:
+    zone: site-a
+    prefix: 24
+    index: 10                  # site-a 의 10번째 /24  → x.x.10.0/24
+    vlan: 10
+    gateway_offset: 254        # 게이트웨이는 대역 끝에서 두 번째 (실무 관례)
+    gateway_node: r1
+    desc: "영업부"
+    hosts: {pc1: 11}
+    dhcp_pool: {start: 100, end: 199}
+    ipv6_subnet_id: "0010"
+    ipv6_gateway_suffix: "254"
+    ipv6_host_suffix: {pc1: "11"}
+
+  vlan20:
+    zone: site-a
+    prefix: 24
+    index: 20
+    vlan: 20
+    gateway_offset: 254
+    gateway_node: r1
+    desc: "개발부"
+    hosts: {pc2: 11}
+    dhcp_pool: {start: 100, end: 199}
+    ipv6_subnet_id: "0020"
+    ipv6_gateway_suffix: "254"
+    ipv6_host_suffix: {pc2: "11"}
+
+  vlan40:
+    zone: site-b
+    prefix: 24
+    index: 8                   # site-b 의 8번째 /24 → x.x.40.0/24
+    vlan: 40
+    gateway_offset: 254
+    gateway_node: r4
+    desc: "DC 서버망 (고정 IP 만 사용, DHCP 없음 — 서버는 주소가 바뀌면 안 된다)"
+    hosts: {web: 11, ftp: 12, dns: 13}
+    ipv6_subnet_id: "0040"
+    ipv6_gateway_suffix: "254"
+    ipv6_host_suffix: {web: "11", ftp: "12", dns: "13"}
+
+# =============================================================================
+# 3. P2P 링크 (/30)
+#    offsets = 네트워크 주소로부터의 오프셋. /30 은 1, 2 만 사용 가능하다.
+#    ※ M2 서브네팅 연습 문제로 직결: "이 /30 의 사용 가능 주소는 몇 개인가?"
+# =============================================================================
+p2p:
+  r1-r2:
+    zone: core-p2p
+    prefix: 30
+    index: 0
+    bridge: "201"
+    offsets: {r1: 1, r2: 2}
+    ospf_cost: 10
+    desc: "주 경로"
+    ipv6_subnet_id: "1002"
+    ipv6_suffix: {r1: "1", r2: "2"}      # 호스트 부분 = 라우터 번호 (IPv4 와 대조되는 가독성)
+  r1-r3:
+    zone: core-p2p
+    prefix: 30
+    index: 1
+    bridge: "202"
+    offsets: {r1: 1, r3: 2}
+    ospf_cost: 100
+    desc: "백업 경로 (cost 높게)"
+    ipv6_subnet_id: "1003"
+    ipv6_suffix: {r1: "1", r3: "3"}
+  r2-r4:
+    zone: core-p2p
+    prefix: 30
+    index: 2
+    bridge: "203"
+    offsets: {r2: 1, r4: 2}
+    ospf_cost: 10
+    desc: "주 경로"
+    ipv6_subnet_id: "2004"
+    ipv6_suffix: {r2: "2", r4: "4"}
+  r3-r4:
+    zone: core-p2p
+    prefix: 30
+    index: 3
+    bridge: "204"
+    offsets: {r3: 1, r4: 2}
+    ospf_cost: 100
+    desc: "백업 경로"
+    ipv6_subnet_id: "3004"
+    ipv6_suffix: {r3: "3", r4: "4"}
+  r4-edge:
+    zone: core-p2p
+    prefix: 30
+    index: 4
+    bridge: "401"
+    offsets: {r4: 1, edge: 2}
+    desc: "인터넷 경계 (M9)"
+    ipv6_subnet_id: "4005"
+    ipv6_suffix: {r4: "4", edge: "5"}
+
+# =============================================================================
+# 4. 루프백 (/32) — OSPF router-id
+# =============================================================================
+loopback:
+  ipv6_subnet_id: "ffff"
+  nodes:
+    r1:   {offset: 1, ipv6_suffix: "1"}
+    r2:   {offset: 2, ipv6_suffix: "2"}
+    r3:   {offset: 3, ipv6_suffix: "3"}
+    r4:   {offset: 4, ipv6_suffix: "4"}
+    edge: {offset: 5, ipv6_suffix: "5"}
+
+# =============================================================================
+# 5. 공인 구역 (M9) — "사설은 여기까지 못 온다"를 눈으로 확인하는 곳
+#    주소는 config/site.yml 의 networks.public_* 에서 계산된다.
+# =============================================================================
+public:
+  transit_offsets: {edge: 1, inet: 2}
+  transit_bridge: "402"
+  snat_from: edge                    # SNAT(PAT) 출발지로 쓸 노드의 transit 주소
+  service_block:
+    note: |
+      실제 ISP 는 회선용 /30 과 별도로 "서비스용 공인 블록"을 라우팅해 준다.
+      회선 주소에 서버 공개 IP 를 욱여넣을 수 없기 때문.
+      → M9 에서 "공개 IP 가 어디서 오는가"를 설명하는 근거가 된다.
+  dnat:
+    - {node: web, offset: 2, ports: [80, 443], desc: "web 공개"}
+    - {node: ftp, offset: 4, ports: [21, "passive"], desc: "ftp 공개 (passive 포트 대역 포함)"}
+  external_site:
+    offset: 10
+    desc: "'외부 웹사이트'. 다른 문서용 대역을 써서 '남의 네트워크'임을 시각적으로 구분"
+  ipv6:
+    transit_suffix: {edge: "1", inet: "2"}
+    web_public_suffix: "10"
+    external_suffix: "10"
+    note: |
+      M9 확장 과제(C9): 내부 세그먼트에 GUA 를 추가 배정하면 NAT 없이 inet 까지 직접 도달한다.
+      → "IPv6 에는 NAT 가 필요 없다"를 실증하고, 그럼 무엇이 보호하는가(= 방화벽)로 이어진다.
+
+# =============================================================================
+# 6. 관리망 (Out-of-Band)
+#    랩 N 의 관리망 = networks.management 를 /24 로 자른 N 번째 조각
+#    ▸ 랩 서비스망은 전 랩 동일하게 두고 관리망만 분리한다.
+#      교재·정답·검증 스크립트를 하나로 유지하기 위해서다.
+# =============================================================================
+management:
+  # 관리망은 랩 자원이 아니다 — 전 랩 공용 VLAN-aware 브리지 하나를 랩별 VLAN 으로 나눈다.
+  # 브리지 이름은 config/site.yml 의 labs.naming.mgmt_bridge. 근거는 design/topology.yml 과 PLAN 7.9.1.
+  vlan_base: 3000                # 랩 N 의 관리 VLAN = vlan_base + N  (랩1 = 3001)
+  interface: mgmt0
+  subnet_prefix: 24
+  gateway_octet: 1               # Proxmox 호스트 (포워딩 없음)
+  note: "노드 마지막 옥텟 = 노드 ID = MAC 4번째 옥텟. 세 값이 일치하므로 노드 식별이 쉽다."
+  hosts:                         # 값 = 마지막 옥텟(= 노드 ID)
+    pc1: 11
+    pc2: 12
+    sw1: 21
+    sw2: 22
+    r1:  31
+    r2:  32
+    r3:  33
+    r4:  34
+    edge: 35
+    web: 41
+    ftp: 42
+    dns: 43
+    inet: 51
+
+# =============================================================================
+# 7. 단계별 오버라이드
+#   "하나의 토폴로지가 자라난다"(PLAN 설계원칙 1)를 주소에도 적용한다.
+#   M1 은 아직 라우터가 없으므로 두 PC 가 같은 대역에 있어야 통신이 된다.
+#   M2 에서 부서가 나뉘며 VLAN 으로 분리되고 → 통신이 끊기고 → 라우터가 등장한다.
+#   이 "끊기는 경험"이 L2/L3 차이를 이해시키는 결정적 장면이므로 의도적으로 설계했다.
+# =============================================================================
+stage_overrides:
+  m1:
+    desc: "L2 학습 단계 — 두 PC 를 같은 대역에 둔다. VLAN 분리는 M2 에서."
+    host_segment_override:
+      pc2: {segment: vlan10, offset: 12}   # 정규 주소는 vlan20 의 .11. M2 에서 원복된다.
+    switch_vlan_filtering: false           # VLAN 없는 단순 브리지 = 브로드캐스트 도메인 1개
+    default_route: false                   # 게이트웨이가 없다. 같은 대역 안에서만 통신 가능.
+
+# =============================================================================
+# 8. DNS (M8) — 주소는 위 규칙에서 자동으로 채워진다
+# =============================================================================
+dns:
+  zone: lab.local
+  server_node: dns
+  records:
+    - {name: web, node: web, types: [A, AAAA]}
+    - {name: ftp, node: ftp, types: [A, AAAA]}
+    - {name: dns, node: dns, types: [A]}
+    - {name: pc1, node: pc1, types: [A]}
+    - {name: pc2, node: pc2, types: [A]}
+    - {name: r1,  node: r1, source: loopback, types: [A]}
+    - {name: r4,  node: r4, source: loopback, types: [A]}
+    - {name: www, cname: web}
+  external_zone:
+    zone: example-ext.com
+    note: "외부 도메인 흉내. inet 노드가 권한 서버 역할. M9 '외부 사이트 접속' 실습에 사용."
+    records:
+      - {name: www, source: external_site, types: [A, AAAA]}
+
+# =============================================================================
+# 9. 서비스 포트 (M6 / M8 / M9)
+# =============================================================================
+services:
+  web:  {tcp: [80, 443]}
+  ftp:
+    tcp: [21]
+    passive_range: "50000-50100"
+    note: "passive 데이터 포트 범위를 고정해야 방화벽 정책을 쓸 수 있다 — M9 핵심"
+  dns:  {udp: [53], tcp: [53], note: "UDP 우선, 응답이 크면 TCP 로 전환 → M6 TCP/UDP 선택 기준 사례"}
+  ssh:  {tcp: [22], note: "관리 접근. telnet(23) 은 진단 도구로만 사용 — G4"}

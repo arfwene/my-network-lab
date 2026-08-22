@@ -1,0 +1,22 @@
+---
+# M1-02 : sw1 의 eth2 를 브리지에서 제거 (포트가 스위치에 안 꽂힌 상태)
+#   증상  : pc1, pc2 양쪽 링크 모두 UP. 그런데 ping 무응답.
+#   정답  : sw1 에서 eth2 가 br0 의 멤버가 아니다. `bridge link show` 에 없다.
+#   노림수: 링크 UP 이 곧 통신 가능은 아니다. 스위치가 전달해야 통한다. (B2)
+- name: "scenario m01-02 :: sw1 포트가 스위치에 꽂혀 있지 않다"
+  hosts: sw1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: 브리지 멤버십 변경
+      ansible.builtin.command: >-
+        ip link set eth2
+        {{ 'nomaster' if scenario_action | default('break') == 'break' else 'master br0' }}
+      changed_when: true
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'sw1 의 eth2 를 브리지에서 뺐다. 링크는 UP 이라 L1 만 보면 정상으로 보인다.'
+             if scenario_action | default('break') == 'break'
+             else 'sw1 eth2 브리지 복구 완료.' }}

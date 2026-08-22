@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}부록 · {{ site_name }}{% endblock %}
+{% block body %}
+<header class="top">
+  <div class="brand">{{ site_name }}</div>
+  <a class="ghost" href="/">← 랩으로</a>
+  <div class="spacer"></div>
+  {% include "_health.html" %}
+  <div class="who">{{ user.name | default(user.username) }}<span class="role">{{ user.role_label }}</span></div>
+  <a class="ghost" href="/logout">나가기</a>
+</header>
+
+<main class="layout">
+  <aside class="modules">
+    <h3>부록</h3>
+    <ul>
+      {% for d in docs %}
+      <li>
+        <a class="mod {{ 'on' if d.id == doc.id }}" href="/appendix?doc={{ d.id }}">
+          <span class="dot done"></span>
+          <span class="t"><b>{{ loop.index }}</b> {{ d.title.split(' — ')[0] }}</span>
+          <span class="d">{{ '🖨' if d.print else '' }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="legend">🖨 인쇄해서 곁에 두기를 권하는 것</p>
+    <p class="legend"><a href="/">← 모듈로 돌아가기</a></p>
+  </aside>
+
+  <section class="content" id="module">
+    <div class="module-head">
+      <div>
+        <span class="mid">부록</span>
+        <h2>{{ doc.title }}</h2>
+        <p class="meta">{{ doc.summary }}</p>
+      </div>
+    </div>
+    <p class="note">
+      부록에는 퀴즈도 검사도 없다. <b>처음부터 전부 열려 있고</b>, 언제든 여기로 와서 보면 된다.
+      주소는 지금 보고 있는 <b>lab {{ lab_id }}</b> 의 실제 값이다.
+      <span class="muted">원본: <code>docs/appendix/{{ doc.id }}.md.j2</code> · 인쇄용 사본: <code>dist/appendix/{{ doc.id }}.md</code></span>
+    </p>
+    <article class="doc">{{ doc_html | safe }}</article>
+  </section>
+</main>
+{% endblock %}

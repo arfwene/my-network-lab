@@ -1,0 +1,30 @@
+---
+# M3-04 : web 서버의 기본 경로 삭제
+#   증상  : pc1 -> web 무응답. **모든 라우터의 경로가 정상**이고 r4 -> web 은 잘 된다.
+#   정답  : web 자신에게 돌아갈 길이 없다. r4 와는 같은 대역이라 경로 없이도 통하므로
+#           "서버는 정상" 으로 보인다.
+#   노림수: 리턴 경로는 라우터만의 문제가 아니다. 네트워크/서버 담당이 서로 미루는 전형적 상황. (D3)
+- name: "scenario m03-04 :: 서버의 기본 경로 누락"
+  hosts: web
+  become: true
+  gather_facts: false
+  vars:
+    gw: "{{ ipv4.segments.vlan40.gateway }}"
+  tasks:
+    - name: 기본 경로 삭제
+      ansible.builtin.command: "ip route del default"
+      changed_when: true
+      failed_when: false
+      when: scenario_action | default('break') == 'break'
+
+    - name: 기본 경로 복구
+      ansible.builtin.command: "ip route replace default via {{ gw }} dev eth1 proto static"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'web 의 기본 경로를 지웠다. 라우터는 전부 정상이므로 "네트워크는 이상 없다" 로 보인다.'
+             if scenario_action | default('break') == 'break'
+             else 'web 기본 경로 복구 완료 (via ' ~ gw ~ ').' }}

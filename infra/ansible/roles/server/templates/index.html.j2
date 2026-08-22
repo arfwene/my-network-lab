@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>{{ node }} — my-network-lab</title>
+<h1>{{ node }}</h1>
+<p>{{ desc }}</p>
+<ul>
+  <li>노드 역할: {{ node_role }} / 구역: {{ zone }}</li>
+  <li>단계: {{ lab_stage }}</li>
+{% for i in lab_interfaces if i.active and i.ipv4 is defined %}
+  <li>{{ i.name }} : {{ i.ipv4 }}{% if i.ipv6 is defined %} , {{ i.ipv6 }}{% endif %}</li>
+{% endfor %}
+</ul>
+<p>이 페이지가 보인다면 L1~L7 전 구간이 정상이라는 뜻이다.</p>

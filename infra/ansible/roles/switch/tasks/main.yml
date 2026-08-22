@@ -1,0 +1,24 @@
+---
+# Linux bridge 를 스위치로 사용한다.
+# 실장비 명령 대응:  bridge fdb show  ==  show mac address-table
+#                    bridge vlan show ==  show vlan brief
+- name: 스위칭 설정 스크립트 배포
+  ansible.builtin.template:
+    src: lab-switch.sh.j2
+    dest: /usr/local/sbin/lab-switch-up.sh
+    mode: "0755"
+  notify: restart lab-switch
+
+- name: 스위치 서비스 유닛 배포
+  ansible.builtin.copy:
+    src: lab-switch.service
+    dest: /etc/systemd/system/lab-switch.service
+    mode: "0644"
+  notify: restart lab-switch
+
+- name: 스위치 서비스 활성화
+  ansible.builtin.systemd:
+    name: lab-switch
+    enabled: true
+    state: started
+    daemon_reload: true

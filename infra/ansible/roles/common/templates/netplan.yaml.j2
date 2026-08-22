@@ -1,0 +1,97 @@
+# 자동 생성 (Ansible / roles/common). 직접 수정하지 말 것.
+#   노드   : {{ node }} ({{ node_role }})
+#   단계   : {{ lab_stage }}
+#
+# 인터페이스 이름을 MAC 으로 매칭해 고정한다.
+# -> 부팅 순서나 PCI 순서가 바뀌어도 eth1 이 항상 같은 링크를 가리킨다.
+#    실장비에서 포트 번호가 물리적으로 고정된 것과 같은 효과.
+{% set si = stages.index(lab_stage) %}
+{% set v6 = si >= stages.index('m5') %}
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ mgmt_interface }}:
+      match:
+        macaddress: "{{ mgmt_mac }}"
+      set-name: {{ mgmt_interface }}
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      addresses: ["{{ mgmt_ip }}/{{ mgmt_prefixlen }}"]
+      # 기본 경로를 두지 않는다. 관리망은 랩과 분리된 별개 세계이고,
+      # 점프 호스트가 같은 세그먼트에 있어 라우팅이 필요 없다.
+{# 인터페이스 이름은 배선의 성질이므로 단계와 무관하게 항상 고정한다.
+   주소는 설정이므로 해당 모듈에 도달했을 때만 붙인다. 실제 현장과 같은 모델. #}
+{% for i in lab_interfaces if i.bridge_id and not i.parent %}
+    {{ i.name }}:                       # -> {{ i.peer | default('?') }} ({{ i.bridge }}){% if not i.active %}  [{{ i.stage | upper }} 부터 사용]{% elif i.desc %}  {{ i.desc }}{% endif %}
+
+      match:
+        macaddress: "{{ i.mac }}"
+      set-name: {{ i.name }}
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+{%   if i.active and node_role != 'switch' and i.ipv4 is defined and i.mode | default('') != 'trunk' %}
+      addresses:
+        - "{{ i.ipv4 }}"
+{%     if v6 and i.ipv6 is defined %}
+        - "{{ i.ipv6 }}"
+{%     endif %}
+{%     set has_gw = i.gateway is defined and node_role in ['host', 'server'] %}
+{%     set rts = i.routes | default([]) | selectattr('stage', 'in', stages[:si+1]) | list %}
+{%     if has_gw or rts %}
+      routes:
+{%       if has_gw %}
+        - to: default
+          via: {{ i.gateway }}
+{%         if v6 and i.gateway6 is defined %}
+        - to: "::/0"
+          via: "{{ i.gateway6 }}"
+{%         endif %}
+{%       endif %}
+{%       for r in rts %}
+        - to: {{ r.to }}                # {{ r.desc | default('', true) }}
+          via: {{ r.via }}
+{%       endfor %}
+{%     endif %}
+{%   endif %}
+{% endfor %}
+{% set subs = lab_interfaces | selectattr('active') | selectattr('parent') | list %}
+{% if subs %}
+  vlans:
+{%   for i in subs %}
+    {{ i.name }}:                       # VLAN {{ i.vlan }} 게이트웨이
+      id: {{ i.vlan }}
+      link: {{ i.parent }}
+{%     if i.ipv4 is defined %}
+      addresses:
+        - "{{ i.ipv4 }}"
+{%       if v6 and i.ipv6 is defined %}
+        - "{{ i.ipv6 }}"
+{%       endif %}
+{%     endif %}
+{%   endfor %}
+{% endif %}
+{% set los = lab_interfaces | selectattr('active') | selectattr('type', 'defined') | selectattr('type', 'equalto', 'loopback') | list %}
+{% if los %}
+  dummy-devices:
+{%   for i in los %}
+    {{ i.name }}:                       # 루프백 — OSPF router-id / 장비 식별자
+      addresses:
+        - "{{ i.ipv4 }}"
+{%     if v6 and i.ipv6 is defined %}
+        - "{{ i.ipv6 }}"
+{%     endif %}
+{%     if si >= stages.index(i.extra_stage | default('m1')) %}
+{%       for a in i.extra_ipv4 | default([]) %}
+        - "{{ a }}"                     # 공인 서비스 블록 (DNAT 대상)
+{%       endfor %}
+{%       if v6 %}
+{%         for a in i.extra_ipv6 | default([]) %}
+        - "{{ a }}"
+{%         endfor %}
+{%       endif %}
+{%     endif %}
+{%   endfor %}
+{% endif %}

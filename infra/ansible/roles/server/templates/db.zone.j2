@@ -1,0 +1,8 @@
+$TTL 300
+@   IN  SOA {{ node }}.{{ dns.zone }}. admin.{{ dns.zone }}. (
+            {{ ansible_date_time.epoch | default('1') }} ; serial
+            300 60 604800 300 )
+@   IN  NS  {{ node }}.{{ dns.zone }}.
+{% for r in dns.records %}
+{{ "%-8s"|format(r.name) }} IN  {{ "%-6s"|format(r.type) }} {{ r.value }}
+{% endfor %}

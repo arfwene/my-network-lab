@@ -1,0 +1,6 @@
+---
+- name: restart lab-switch
+  ansible.builtin.systemd:
+    name: lab-switch
+    state: restarted
+    daemon_reload: true

@@ -1,0 +1,12 @@
+id: m03
+title: "라우팅 기초 — 정적 라우팅"
+stage: m3
+duration: "3시간"
+competencies: [D2, D3, D4, H5]
+summary: "라우팅 테이블을 읽어 다음 홉을 예측하고, 리턴 경로가 없으면 통신이 되지 않는다는 것을 캡처로 증명한다."
+objectives:
+  - "라우팅 테이블을 읽고 Longest Prefix Match 로 특정 목적지의 다음 홉을 예측할 수 있다 (D2)"
+  - "정적 라우팅을 양방향으로 구성하고, 리턴 경로 누락 시의 증상을 진단할 수 있다 (D3)"
+  - "AD(Administrative Distance)와 메트릭의 차이, 정적/동적 라우팅의 선택 기준을 설명할 수 있다 (D4)"
+  - "traceroute 의 동작 원리(TTL + ICMP)와 한계를 설명하고 결과를 오독하지 않을 수 있다 (H5)"
+  - "요약(summarization)된 경로 한 줄이 여러 대역을 어떻게 덮는지 설명할 수 있다"

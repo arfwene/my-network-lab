@@ -1,0 +1,34 @@
+# =============================================================================
+#  site.local.yml — 실제 환경 값 (git 에 올리지 않는다)
+# =============================================================================
+#  config/site.yml 위에 깊은 병합(deep merge)된다. 바꿀 값만 쓰면 된다.
+#  이 파일을 `config/site.local.yml` 로 복사해서 사용할 것.
+# =============================================================================
+
+access:
+  office_lan: 192.0.2.0/24            # 교육생 PC 가 있는 사무실 대역
+  # Proxmox 접속 정보는 웹 콘솔 [관리자 → 연결 설정] 에서 입력해도 된다.
+  #   웹에서 저장하면 var/runtime.yml 로 나가며 이 파일보다 우선한다.
+  #   API 토큰은 어느 쪽이든 파일에 쓰지 않는다 (var/console.db + 환경변수).
+  proxmox:
+    host_ip:      192.0.2.10
+    api_endpoint: "https://192.0.2.10:8006/"
+    node_name:    pve01
+    datastore:    local-lvm
+  jump_host:
+    office_ip: 192.0.2.11
+    # 이 서버가 랩 관리망(172.30.0.0/16) 브리지에 물려 있지 않다면 켠다.
+    # proxy_via_proxmox: true
+  ssh_public_keys:
+    - "ssh-ed25519 AAAA... trainee01@office"
+    - "ssh-ed25519 AAAA... admin@ops"
+
+# 사내에서 이미 사용 중인 대역을 여기에 등록한다.
+# 랩 대역이 이것과 겹치면 validate-site.py 가 배포를 막는다.
+forbidden:
+  - {cidr: 172.16.0.0/16, severity: error, reason: "사내 사용 중 (사무실·지사)"}
+  # - {cidr: 10.20.0.0/16, severity: error, reason: "사내 데이터센터"}
+
+publish_guard:
+  forbidden_strings:
+    - "example-corp.co.kr"              # 사내 도메인 등

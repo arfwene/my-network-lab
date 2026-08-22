@@ -1,0 +1,32 @@
+---
+# M2-02 : sw1 트렁크에서 VLAN20 태그 제거
+#   증상  : pc2 만 게이트웨이에 닿지 못한다. pc1 은 정상.
+#           pc2 의 주소·마스크·기본 경로는 전부 맞다. 링크도 UP.
+#   정답  : sw1 의 eth3(트렁크)에 VLAN20 이 없다. VLAN20 프레임이 r1 까지 가지 못한다.
+#           bridge vlan show dev eth3 으로 확인.
+#   노림수: "두 PC 의 차이는 VLAN 뿐이다" 에서 출발해 그 VLAN 의 경로를 따라가기. (B3, B5)
+- name: "scenario m02-02 :: 트렁크에 VLAN 이 빠졌다"
+  hosts: sw1
+  become: true
+  gather_facts: false
+  vars:
+    trunk: "{{ lab_interfaces | selectattr('name', 'equalto', 'eth3') | first }}"
+    vid: "{{ ipv4.segments.vlan20.vlan }}"
+  tasks:
+    - name: 트렁크에서 VLAN 제거
+      ansible.builtin.command: "bridge vlan del dev {{ trunk.name }} vid {{ vid }}"
+      changed_when: true
+      failed_when: false
+      when: scenario_action | default('break') == 'break'
+
+    - name: 트렁크에 VLAN 복구 (태그된 채로)
+      ansible.builtin.command: "bridge vlan add dev {{ trunk.name }} vid {{ vid }}"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'sw1 의 ' ~ trunk.name ~ ' (r1 트렁크) 에서 VLAN ' ~ vid ~ ' 을 뺐다. pc2 만 게이트웨이에 못 간다.'
+             if scenario_action | default('break') == 'break'
+             else 'sw1 트렁크 VLAN ' ~ vid ~ ' 복구 완료.' }}

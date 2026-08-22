@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}계정 관리 · {{ site_name }}{% endblock %}
+{% block body %}
+<header class="top">
+  <div class="brand">{{ site_name }}</div>
+  <a class="ghost" href="/">← 랩으로</a>
+  <a class="ghost" href="/admin/settings">연결 설정</a>
+  <a class="ghost" href="/admin/reviews">검토 큐{% if pending %} <b class="pill">{{ pending }}</b>{% endif %}</a>
+  <a class="ghost" href="/admin/exams">시험</a>
+  <div class="spacer"></div>
+  {% include "_health.html" %}
+  <div class="who">{{ user.name }}<span class="role">{{ user.role_label }}</span></div>
+  <a class="ghost" href="/password">비밀번호</a>
+  <a class="ghost" href="/logout">나가기</a>
+</header>
+
+<main class="admin">
+  {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="flash bad">{{ err }}</div>{% endif %}
+
+  <section class="card">
+    <h3>계정 만들기</h3>
+    <form method="post" action="/admin/users" class="newuser">
+      <label>아이디<input name="username" required pattern="[A-Za-z0-9_-]+"></label>
+      <label>이름<input name="name" placeholder="표시 이름"></label>
+      <label>종류
+        <select name="role" id="rolesel">
+          <option value="user">사용자 — 배정된 랩만</option>
+          <option value="admin">관리자 — 모든 랩 + 계정 관리</option>
+        </select>
+      </label>
+      <label>랩
+        <select name="lab_id" id="labsel">
+          {% for l in labs %}<option value="{{ l }}">lab{{ l }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>비밀번호<input name="password" type="text" placeholder="비우면 자동 생성"></label>
+      <button class="btn primary" type="submit">만들기</button>
+    </form>
+    <p class="note">규칙: {{ policy }} · 생성된 계정은 <b>첫 로그인에서 비밀번호를 바꿔야</b> 한다.</p>
+  </section>
+
+  <section class="card">
+    <h3>계정 <small>{{ users | length }}개</small></h3>
+    <table class="users">
+      <thead><tr>
+        <th>아이디</th><th>이름</th><th>종류</th><th>랩</th><th>상태</th>
+        <th>마지막 로그인</th><th>작업</th>
+      </tr></thead>
+      <tbody>
+      {% for u in users %}
+        <tr class="{{ 'off' if u.disabled }}">
+          <td><b>{{ u.username }}</b></td>
+          <td>{{ u.name }}</td>
+          <td><span class="badge {{ u.role }}">{{ role_label[u.role] }}</span></td>
+          <td>
+            {% if u.role == 'user' %}
+            <form method="post" action="/admin/users/{{ u.username }}/lab" class="inline">
+              <select name="lab_id" onchange="this.form.submit()">
+                {% for l in labs %}<option value="{{ l }}" {{ 'selected' if l == u.lab_id }}>lab{{ l }}</option>{% endfor %}
+              </select>
+            </form>
+            {% else %}<span class="muted">전체</span>{% endif %}
+          </td>
+          <td>
+            {% if u.disabled %}<span class="badge off">차단</span>
+            {% elif u.must_change_password %}<span class="badge warn">변경 필요</span>
+            {% else %}<span class="badge ok">정상</span>{% endif %}
+          </td>
+          <td class="muted">{{ u.last_login or '-' }}</td>
+          <td class="ops">
+            <form method="post" action="/admin/users/{{ u.username }}/reset" class="inline">
+              <button class="mini">비밀번호 초기화</button></form>
+            <form method="post" action="/admin/users/{{ u.username }}/unlock" class="inline">
+              <button class="mini">잠금 해제</button></form>
+            {% if u.disabled %}
+            <form method="post" action="/admin/users/{{ u.username }}/enable" class="inline">
+              <button class="mini">차단 해제</button></form>
+            {% else %}
+            <form method="post" action="/admin/users/{{ u.username }}/disable" class="inline">
+              <button class="mini warn">차단</button></form>
+            {% endif %}
+            <form method="post" action="/admin/users/{{ u.username }}/delete" class="inline"
+                  onsubmit="return confirm('{{ u.username }} 계정을 삭제한다. 계속?')">
+              <button class="mini danger">삭제</button></form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="note">
+      <b>차단</b>은 계정을 남긴 채 접근만 막는다 (진행 중인 세션도 즉시 끊긴다).
+      교육 중 문제가 생겼을 때 삭제하면 이력이 사라지므로 차단을 먼저 쓸 것.
+    </p>
+  </section>
+</main>
+<script>
+  // 관리자는 랩을 배정하지 않는다
+  const rs = document.getElementById('rolesel'), ls = document.getElementById('labsel');
+  const sync = () => ls.closest('label').style.display = rs.value === 'admin' ? 'none' : '';
+  rs.addEventListener('change', sync); sync();
+</script>
+{% endblock %}

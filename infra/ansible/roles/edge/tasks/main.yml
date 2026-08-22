@@ -1,0 +1,17 @@
+---
+# 인터넷 경계: NAT + stateful 방화벽 (M9)
+- name: nftables 규칙 배포
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    mode: "0644"
+    validate: "nft -c -f %s"
+  notify: reload nftables
+  when: stages.index(lab_stage) >= stages.index('m9')
+
+- name: nftables 활성화
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+    state: started
+  when: stages.index(lab_stage) >= stages.index('m9')

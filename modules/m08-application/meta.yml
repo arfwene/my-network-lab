@@ -1,0 +1,14 @@
+id: m08
+title: "응용 계층 — HTTP · DNS · FTP"
+stage: m8
+duration: "4시간"
+competencies: [A1, F1, F2, F3, F4, F5, G4]
+summary: "\"인터넷이 안 돼요\" 의 첫 분기점인 DNS 실패/네트워크 실패 판별을 익히고, FTP 의 두 채널을 캡처로 증명한다."
+objectives:
+  - "curl 한 번에서 DNS → 라우팅 → ARP → TCP handshake → HTTP 가 순서대로 일어나는 것을 캡처로 짚고, 각 단계가 깨졌을 때의 증상을 구분할 수 있다 (A1)"
+  - "DNS 해석 실패인지 네트워크 도달 실패인지 구분할 수 있다 (F1) ★"
+  - "telnet · nc 만으로 HTTP 요청을 수동 작성해 응답을 받아낼 수 있고, 상태 코드로 책임 소재를 판단할 수 있다 (F2)"
+  - "HTTPS 가 네트워크 관점에서 무엇을 추가하는지 설명할 수 있다 (F3)"
+  - "FTP 의 제어 채널과 데이터 채널 분리를 설명하고, Active 와 Passive 의 연결 방향 차이를 캡처로 증명할 수 있다 (F4)"
+  - "FTP Active 모드가 NAT · 방화벽 환경에서 실패하는 이유를 설명할 수 있다 (F5)"
+  - "관리 접근에 telnet 대신 SSH 를 써야 하는 이유를 캡처로 설명할 수 있다 (G4)"

@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block body %}
+<header class="top">
+  <div class="brand">{{ site_name }}</div>
+  <form class="labpick" method="get" action="/">
+    <label>랩
+      <select name="lab" onchange="this.form.submit()">
+        {% for l in labs %}<option value="{{ l }}" {{ 'selected' if l == lab_id }}>lab{{ l }}</option>{% endfor %}
+      </select>
+    </label>
+    <input type="hidden" name="m" value="{{ module.id if module }}">
+  </form>
+  <div class="spacer"></div>
+  {% include "_health.html" %}
+  <div class="who">{{ user.name | default(user.username) }}
+    <span class="role">{{ user.role_label }}</span></div>
+  <a class="ghost" href="/appendix">부록</a>
+  <a class="ghost" href="/history">이력</a>
+  {% if user.role == 'admin' %}<a class="ghost" href="/admin">계정 관리</a>
+  <a class="ghost" href="/admin/settings">연결 설정</a>
+  <a class="ghost" href="/admin/reviews">검토 큐{% if pending %} <b class="pill">{{ pending }}</b>{% endif %}</a>
+  <a class="ghost" href="/admin/exams">시험</a>{% endif %}
+  <a class="ghost" href="/password">비밀번호</a>
+  <a class="ghost" href="/logout">나가기</a>
+</header>
+
+<main class="layout">
+  <aside class="modules">
+    <h3>모듈</h3>
+    <ul>
+      {% for m in modules %}
+      <li>
+        <button class="mod {{ 'on' if module and m.id == module.id }} {{ '' if m.unlocked else 'locked' }}"
+                data-module="{{ m.id }}" {{ 'disabled' if not m.unlocked }}
+                title="{{ '앞 모듈을 통과해야 열린다' if not m.unlocked else m.summary }}">
+          <span class="dot {{ 'done' if m.progress.complete else m.status }}"></span>
+          <span class="t"><b>{{ m.id | upper }}</b> {{ m.title }}</span>
+          <span class="d">{{ '🔒' if not m.unlocked else ('✔' if m.progress.complete else m.duration) }}</span>
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="legend">
+      <span class="dot done"></span>통과 &nbsp;
+      <span class="dot applied"></span>적용됨 &nbsp;
+      <span class="dot pending"></span>미적용 &nbsp; 🔒 잠김
+    </p>
+    <p class="legend"><a href="/history">내 제출 이력 →</a></p>
+    <p class="legend"><a href="/appendix">부록 — 치트시트 · 플로우차트 · 용어집 →</a></p>
+  </aside>
+
+  <section class="content" id="module">
+    {% include "_module.html" %}
+  </section>
+
+  <aside class="side">
+    <h3>토폴로지 <small>{{ module.stage if module }}</small></h3>
+    <div class="topo-box" id="topo">
+      {{ topology_svg | default('') | safe }}
+    </div>
+
+    <h3>랩 상태</h3>
+    <div id="status">{% include "_status.html" %}</div>
+
+    <h3>실행</h3>
+    {% set allow = exam.allow %}
+    {% macro act(name, cls, label, title='') -%}
+      <button class="btn {{ cls }}" data-action="{{ name }}" title="{{ title }}"
+              {{ 'disabled' if allow is not none and name not in allow }}>{{ label }}</button>
+    {%- endmacro %}
+    <div class="actions {{ 'examlock' if allow is not none }}"
+         data-lab="{{ lab_id }}" data-stage="{{ module.stage if module else 'm1' }}"
+         data-capstone="{{ capstone }}">
+      <div class="row">
+        {{ act('deploy', '', '랩 생성', 'Terraform — 브리지와 VM 생성') }}
+        {{ act('destroy', 'danger', '랩 삭제', 'Terraform — VM 삭제') }}
+      </div>
+      {{ act('apply', 'primary', '이 모듈 적용') }}
+      {{ act('verify', '', '연결 확인') }}
+      {{ act('reset', 'warn', '이 모듈 초기화') }}
+      <div class="row">
+        <select id="scenario" {{ 'disabled' if allow is not none }}>
+          <option value="">장애 시나리오…</option>
+          {% for s in scenarios %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+        </select>
+        {{ act('break', 'danger', '주입') }}
+        {{ act('fix', '', '복구') }}
+      </div>
+      {% if allow is not none %}
+      <p class="note lock">시험 중에는 위 버튼이 잠긴다.
+        {% if exam.phase == 'closed' %}성적이 이미 확정됐다.{% endif %}
+        <b>연결 확인</b>만 열려 있다 — 상태를 보고 보고서를 쓰라는 뜻이다.</p>
+      {% endif %}
+    </div>
+
+    <div class="capstone" id="capstone" {{ '' if module and module.id == capstone else 'hidden' }}>
+      <h3>캡스톤 시험</h3>
+      {% if exam.phase in ('open', 'overtime') %}
+        <p class="note">진행 중이다. 남은 시간은 위 <b>랩 상태</b>에 있다.</p>
+      {% else %}
+        <p class="note">
+          랩을 초기화한 뒤 <b>서버가 고른 장애 {{ exam.faults }}가지</b>를 주입한다.
+          <b>무엇을 주입했는지는 알려주지 않는다.</b><br>
+          제한 시간 <b>{{ exam.minutes }}분</b>. 시간이 끝나면 그 순간의 검사 결과가
+          <b>확정 성적</b>이 되고, 그 뒤에 고쳐도 성적은 바뀌지 않는다.<br>
+          <b>못 고친 채로 끝나도 된다.</b> 남은 것을 인계 보고서에 적는 것까지가 과제다.
+        </p>
+        <button class="btn danger big" id="examstart">
+          {{ '캡스톤 다시 시작' if exam.phase == 'closed' else '캡스톤 시작' }}</button>
+      {% endif %}
+    </div>
+    <p class="note">랩 준비는 버튼으로, <b>학습은 터미널에서</b> 한다.<br>
+      <code>ssh pc1</code> 로 들어가 직접 명령을 쳐볼 것.</p>
+  </aside>
+</main>
+
+<div class="modal-back" id="modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3 id="modal-title">확인</h3>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-scope" id="modal-scope"></div>
+    <div class="modal-actions">
+      <button class="btn" id="modal-cancel">취소</button>
+      <button class="btn danger" id="modal-ok">확인</button>
+    </div>
+  </div>
+</div>
+
+<section class="console" id="console">
+  <header>
+    <span class="title">실행 로그</span>
+    <span class="job" id="jobinfo"></span>
+    <div class="spacer"></div>
+    <button class="ghost" id="clearlog">지우기</button>
+    <button class="ghost" id="togglelog">접기</button>
+  </header>
+  <pre id="log"></pre>
+</section>
+{% endblock %}

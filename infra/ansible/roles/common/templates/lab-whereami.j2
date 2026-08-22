@@ -1,0 +1,19 @@
+#!/bin/bash
+# lab-whereami — 내 인터페이스가 어느 링크에 붙어 있는가
+# Proxmox 는 토폴로지를 시각적으로 보여주지 않으므로 이 스크립트가 그 역할을 한다.
+cat <<'BANNER'
+{{ node }} ({{ node_role }}) — {{ desc }}
+BANNER
+printf '\n%-10s %-8s %-20s %-14s %s\n' 인터페이스 상태 주소 상대노드 설명
+printf '%s\n' "-------------------------------------------------------------------------------"
+printf '%-10s %-8s %-20s %-14s %s\n' "{{ mgmt_interface }}" \
+  "$(cat /sys/class/net/{{ mgmt_interface }}/operstate 2>/dev/null || echo none)" \
+  "{{ mgmt_ip }}/{{ mgmt_prefixlen }}" "(관리망)" "OOB — 통신 테스트에 쓰지 말 것"
+{% for i in lab_interfaces if i.active %}
+printf '%-10s %-8s %-20s %-14s %s\n' "{{ i.name }}" \
+  "$(cat /sys/class/net/{{ i.name }}/operstate 2>/dev/null || echo none)" \
+  "{{ i.ipv4 | default('-') }}" "{{ i.peer | default('-') }}" \
+  "{{ i.desc | default(i.role | default('', true), true) }}{% if i.vlan is defined and i.vlan %} [VLAN {{ i.vlan }}]{% endif %}"
+{% endfor %}
+echo
+echo "단계: {{ lab_stage }}   |   전체 지도: 웹 콘솔 [랩 지도]"

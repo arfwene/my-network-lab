@@ -1,0 +1,310 @@
+# 웹 콘솔 (v1)
+
+브라우저에서 모듈 교재를 읽고, 버튼으로 그 모듈을 랩에 적용한다.
+
+> **CLI 를 대체하지 않고 감싼다.** 랩 준비는 버튼으로, 학습은 터미널에서.
+> 네트워크 엔지니어 교육에서 CLI 를 감추면 배울 것이 사라진다.
+
+## 설치
+
+Proxmox 호스트 위에서 돌려도 되고, 별도의 서버(점프 호스트)에서 원격 Proxmox 에 붙어도 된다.
+어느 Proxmox 를 쓸지는 설치 후 웹에서 정한다 → [Proxmox 연결](#proxmox-연결)
+
+```bash
+make console-setup
+python3 tools/console-user.py add user01 --lab 1 --name "교육생01"
+python3 tools/console-user.py add admin2 --role admin --name "관리자2"
+```
+
+## 계정
+
+| | |
+|---|---|
+| 저장 | `var/console.db` (SQLite, 0600) — `make clean` 이 건드리지 않는다 |
+| 비밀번호 | `pbkdf2-hmac-sha256` · 200,000회 · 계정별 난수 솔트. 평문 저장 안 함 |
+| 세션 | 서명 쿠키에 **username 만**. 권한은 매 요청 DB 에서 다시 읽는다 |
+
+### 계정 종류
+
+| 종류 | 랩 | 계정 관리 | 해설 | 권한 |
+|---|---|---|---|---|
+| **관리자** `admin` | 전체 | ○ | ○ | 모든 기능 |
+| **사용자** `user` | **배정된 랩 하나** | ✗ | ✗ | 랩 생성·실행·삭제만 |
+
+사용자 계정의 권한은 **랩을 하는 데 필요한 것만** 준다.
+
+```
+lab.deploy   랩 생성 (Terraform apply)
+lab.destroy  랩 삭제 (Terraform destroy)
+lab.apply    모듈 적용 (Ansible)
+lab.verify   검증
+lab.reset    초기화
+lab.break    장애 주입
+lab.fix      장애 복구
+```
+
+관리자는 여기에 `lab.all`(모든 랩) · `user.manage`(계정 관리) · `module.answers`(해설)가 더해진다.
+
+### 최초 관리자
+
+계정이 하나도 없으면 콘솔이 뜰 때 `config/site.yml` 의 `console.bootstrap_admin` 으로 만든다.
+
+```
+admin / admin      ← 첫 로그인에서 비밀번호를 반드시 바꿔야 한다
+```
+
+바꾸기 전에는 **어떤 화면도 열리지 않고 어떤 작업도 실행되지 않는다.**
+
+### 비밀번호 규칙
+
+`config/site.yml` 의 `console.password_policy` 에서 정한다. 기본값:
+
+- 8자 이상
+- 특수문자 1개 이상
+- 계정 이름을 포함할 수 없음
+- 기존과 같을 수 없음
+
+관리자가 만든 계정과 초기화한 비밀번호는 **항상 첫 로그인에서 변경을 강제**한다.
+
+### 로그인 시도 제한
+
+`console.login` 에서 정한다. 기본값 **5회 실패 → 5분 잠금**.
+존재하지 않는 계정도 동일하게 세므로 계정 열거로 구분할 수 없다.
+
+```bash
+python3 tools/console-user.py unlock user01     # 관리자가 즉시 해제
+```
+
+### 관리
+
+웹(`/admin`) 또는 CLI 어느 쪽으로도 된다.
+
+```bash
+python3 tools/console-user.py add user01 --lab 1 --name "교육생01"
+python3 tools/console-user.py add admin2 --role admin --name "관리자2"
+python3 tools/console-user.py lab user01 --lab 3      # 재배정 (즉시 반영)
+python3 tools/console-user.py disable user01         # 차단 (진행 중 세션도 즉시)
+python3 tools/console-user.py unlock user01
+python3 tools/console-user.py list                   # = make users
+```
+
+**마지막 관리자 계정은 막거나 지울 수 없다.** 자기 자신도 차단·삭제할 수 없다.
+차단은 계정을 남긴 채 접근만 막으므로, 문제가 생겼을 때 삭제보다 먼저 쓸 것.
+
+## Proxmox 연결
+
+이 콘솔은 **Proxmox 위에서 직접** 돌 수도 있고, **다른 서버에서 원격 Proxmox 에 붙어서** 돌 수도 있다.
+어느 쪽인지는 웹에서 정한다 — `[관리자 → 연결 설정]` (`/admin/settings`).
+
+| | |
+|---|---|
+| 기본값 | `https://127.0.0.1:8006/` (콘솔이 Proxmox 위에 있는 경우) |
+| 입력 항목 | 주소 · 포트 · 노드 이름 · 데이터스토어 · API 토큰 · 인증서 검증 여부 |
+| 저장 위치 | `var/console.db` (원본, 토큰 포함) → `var/runtime.yml` (파생, **토큰 제외**) |
+| 우선순위 | `config/site.yml` → `config/site.local.yml` → `var/runtime.yml` |
+
+토큰 비밀값만은 파일로 내보내지 않는다. `var/console.db`(0600) 에 두었다가
+작업을 실행할 때 `PROXMOX_VE_API_TOKEN` 환경변수로만 넘긴다.
+생성물인 tfvars 는 언제든 다시 만들어지고 여러 곳으로 복사되기 때문이다.
+
+> 콘솔을 띄우기 전에 `PROXMOX_VE_API_TOKEN` 을 직접 export 해 뒀다면 그것도 그대로 쓰인다.
+> DB 에 토큰을 저장하면 그 값이 우선한다.
+
+### 최초 확인(컨펌)
+
+관리자가 첫 로그인에서 비밀번호를 바꾸고 나면 **연결 설정 화면으로 강제 이동**한다.
+값을 확인하고 `[확인하고 저장]` 을 누르기 전까지는 **어떤 화면도 열리지 않고 어떤 랩도 실행되지 않는다.**
+Proxmox 를 아직 켜지 않았다면 `[점검 실패해도 확인 처리]` 로 넘어갈 수 있다(그 사실이 DB 에 남는다).
+
+### 상태 점검
+
+랩 작업(`deploy`/`apply`/`verify`/…)은 **Proxmox 가 정상일 때만 나간다.**
+관문은 `jobs.Runner.submit` 한 곳이다 — 화면마다 검사를 붙이면 언젠가 빠뜨린 경로가 생긴다.
+
+```
+설정 값 → TCP 연결 → TLS 인증서 → API 인증 → 노드 → 데이터스토어 → 템플릿 VM
+```
+
+한 번에 "안 된다"고만 하면 원인을 찾을 수 없으므로 **어디까지 갔는지**를 남긴다.
+결과는 모든 화면 헤더의 상태 칩(초록/노랑/빨강)에 뜨고, 클릭하면 단계별 결과와
+조치 힌트가 나온다. 30초마다 자동 갱신하며, 실행이 거부되면 팝업이 바로 열린다.
+
+- 교육생에게도 보여준다 — "내 설정이 틀린 건가, 랩이 죽은 건가"를 스스로 구분해야 하기 때문이다.
+- 다만 조치 힌트는 관리자에게만 보낸다.
+- 점검 자체는 30초 캐시를 쓴다. `deploy`/`destroy` 만 캐시를 무시하고 새로 확인한다.
+
+### 토큰 만들기 (Proxmox 셸에서 한 번)
+
+```bash
+pveum user add terraform@pve
+pveum role add Terraform -privs "Datastore.Allocate Datastore.AllocateSpace \
+  Datastore.Audit Sys.Audit Sys.Console Sys.Modify VM.Allocate VM.Audit VM.Clone \
+  VM.Config.CDROM VM.Config.Cloudinit VM.Config.CPU VM.Config.Disk VM.Config.HWType \
+  VM.Config.Memory VM.Config.Network VM.Config.Options VM.Migrate VM.Monitor \
+  VM.PowerMgmt User.Modify Pool.Allocate"
+pveum aclmod / -user terraform@pve -role Terraform
+pveum user token add terraform@pve lab --privsep 0
+```
+
+`Sys.Modify` 는 랩 브리지 생성에 필요하다 — 빼면 VM 은 만들어져도 **배선이 안 된다**.
+
+## 서술 과제와 검토 큐
+
+자동 채점이 불가능한 과제(진단 과정 서술 · 구성도)를 위한 장치다.
+**관리자가 매번 봐야 진행되는 구조를 만들지 않는다** (PLAN 6.7).
+
+| | |
+|---|---|
+| 기본 정책 | 서술은 **제출하면 통과**. 교육생은 관리자를 기다리지 않는다 |
+| 자동 선별 | 루브릭을 전부 충족하면 **자동 통과** — 검토 큐에 뜨지 않는다 |
+| 큐로 가는 것 | 루브릭 미충족 · 구성도(`auto_pass: false`) |
+| 승인 필수 | **캡스톤(M10)만** `review: required`. 승인이 있어야 다음으로 간다 |
+| 재제출 요청 | 피드백을 적지 않으면 저장되지 않는다 |
+
+```yaml
+# modules/mXX/assessment.yml
+written:
+  items:
+    - id: cause
+      title: "장애 원인 서술"
+      review: optional        # optional = 비차단 / required = 승인 필요
+      auto_pass: true         # 루브릭을 다 채우면 관리자가 볼 필요 없다
+      min_chars: 120
+      rubric:
+        - {key: 근거, desc: "명령 결과로 근거를 댔는가", any: ["ip link", "tcpdump"]}
+```
+
+루브릭은 교육생에게도 **다뤄야 할 것**으로 미리 보인다. 빠진 항목은 제출 직후
+"**근거** 미언급"으로 돌려주므로 대부분은 관리자에게 가기 전에 스스로 고친다.
+
+관리자는 `/admin/reviews` 에서 몰아서 본다. 헤더의 대기 건수가 **0 이면 할 일이 없다.**
+자동 사전검토는 채점이 아니라 **20초 만에 판단하도록 요약을 붙이는 장치**다.
+
+## 캡스톤 시험 세션 — 제한 시간과 점수 동결
+
+캡스톤(M10)은 제한 시간 안에 장애를 복구하는 시험이다. 문제는 **시간이 끝났을 때
+랩을 못 만지게 막는 것이 이 구조에서 성립하지 않는다**는 것이다 — 교육생은 점프 호스트를
+거쳐 노드에 SSH 로 직접 붙고, 그 경로는 콘솔을 지나지 않는다. 랩 계정은 `frr`·`frrvty`
+그룹에 있어서 sudo 를 회수해도 `vtysh` 로 라우터를 고칠 수 있다.
+
+그래서 **막는 대신 소용없게 만든다.**
+
+| 층 | 하는 일 | 성격 |
+|---|---|---|
+| **① 점수 동결** | 마감 시각의 검사 결과를 **확정본**으로 못 박는다. 이후 무엇을 고쳐도 성적은 그대로 | **본체 — 우회할 수 없다** |
+| **② 콘솔 잠금** | 마감 뒤 실행 계열 작업을 거부한다 (`verify` 만 남긴다) | 사고 방지 장치 |
+
+> **성적은 확정본으로만 판단할 것.** 콘솔 잠금은 정책적 통제이지 기술적 봉쇄가 아니다.
+
+### 흐름
+
+```
+[캡스톤 시작]
+   │  서버가 시나리오를 무작위로 고른다 (교육생에게 보이지 않는다)
+   │  이전 장애 fix → reset(+site.yml 재적용) → 이번 장애 break
+   ▼
+주입 완료 ── 여기서부터 시계가 간다 (준비 시간은 시험 시간이 아니다)
+   │
+   │  진행 중:  [연결 확인] · [제출하고 검증] 만 열린다
+   │            나머지 버튼은 잠긴다 — 랩은 터미널에서 고치는 것이다
+   ▼
+제한 시간 종료
+   │  서버가 검사를 한 번 돌려 확정본을 만든다 (최대 sweep_seconds 안에)
+   ▼
+확정  ── 실행 버튼 잠김 · 주입된 장애 공개 · 인계 보고서 제출
+   │
+   └─ [캡스톤 다시 시작] 으로 재응시 무제한. 이전 확정본은 이력에 남는다
+```
+
+### 못 고쳐도 낸다
+
+시간이 끝나면 랩 검사는 못 돌리지만 **서술 제출은 그대로 저장된다** (오류가 아니라 정상 경로).
+남은 것을 **인계 보고서**에 적는 것까지가 과제다 — "고쳤습니다"는 누구나 쓰지만
+*"이 세 가지는 배제했고 남은 후보는 둘이며 다음 사람은 여기서 시작하면 된다"* 는
+실제로 진단한 사람만 쓸 수 있다.
+
+### 설정 (`config/site.yml` → `console.capstone`)
+
+| 키 | 기본값 | 뜻 |
+|---|---|---|
+| `module` | `m10` | 시험 세션을 쓰는 모듈 |
+| `minutes` | `45` | 제한 시간 |
+| `faults` | `3` | 무작위로 주입할 장애 개수 |
+| `sweep_seconds` | `20` | 마감 확정을 시도하는 주기 |
+| `pool` | `[]` | 비우면 `scenarios/` 전체에서 고른다 |
+
+### 관리자 (`/admin/exams`)
+
+| 조작 | 효과 |
+|---|---|
+| **연장** | 마감 시각을 뒤로 민다 |
+| **즉시 마감** | 마감 시각을 지금으로 당길 뿐이다. 확정은 시간 초과와 **같은 경로**로 일어난다 |
+| **취소** | 성적도 잠금도 남기지 않는다. 준비 실수를 되돌릴 때만 |
+
+관리자 계정은 잠금의 예외다 — 다음 응시를 준비해야 하기 때문이다.
+콘솔이 꺼져 있던 동안 지난 마감도 **기동 직후** 확정된다. 마감이 프로세스 생존에
+의존하면 "껐다 켜서 시간을 번다"가 가능해진다.
+
+## 안전장치 — 같은 Proxmox 의 다른 자원
+
+이 랩은 회사 Proxmox 위에서 돈다. `[랩 생성]` 을 누르면 **Terraform 보다 먼저** 확인한다.
+하나라도 걸리면 아무것도 만들지 않고 무엇과 부딪히는지 이름을 대고 멈춘다.
+
+| 검사 | 막는 사고 |
+|---|---|
+| VMID 구간이 비어 있는가 | 운영 VM 과 번호 충돌 |
+| 템플릿 VMID 가 정말 템플릿인가 | **운영 VM 복제** |
+| 브리지 이름이 비어 있는가 | 기존 브리지를 랩 것으로 여기고 삭제 |
+| 랩 대역이 호스트 대역과 겹치는가 | 호스트 라우팅 충돌 |
+| 호스트에 미적용 네트워크 변경이 있는가 | 브리지 생성 시 남의 변경까지 반영 |
+
+Ansible 인벤토리에는 **관리망 IP 를 못 박는다.** 노드 이름이 `web` · `dns` · `ftp` 라서,
+이름 해석에 맡기면 사내 동명 서버로 플레이북이 날아갈 수 있기 때문이다.
+
+하이퍼바이저 보호 규칙은 `dist/host-guard.nft` 로 만들어 두되 **적용은 관리자가 결정한다**
+(자세한 내용: `dist/access.md` 6.1).
+
+## 실행
+
+```bash
+make console                 # 기본 0.0.0.0:8080
+PORT=9000 make console
+```
+
+상시 운영은 systemd 로 돌린다 (부팅 시 자동 기동 · 죽으면 재시작).
+
+```bash
+./install.sh --service       # = make service. 유닛 원본은 deploy/my-network-lab.service
+systemctl status my-network-lab
+journalctl -u my-network-lab -f
+```
+
+**root 로 돌리지 않는다.** 이 서비스는 Terraform·Ansible 을 자식 프로세스로 띄우는데,
+root 로 돌면 생성물(`dist/` · `inventory/` · `var/`)이 전부 root 소유가 되어
+관리자가 같은 저장소를 CLI 로 만질 수 없게 된다.
+
+접근은 **사무실 LAN 에서만** 허용할 것. 이 콘솔은 ansible-playbook 을 실행하므로 권한이 크다.
+서버 준비부터 첫 랩까지의 전체 절차는 `docs/DEPLOY.md`.
+
+## 화면
+
+| 영역 | 내용 |
+|---|---|
+| 좌 | 모듈 목록 + 상태(미적용/적용됨/검증통과/지나감) |
+| 중 | 교재 · 과제 · 해설(강사 전용) 탭 |
+| 우 | 그 모듈 시점의 토폴로지, 랩 상태, 실행 버튼 |
+| 하 | 실행 로그 (SSE 실시간) |
+| 헤더 | Proxmox 연결 상태 칩 — 클릭하면 단계별 점검 결과 · 관리자는 검토 큐 대기 건수 |
+
+## 권한
+
+| 역할 | 볼 수 있는 랩 | 계정 관리 | 연결 설정 | 검토 큐 | 해설 |
+|---|---|---|---|---|---|
+| `user` | **배정된 랩 하나** | ✗ | ✗ (상태만 볼 수 있다) | ✗ | ✗ |
+| `admin` | 전체 | ○ | ○ | ○ | ○ |
+
+## 의존성 정책
+
+- **CDN 을 쓰지 않는다.** 랩 서버가 폐쇄망일 수 있다.
+- 토폴로지는 Mermaid.js 대신 **서버에서 SVG 로 직접 그린다** (`topology_svg.py`).
+- 프론트엔드 프레임워크·빌드 체인 없음. `app.js` + `health.js` 두 파일.

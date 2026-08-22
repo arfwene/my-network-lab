@@ -1,0 +1,56 @@
+#!/usr/sbin/nft -f
+# =============================================================================
+#  {{ node }} — 인터넷 경계 (자동 생성)
+#  inside  = eth1 ({{ ipv4.p2p['r4-edge'].addresses.edge }})   사설
+#  outside = eth2 ({{ public.ipv4.transit.addresses.edge }})   공인
+#
+#  확인 명령:
+#    nft list ruleset
+#    conntrack -L                <- 세션(5-tuple) 테이블. "세션"의 실체.
+# =============================================================================
+flush ruleset
+
+table inet filter {
+    chain input {
+        type filter hook input priority 0; policy accept;
+        # 랩 노드 자신에 대한 접근은 열어둔다 (관리망 접속 유지)
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+
+        # ---- Stateful 의 핵심 ----------------------------------------------
+        # 나갈 때 만들어진 세션의 "돌아오는 패킷"은 자동으로 허용된다.
+        # 그래서 역방향 정책을 따로 쓰지 않는다. 이것이 stateful 방화벽이다.
+        ct state established,related accept
+        ct state invalid drop
+
+        # ---- 내부 -> 외부 : 전부 허용 --------------------------------------
+        iifname "eth1" oifname "eth2" accept
+
+        # ---- 외부 -> 내부 : 공개 서비스만 ----------------------------------
+        # (DNAT 은 prerouting 에서 이미 끝났으므로 여기서는 사설 주소로 판정한다)
+{% for d in public.ipv4.nat_pool.dnat %}
+        iifname "eth2" oifname "eth1" ip daddr {{ d.private }} tcp dport { {{ d.ports | map('string') | join(', ') }} } accept   # {{ d.desc }}
+{% endfor %}
+
+        # 그 외는 policy drop. 로그를 남기면 트러블슈팅에 도움이 된다.
+        limit rate 5/second log prefix "[edge-drop] "
+    }
+}
+
+table ip nat {
+    chain prerouting {
+        type nat hook prerouting priority -100;
+{% for d in public.ipv4.nat_pool.dnat %}
+        ip daddr {{ d.public }} tcp dport { {{ d.ports | map('string') | join(', ') }} } dnat to {{ d.private }}   # {{ d.desc }}
+{% endfor %}
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority 100;
+        # 사설 출발지를 공인 주소 하나로 바꾼다 (PAT).
+        # 출발지 포트가 함께 바뀌므로 여러 내부 호스트가 주소 하나를 공유할 수 있다.
+        ip saddr {{ ipv4.lab_block }} oifname "eth2" snat to {{ public.ipv4.nat_pool.snat_address }}
+    }
+}

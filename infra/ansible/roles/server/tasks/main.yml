@@ -1,0 +1,102 @@
+---
+- name: 어떤 서비스를 올릴지 결정
+  ansible.builtin.set_fact:
+    svc_active: "{{ stages.index(lab_stage) >= stages.index(stage) }}"
+
+- block:
+    # ---------------- nginx (web, inet) ----------------
+    - name: nginx 사이트 설정
+      ansible.builtin.template:
+        src: nginx-lab.conf.j2
+        dest: /etc/nginx/sites-available/lab.conf
+        mode: "0644"
+      notify: restart nginx
+
+    - name: nginx 기본 사이트 제거
+      ansible.builtin.file: {path: /etc/nginx/sites-enabled/default, state: absent}
+      notify: restart nginx
+
+    - name: nginx 사이트 활성화
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/lab.conf
+        dest: /etc/nginx/sites-enabled/lab.conf
+        state: link
+      notify: restart nginx
+
+    - name: 콘텐츠 배포
+      ansible.builtin.template:
+        src: index.html.j2
+        dest: /var/www/html/index.html
+        mode: "0644"
+
+    - name: nginx 활성화
+      ansible.builtin.systemd: {name: nginx, enabled: true, state: started}
+  when: "'nginx' in services and svc_active"
+
+- block:
+    # ---------------- vsftpd (ftp) ----------------
+    # passive 포트 범위를 고정해야 방화벽 정책을 쓸 수 있다 — M9 의 핵심
+    - name: vsftpd 설정
+      ansible.builtin.template:
+        src: vsftpd.conf.j2
+        dest: /etc/vsftpd.conf
+        mode: "0644"
+      notify: restart vsftpd
+
+    # vsftpd 의 PAM 설정에는 pam_shells.so 가 들어 있다.
+    # 로그인 셸이 /etc/shells 에 없으면 **비밀번호가 맞아도 530 으로 거부**된다.
+    # ftpuser 는 SSH 로 못 들어오게 nologin 을 쓰므로, 그 셸을 목록에 등록해 준다.
+    #   (셸을 /bin/bash 로 바꾸는 것은 반대 방향의 해결이다 — 계정에 실제 로그인 권한이 생긴다)
+    - name: nologin 을 /etc/shells 에 등록 (FTP 로그인 전제 조건)
+      ansible.builtin.lineinfile:
+        path: /etc/shells
+        line: /usr/sbin/nologin
+        state: present
+        create: true
+        mode: "0644"
+
+    - name: FTP 테스트 계정
+      ansible.builtin.user:
+        name: ftpuser
+        password: "{{ 'labpass' | password_hash('sha512', 'labsalt') }}"
+        shell: /usr/sbin/nologin
+        home: /srv/ftp
+        create_home: true
+
+    - name: FTP 테스트 파일
+      ansible.builtin.copy:
+        dest: /srv/ftp/hello.txt
+        content: "my-network-lab FTP test file\n"
+        owner: ftpuser
+        mode: "0644"
+
+    - name: vsftpd 활성화
+      ansible.builtin.systemd: {name: vsftpd, enabled: true, state: started}
+  when: "'vsftpd' in services and svc_active"
+
+- block:
+    # ---------------- bind9 (dns) ----------------
+    - name: named 옵션
+      ansible.builtin.template:
+        src: named.conf.options.j2
+        dest: /etc/bind/named.conf.options
+        mode: "0644"
+      notify: restart bind9
+
+    - name: 존 선언
+      ansible.builtin.template:
+        src: named.conf.local.j2
+        dest: /etc/bind/named.conf.local
+        mode: "0644"
+      notify: restart bind9
+
+    - name: 정방향 존 파일
+      ansible.builtin.template:
+        src: db.zone.j2
+        dest: "/etc/bind/db.{{ dns.zone }}"
+        mode: "0644"
+      notify: restart bind9
+
+    - name: bind9 활성화
+      ansible.builtin.systemd: {name: named, enabled: true, state: started}
+  when: "'bind9' in services and svc_active"

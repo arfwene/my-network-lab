@@ -1,0 +1,40 @@
+---
+# FRRouting — vtysh 는 Cisco IOS 명령을 거의 그대로 쓴다.
+#   show ip route / show ip ospf neighbor / show running-config
+- name: FRR 데몬 활성화
+  ansible.builtin.lineinfile:
+    path: /etc/frr/daemons
+    regexp: "^{{ item }}="
+    line: "{{ item }}=yes"
+  loop: [zebra, staticd, ospfd, ospf6d]
+  notify: restart frr
+
+- name: vtysh 통합 설정 사용
+  ansible.builtin.lineinfile:
+    path: /etc/frr/vtysh.conf
+    line: "service integrated-vtysh-config"
+    create: true
+    mode: "0640"
+    owner: frr
+    group: frrvty
+
+- name: frr.conf 배포
+  ansible.builtin.template:
+    src: frr.conf.j2
+    dest: /etc/frr/frr.conf
+    owner: frr
+    group: frr
+    mode: "0640"
+  notify: restart frr
+
+- name: 랩 계정을 frr 그룹에 추가 (sudo 없이 vtysh 조회)
+  ansible.builtin.user:
+    name: "{{ ansible_user }}"
+    groups: [frr, frrvty]
+    append: true
+
+- name: FRR 활성화
+  ansible.builtin.systemd:
+    name: frr
+    enabled: true
+    state: started

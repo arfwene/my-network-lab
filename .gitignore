@@ -1,0 +1,29 @@
+__pycache__/
+*.pyc
+
+# ---- 실제 환경 값 (사내 IP·키). 절대 커밋하지 않는다 ----
+config/site.local.yml
+
+# ---- 생성물 (config/site.yml 에서 언제든 다시 만들 수 있다) ----
+#  실제 환경 값이 박혀 있으므로 저장소에 올리지 않는다.
+dist/
+infra/ansible/inventory/lab*/
+# main.tf 까지 gen-tfvars / gen-mgmt 가 생성한다 (_template · _mgmt 만 커밋)
+infra/terraform/envs/lab*/
+infra/terraform/envs/mgmt/
+
+# ---- Terraform ----
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+crash.log
+
+# ---- 웹 콘솔 ----
+console/.venv/
+console/__pycache__/
+
+# ---- 운영 데이터 (재생성 불가. make clean 이 건드리지 않는다) ----
+#  계정 DB, 세션 시크릿, 랩 진행 상태
+var/
+config/users.yml*

@@ -1,0 +1,12 @@
+---
+- name: netplan apply
+  ansible.builtin.command: netplan apply
+  async: 30
+  poll: 0
+  changed_when: true
+  # 인터페이스 이름이 바뀌는 경우가 있어 비동기로 던지고 재접속을 기다린다
+
+- name: wait for reconnect
+  ansible.builtin.wait_for_connection:
+    delay: 5
+    timeout: 120

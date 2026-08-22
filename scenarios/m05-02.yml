@@ -1,0 +1,31 @@
+---
+# M5-02 : r4 서버망 인터페이스의 OSPFv3 area 제거
+#   증상  : pc1 에서 IPv6 게이트웨이까지는 가는데 서버망만 못 간다. IPv4 는 정상.
+#   정답  : r4 의 eth3 가 OSPFv3 에 들어 있지 않아 서버망 IPv6 대역이 광고되지 않는다.
+#           r1 의 show ipv6 route ospf6 에 그 대역이 없다.
+#   노림수: 절단 지점을 찾은 뒤 "이 경로를 누가 알려 줬어야 하는가" 로 거슬러 올라가기. (C4)
+- name: "scenario m05-02 :: 서버망 IPv6 경로가 광고되지 않는다"
+  hosts: r4
+  become: true
+  gather_facts: false
+  vars:
+    area6: "{{ routing.ospf6.area }}"
+  tasks:
+    - name: OSPFv3 에서 서버망 인터페이스를 뺀다
+      ansible.builtin.command: >-
+        vtysh -c "conf t" -c "interface eth3" -c "no ipv6 ospf6 area {{ area6 }}"
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: OSPFv3 복구
+      ansible.builtin.command: >-
+        vtysh -c "conf t" -c "interface eth3" -c "ipv6 ospf6 area {{ area6 }}"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'r4 의 eth3 를 OSPFv3 에서 뺐다. IPv4 는 그대로이므로 IPv6 쪽만 경로가 사라진다.'
+             if scenario_action | default('break') == 'break'
+             else 'r4 eth3 OSPFv3 복구 완료 (area ' ~ area6 ~ ').' }}

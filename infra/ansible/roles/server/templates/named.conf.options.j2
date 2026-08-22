@@ -1,0 +1,9 @@
+options {
+    directory "/var/cache/bind";
+    recursion yes;
+    allow-query { any; };
+    allow-recursion { {{ ipv4.lab_block }}; localhost; };
+    dnssec-validation no;      # 랩 전용
+    listen-on { any; };
+    listen-on-v6 { any; };
+};

@@ -1,0 +1,24 @@
+---
+# M6-04 : pc1 의 ephemeral 포트 범위를 3개로 좁힌다
+#   증상  : 처음 몇 번은 되다가 `Cannot assign requested address` 가 뜬다.
+#   정답  : 상대 문제가 아니라 **내 쪽 자원 고갈**이다. 출발지 포트를 더 만들 수 없다.
+#   노림수: 에러 메시지를 읽는 훈련. "assign"(할당) 이라는 단어가 이미 답을 말하고 있다. (E4)
+- name: "scenario m06-04 :: 출발지 포트 고갈"
+  hosts: pc1
+  become: true
+  gather_facts: false
+  vars:
+    narrow: "32768 32770"
+    normal: "32768 60999"
+  tasks:
+    - name: ephemeral 포트 범위 변경
+      ansible.builtin.command: >-
+        sysctl -w net.ipv4.ip_local_port_range={{ (narrow if scenario_action | default('break') == 'break' else normal) | quote }}
+      changed_when: true
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'pc1 의 ephemeral 포트를 3개로 좁혔다. 반복 접속을 시켜야 증상이 나온다 — for 문으로 10번 돌리게 할 것.'
+             if scenario_action | default('break') == 'break'
+             else 'pc1 포트 범위 복구 완료 (' ~ normal ~ ').' }}

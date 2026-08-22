@@ -1,0 +1,39 @@
+---
+# M8-01 : DNS 레코드가 엉뚱한 IP 를 가리킨다
+#   증상  : 이름은 잘 풀린다. 그런데 접속이 안 된다. IP 로 직접 하면 된다.
+#   정답  : dig 응답의 **값**이 틀렸다. web 의 A 레코드가 없는 주소를 가리킨다.
+#   노림수: "응답이 왔다" 와 "맞는 답이 왔다" 는 다르다. 가장 놓치기 쉬운 DNS 장애. (F1) ★
+- name: "scenario m08-01 :: DNS 레코드 오류"
+  hosts: dns
+  become: true
+  gather_facts: false
+  vars:
+    good: "{{ ipv4.segments.vlan40.hosts.web }}"
+    bad: "{{ ipv4.segments.vlan40.hosts.web.split('.')[:3] | join('.') }}.99"
+    zonefile: "/etc/bind/db.{{ dns.zone }}"
+  tasks:
+    - name: web 의 A 레코드를 바꾼다
+      ansible.builtin.replace:
+        path: "{{ zonefile }}"
+        regexp: '^(web\s+IN\s+A\s+){{ good | regex_escape }}\s*$'
+        replace: '\g<1>{{ bad }}'
+      when: scenario_action | default('break') == 'break'
+
+    - name: A 레코드 복구
+      ansible.builtin.replace:
+        path: "{{ zonefile }}"
+        regexp: '^(web\s+IN\s+A\s+){{ bad | regex_escape }}\s*$'
+        replace: '\g<1>{{ good }}'
+      when: scenario_action | default('break') != 'break'
+
+    - name: named 재시작 (존 파일 다시 읽기)
+      ansible.builtin.systemd:
+        name: named
+        state: restarted
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'web 의 A 레코드를 ' ~ bad ~ ' 로 바꿨다. 이름은 풀리므로 "DNS 는 정상" 이라고 넘어가기 쉽다. 힌트를 늦게 줄 것.'
+             if scenario_action | default('break') == 'break'
+             else 'web A 레코드 복구 완료 (' ~ good ~ '). TTL 때문에 최대 5분간 옛 값이 남을 수 있다.' }}

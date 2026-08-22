@@ -1,0 +1,27 @@
+---
+# M9-01 : SNAT 규칙 제거
+#   증상  : 내부에서 외부로 아무것도 안 된다. 내부끼리는 전부 정상.
+#   정답  : 경계 바깥쪽(eth2) 캡처에 **사설 출발지가 그대로** 보인다.
+#           나가긴 나갔는데 그 주소로는 응답이 돌아올 수 없다.
+#   노림수: "나갔는가" 와 "변환됐는가" 는 다른 질문이다. 양쪽 동시 캡처. (G1, C7)
+- name: "scenario m09-01 :: SNAT 이 사라졌다"
+  hosts: edge
+  become: true
+  gather_facts: false
+  tasks:
+    - name: postrouting 체인 비우기 (SNAT 제거)
+      ansible.builtin.command: "nft flush chain ip nat postrouting"
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: 설정 파일 기준으로 복구
+      ansible.builtin.command: "nft -f /etc/nftables.conf"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'edge 의 SNAT 을 지웠다. "내부에서 밖으로 안 된다" 로만 알리고, 경계 양쪽 캡처를 유도할 것.'
+             if scenario_action | default('break') == 'break'
+             else 'edge 규칙 복구 완료 (nft list ruleset 으로 확인).' }}

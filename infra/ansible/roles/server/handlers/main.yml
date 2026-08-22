@@ -1,0 +1,7 @@
+---
+- name: restart nginx
+  ansible.builtin.systemd: {name: nginx, state: restarted}
+- name: restart vsftpd
+  ansible.builtin.systemd: {name: vsftpd, state: restarted}
+- name: restart bind9
+  ansible.builtin.systemd: {name: named, state: restarted}

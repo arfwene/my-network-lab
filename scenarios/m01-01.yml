@@ -1,0 +1,20 @@
+---
+# M1-01 : pc2 의 랩 인터페이스를 관리적으로 down
+#   증상  : pc1 -> pc2 ping 무응답
+#   정답  : pc2 의 eth1 이 admin down. `ip -br link` 에 UP 플래그가 없다.
+#   노림수: "ping 부터 치지 말고 링크부터 봐라" (B1)
+- name: "scenario m01-01 :: pc2 링크 down"
+  hosts: pc2
+  become: true
+  gather_facts: false
+  tasks:
+    - name: 링크 상태 변경
+      ansible.builtin.command: "ip link set eth1 {{ 'down' if scenario_action | default('break') == 'break' else 'up' }}"
+      changed_when: true
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'pc2 eth1 을 down 시켰다. 교육생에게 "pc1 에서 pc2 로 ping 이 안 된다"고만 알릴 것.'
+             if scenario_action | default('break') == 'break'
+             else 'pc2 eth1 복구 완료.' }}

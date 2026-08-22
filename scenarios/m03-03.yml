@@ -1,0 +1,37 @@
+---
+# M3-03 : 라우팅 루프
+#   증상  : pc1 -> web 무응답. traceroute 를 돌리면 같은 두 주소가 번갈아 반복된다.
+#   정답  : r2 의 Site-B 경로가 r4 가 아니라 r1 을 향한다.
+#           r1 은 r2 로, r2 는 다시 r1 으로 -> TTL 이 0 이 될 때까지 왕복한다.
+#   노림수: TTL 이 없으면 무슨 일이 벌어지는지(M1 의 L2 루프와 대조) + traceroute 읽기. (D2, H5)
+- name: "scenario m03-03 :: 라우팅 루프"
+  hosts: r2
+  become: true
+  gather_facts: false
+  vars:
+    site_b: "{{ ipv4.summary['site-b'].cidr }}"
+    good: "{{ ipv4.p2p['r2-r4'].addresses.r4 }}"
+    loop_nh: "{{ ipv4.p2p['r1-r2'].addresses.r1 }}"
+  tasks:
+    - name: Site-B 경로를 되돌려 보낸다
+      ansible.builtin.command: >-
+        vtysh -c "conf t"
+        -c "no ip route {{ site_b }} {{ good }}"
+        -c "ip route {{ site_b }} {{ loop_nh }}"
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: 경로 복구
+      ansible.builtin.command: >-
+        vtysh -c "conf t"
+        -c "no ip route {{ site_b }} {{ loop_nh }}"
+        -c "ip route {{ site_b }} {{ good }}"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'r2 의 ' ~ site_b ~ ' 경로를 r1 쪽으로 되돌려 루프를 만들었다. traceroute 를 돌려 보게 할 것.'
+             if scenario_action | default('break') == 'break'
+             else 'r2 경로 복구 완료 (' ~ site_b ~ ' via ' ~ good ~ ').' }}

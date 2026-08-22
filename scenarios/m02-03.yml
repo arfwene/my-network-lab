@@ -1,0 +1,37 @@
+---
+# M2-03 : r1 의 VLAN20 게이트웨이 주소 오설정
+#   증상  : pc2 가 아무 데도 못 간다. pc2 의 설정은 완벽하다.
+#           ping <게이트웨이> 무응답, ip neigh 에 게이트웨이가 FAILED.
+#   정답  : r1 의 eth1.20 주소가 설계값(.254)이 아니라 .253 이다.
+#           pc2 의 기본 경로가 존재하지 않는 주소를 가리키고 있다.
+#   노림수: "내 설정이 맞으면 반대편 끝을 본다." 게이트웨이는 살아 있어야 게이트웨이다. (B5)
+- name: "scenario m02-03 :: 게이트웨이 주소 오설정"
+  hosts: r1
+  become: true
+  gather_facts: false
+  vars:
+    seg: "{{ ipv4.segments.vlan20 }}"
+    plen: "{{ ipv4.segments.vlan20.cidr.split('/')[1] }}"
+    good: "{{ ipv4.segments.vlan20.gateway }}"
+    bad: "{{ ipv4.segments.vlan20.gateway.split('.')[:3] | join('.') }}.253"
+  tasks:
+    - name: 게이트웨이 주소를 한 칸 옆으로 옮긴다
+      ansible.builtin.shell: |
+        ip addr del {{ good }}/{{ plen }} dev eth1.20 2>/dev/null || true
+        ip addr replace {{ bad }}/{{ plen }} dev eth1.20
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: 게이트웨이 주소 복구
+      ansible.builtin.shell: |
+        ip addr del {{ bad }}/{{ plen }} dev eth1.20 2>/dev/null || true
+        ip addr replace {{ good }}/{{ plen }} dev eth1.20
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'r1 의 eth1.20 주소를 ' ~ good ~ ' 에서 ' ~ bad ~ ' 로 바꿨다. pc2 의 게이트웨이가 사라진 셈이다.'
+             if scenario_action | default('break') == 'break'
+             else 'r1 eth1.20 주소 복구 완료 (' ~ good ~ ').' }}

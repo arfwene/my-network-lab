@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}제출 이력 · {{ site_name }}{% endblock %}
+{% block body %}
+<header class="top">
+  <div class="brand">{{ site_name }}</div>
+  <a class="ghost" href="/">← 랩으로</a>
+  {% if all_users %}
+  <form class="labpick" method="get" action="/history">
+    <label>대상
+      <select name="who" onchange="this.form.submit()">
+        {% for u in all_users %}
+        <option value="{{ u.username }}" {{ 'selected' if u.username == target }}>
+          {{ u.username }} ({{ u.name }})</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+  {% endif %}
+  <div class="spacer"></div>
+  {% include "_health.html" %}
+  <div class="who">{{ user.name }}<span class="role">{{ user.role_label }}</span></div>
+  <a class="ghost" href="/logout">나가기</a>
+</header>
+
+<main class="admin">
+  <section class="card">
+    <h3>진도 <small>{{ target }}</small></h3>
+    <table class="users">
+      <thead><tr><th>모듈</th><th>퀴즈</th><th>검사</th><th>최고 점수</th><th>시도</th><th>통과 시각</th></tr></thead>
+      <tbody>
+      {% for mid, m in modules.items() %}
+        {% set p = progress.get(mid) %}
+        <tr>
+          <td><b>{{ mid | upper }}</b> {{ m.title }}</td>
+          <td>{% if p and p.quiz_passed %}<span class="badge ok">통과</span>{% else %}<span class="muted">-</span>{% endif %}</td>
+          <td>{% if p and p.checks_passed %}<span class="badge ok">통과</span>{% else %}<span class="muted">-</span>{% endif %}</td>
+          <td>{{ p.best_score if p else 0 }}%</td>
+          <td>{{ p.tries if p else 0 }}</td>
+          <td class="muted">{{ (p.passed_at if p else None) or '-' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {% if submissions %}
+  <section class="card">
+    <h3>서술 과제 <small>{{ submissions | length }}건</small></h3>
+    <table class="users">
+      <thead><tr><th>모듈</th><th>항목</th><th>상태</th><th>자동 사전검토</th><th>피드백</th><th>제출 시각</th></tr></thead>
+      <tbody>
+      {% for key, sub in submissions.items() %}
+        <tr>
+          <td><b>{{ sub.module_id | upper }}</b></td>
+          <td>{{ sub.item_id }}</td>
+          <td><span class="badge {{ {'auto_ok':'ok','approved':'ok','submitted':'warn','changes_requested':'off'}[sub.status] }}">
+            {{ {'auto_ok':'자동 통과','approved':'승인됨','submitted':'검토 대기','changes_requested':'재제출 요청'}[sub.status] }}</span></td>
+          <td class="muted">{% if sub.auto_total %}{{ sub.auto_hit }}/{{ sub.auto_total }}{% else %}-{% endif %}</td>
+          <td class="muted small">{{ sub.feedback or '-' }}{% if sub.reviewed_by %} <i>({{ sub.reviewed_by }})</i>{% endif %}</td>
+          <td class="muted">{{ sub.created_at }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="note">가장 최근 제출본만 보인다. 재제출하면 이전 것도 DB 에 남는다.</p>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h3>제출 이력 <small>{{ attempts | length }}건</small></h3>
+    {% if not attempts %}<p class="muted">아직 제출한 기록이 없다.</p>{% endif %}
+    <table class="users">
+      <thead><tr><th>시각</th><th>모듈</th><th>종류</th><th>결과</th><th>내용</th></tr></thead>
+      <tbody>
+      {% for a in attempts %}
+        <tr>
+          <td class="muted">{{ a.created_at }}</td>
+          <td>{{ a.module_id | upper }}</td>
+          <td>{{ '퀴즈' if a.kind == 'quiz' else '검사' }}</td>
+          <td>
+            <span class="badge {{ 'ok' if a.passed else 'off' }}">
+              {{ '통과' if a.passed else '미통과' }}</span>
+            {{ a.correct }}/{{ a.total }} ({{ a.score }}%)
+          </td>
+          <td class="muted small">
+            {% if a.detail %}
+              {% for d in a.detail if not d.ok %}
+                <div>✘ {{ d.text if a.kind == 'quiz' else d.title }}</div>
+              {% endfor %}
+              {% if a.passed %}전부 통과{% endif %}
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</main>
+{% endblock %}

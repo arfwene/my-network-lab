@@ -1,0 +1,61 @@
+---
+# 모든 노드 공통: 인터페이스 명명 · 관리망 · 헬퍼
+
+- name: 단계 인덱스 계산
+  ansible.builtin.set_fact:
+    stage_idx: "{{ stages.index(lab_stage) }}"
+    ipv6_enabled: "{{ stages.index(lab_stage) >= stages.index('m5') }}"
+
+- name: 호스트명 설정 (랩 번호는 게스트 안에서 보이지 않는다 — 교재 일관성)
+  ansible.builtin.hostname:
+    name: "{{ node }}"
+
+- name: /etc/hosts 에 자기 이름 등록
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1'
+    line: "127.0.1.1 {{ node }}.{{ lab_domain }} {{ node }}"
+
+# cloud-init 이 매 부팅마다 netplan 을 덮어쓰면 우리 설정이 날아간다.
+- name: cloud-init 의 네트워크 관리 비활성화
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+    content: "network: {config: disabled}\n"
+    mode: "0644"
+
+- name: cloud-init 이 만든 netplan 제거
+  ansible.builtin.file:
+    path: /etc/netplan/50-cloud-init.yaml
+    state: absent
+  notify: netplan apply
+
+- name: netplan 설정 배포
+  ansible.builtin.template:
+    src: netplan.yaml.j2
+    dest: /etc/netplan/50-lab.yaml
+    mode: "0600"
+  notify: netplan apply
+
+- name: IP 포워딩 (라우터·경계 장비만)
+  ansible.posix.sysctl:
+    name: "{{ item.k }}"
+    value: "{{ item.v }}"
+    sysctl_set: true
+    state: present
+    reload: true
+  loop:
+    - {k: net.ipv4.ip_forward,             v: "{{ 1 if node_role in ['router','edge'] else 0 }}"}
+    - {k: net.ipv6.conf.all.forwarding,    v: "{{ 1 if node_role in ['router','edge'] else 0 }}"}
+  loop_control: {label: "{{ item.k }}={{ item.v }}"}
+
+- name: lab-whereami 헬퍼 배포 (내 인터페이스가 어느 링크에 붙어 있는가)
+  ansible.builtin.template:
+    src: lab-whereami.j2
+    dest: /usr/local/bin/lab-whereami
+    mode: "0755"
+
+- name: 로그인 배너 (지금 어느 단계인지 항상 보이게)
+  ansible.builtin.template:
+    src: motd.j2
+    dest: /etc/motd
+    mode: "0644"

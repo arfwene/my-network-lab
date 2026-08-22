@@ -1,0 +1,129 @@
+{% if module and module.id == capstone and exam.phase == 'closed' %}
+<div class="frozen">
+  <h3>확정 성적 <span class="score {{ 'ok' if exam.passed else 'bad' }}">{{ exam.ok }}/{{ exam.total }}</span></h3>
+  <p>제한 시간이 끝난 <b>{{ exam.closed_at }} UTC</b> 시점의 검사 결과다.
+    지금 랩을 고쳐도 이 숫자는 바뀌지 않는다. 다시 응시하면 새로 확정된다.</p>
+  {% if exam.scenarios %}
+  <p>이번 회차에 주입된 장애: {% for s in exam.scenarios %}<code>{{ s }}</code> {% endfor %}
+    <span class="muted">— 보고서에 적은 진단과 맞춰 볼 것.</span></p>
+  {% endif %}
+  {% if exam.frozen %}
+  <ul class="cresult">
+    {% for it in exam.frozen['items'] %}
+    <li class="{{ 'ok' if it.ok else 'bad' }}">
+      <span class="mark">{{ '✔' if it.ok else '✘' }}</span>
+      <div><div class="t">{{ it.title }} <span class="muted">{{ it.host }}</span></div>
+        {% if not it.ok %}<div class="why">{{ it.reason }}</div>{% endif %}</div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if last_quiz or last_checks or (written and mstate.written) %}
+<div class="result">
+  <div class="result-head">
+    <h3>최근 제출 결과</h3>
+    {% if mstate.complete %}
+      <span class="badge ok big">통과</span>
+    {% else %}
+      <span class="badge warn big">미통과</span>
+    {% endif %}
+    <span class="muted">시도 {{ mstate.tries }}회 · 최고 {{ mstate.best_score }}%</span>
+  </div>
+
+  {% if last_quiz %}
+  <section class="rblock">
+    <h4>퀴즈
+      <span class="score {{ 'ok' if last_quiz.passed else 'bad' }}">
+        {{ last_quiz.score }}% ({{ last_quiz.correct }}/{{ last_quiz.total }})</span>
+      <span class="muted">{{ last_quiz.created_at }}</span>
+    </h4>
+    <ul class="qresult">
+      {% for it in last_quiz.detail %}
+      <li class="{{ 'ok' if it.ok else 'bad' }}">
+        <span class="mark">{{ '✔' if it.ok else '✘' }}</span>
+        <div>
+          <div class="t">{{ it.text }}</div>
+          {% if not it.ok and it.explain %}<div class="explain">{{ it.explain | labtext }}</div>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if last_checks %}
+  <section class="rblock">
+    <h4>랩 상태 검사
+      <span class="score {{ 'ok' if last_checks.passed else 'bad' }}">
+        {{ last_checks.correct }}/{{ last_checks.total }} 통과</span>
+      <span class="muted">{{ last_checks.created_at }}</span>
+    </h4>
+    <ul class="cresult">
+      {% for it in last_checks.detail %}
+      <li class="{{ 'ok' if it.ok else 'bad' }}">
+        <span class="mark">{{ '✔' if it.ok else '✘' }}</span>
+        <div>
+          <div class="t">{{ it.title }}
+            <span class="kindtag {{ it.kind }}">{{ {'config':'설정','connectivity':'통신','state':'상태'}[it.kind] }}</span>
+            <span class="muted">{{ it.host }}</span>
+          </div>
+          {% if not it.ok %}
+            <div class="why">{{ it.reason }}</div>
+            {% if it.hint %}<div class="hint">힌트: {{ it.hint }}</div>{% endif %}
+            <div class="cmd"><code>{{ it.run }}</code></div>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if written and mstate.written %}
+  <section class="rblock">
+    <h4>서술 과제
+      <span class="muted">자동 사전검토는 관리자가 빨리 훑기 위한 것이지 채점이 아니다</span>
+    </h4>
+    <ul class="cresult">
+      {% for w in written %}
+      {% set cur = mstate.written.get(w.id) %}
+      {% if cur %}
+      <li class="{{ 'ok' if cur.status in ('auto_ok','approved') else ('bad' if cur.status == 'changes_requested' else '') }}">
+        <span class="mark">{{ {'auto_ok':'✔','approved':'✔','submitted':'…','changes_requested':'✘'}[cur.status] }}</span>
+        <div>
+          <div class="t">{{ w.title }}
+            <span class="kindtag">{{ {'auto_ok':'자동 통과','approved':'승인됨','submitted':'검토 대기','changes_requested':'재제출 요청'}[cur.status] }}</span>
+            <span class="muted">{{ cur.created_at }}</span>
+          </div>
+          {% if cur.auto_total %}
+          <div class="hint">루브릭 {{ cur.auto_hit }}/{{ cur.auto_total }} 충족
+            {% for d in cur.auto_detail if not d.ok %}· <b>{{ d.key }}</b>({{ d.desc }}) 미언급{% endfor %}
+          </div>
+          {% endif %}
+          {% if cur.feedback %}<div class="why">{{ cur.reviewed_by }}: {{ cur.feedback }}</div>{% endif %}
+        </div>
+      </li>
+      {% endif %}
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <div class="result-next">
+    {% if mstate.complete and next_module %}
+      <button class="btn primary big" data-goto="{{ next_module.id }}">
+        다음 모듈 → {{ next_module.id | upper }}. {{ next_module.title }}</button>
+    {% elif mstate.complete %}
+      <div class="done">마지막 모듈까지 통과했다. 수고했다.</div>
+    {% elif mstate.awaiting_review %}
+      <div class="muted">관리자 승인을 기다리는 중이다 —
+        {{ mstate.awaiting_review | join(', ') }}. 승인되면 다음 모듈이 열린다.</div>
+    {% else %}
+      <div class="muted">통과하면 다음 모듈이 열린다. 고친 뒤 다시 제출할 것.</div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

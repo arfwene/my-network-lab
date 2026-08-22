@@ -1,0 +1,225 @@
+<!-- 자동 생성. 원본: docs/appendix/cheatsheet.md.j2  ·  생성: make appendix -->
+
+# 부록 ① 한 장 치트시트
+
+> **인쇄해서 키보드 옆에 둘 것.** 시험장에서 스크롤하면 이미 진 것이다.
+> 주소는 이 랩(lab {{ lab_id }})의 실제 값이다 — `config/site.yml` 이 바뀌면 이 문서도 따라 바뀐다.
+
+---
+
+## 0. 순서 — 이것부터
+
+```
+① 범위를 규정한다      누가 / 어디서 / 언제부터 / 전부인가 일부인가 / 최근 변경
+                      ★ 되는 것을 하나 찾으면 그 경로 전체가 후보에서 사라진다
+② 링크               ip -br link          UP 인가, NO-CARRIER 는 없는가
+③ L3 도달            ping · traceroute    어디까지 가는가
+④ 포트·서비스         telnet · ss · curl   응답하는가
+⑤ 바꾸기 전           지금 상태를 저장하고 되돌리는 명령을 적는다
+```
+
+**아래가 깨져 있으면 위는 볼 필요조차 없다.**
+
+---
+
+## 1. 링크 · 물리 (M1)
+
+| 무엇을 볼 때 | 명령 | 정상이면 |
+|---|---|---|
+| 링크 전체 | `ip -br link` | `UP`, `NO-CARRIER` 없음 |
+| 주소 전체 | `ip -br addr` | 설계 주소 + 올바른 프리픽스 |
+| 한 인터페이스 | `ip -d link show eth1` | `state UP`, MTU {{ 1500 }} |
+| 링크 올리기 | `sudo ip link set eth1 up` | — |
+| MTU 확인 | `cat /sys/class/net/eth1/mtu` | `1500` |
+
+```
+DOWN  <NO-CARRIER,...,UP>   → 내가 켰는데 상대가 없다. 케이블·상대 포트
+DOWN  <BROADCAST,MULTICAST> → 내가 꺼 놨다. ip link set up
+UP    <...,LOWER_UP,UP>     → 정상
+```
+
+## 2. L2 · 스위칭 (M1 · M2)
+
+| 무엇을 볼 때 | 명령 (sw1 · sw2) | 정상이면 |
+|---|---|---|
+| 포트가 꽂혀 있는가 | `bridge link show` | 있어야 할 eth 가 다 보인다 |
+| MAC 학습 | `bridge fdb show br br0` | 상대 MAC 이 올바른 포트에 |
+| 트렁크 VLAN | `bridge vlan show dev eth3` | {{ vlans[10].id }}·{{ vlans[20].id }} 태그, {{ vlans[999].id }} `PVID Untagged` |
+| 포트 붙이기 | `sudo ip link set eth2 master br0` | — |
+| ARP 캐시 | `ip neigh show` | 상대가 `REACHABLE` |
+| ARP 비우기 | `sudo ip neigh flush all` | — |
+
+> `ip neigh` 에 **항목이 있다고 정상이 아니다.** MAC **값**이 맞는지 본다.
+> `PERMANENT` 가 보이면 누군가 정적 ARP 를 박아 둔 것이다.
+
+## 3. L3 · 라우팅 (M2 · M3 · M4)
+
+| 무엇을 볼 때 | 명령 | 정상이면 |
+|---|---|---|
+| 경로 표 | `ip route show` | `default via {{ gw.vlan10 }}` |
+| **이 목적지는 어디로?** | `ip route get {{ ip.web }}` | 예상한 `via` 와 `dev` |
+| 실제 경로 | `traceroute -n -w1 -q1 {{ ip.web }}` | {{ gw.vlan10 }} → {{ p2p['r1-r2'].addresses.r2 }} → {{ p2p['r2-r4'].addresses.r4 }} → {{ ip.web }} |
+| 포워딩 켜짐 | `cat /proc/sys/net/ipv4/ip_forward` | `1` (라우터) |
+
+**라우터 (FRR · vtysh)**
+
+```bash
+sudo vtysh -c 'show ip route'              # 전체
+sudo vtysh -c 'show ip route ospf'         # OSPF 로 배운 것만
+sudo vtysh -c 'show ip route static'       # 정적만  ← m10 에서는 비어 있어야 정상
+sudo vtysh -c 'show ip ospf neighbor'      # 인접 (r1·r4 는 2개가 정상)
+sudo vtysh -c 'show ip ospf interface eth2'
+sudo vtysh -c 'show running-config'
+```
+
+```
+S>* 10.10.32.0/19 via ...    S=정적  >=선택됨  *=커널에 올라감
+O   10.10.40.0/24 ...        O=OSPF 로 배움
+                             ▶ '>' 가 없으면 테이블에 있어도 안 쓰인다
+```
+
+**OSPF 인접이 안 설 때 — 이 순서로**
+
+```
+① Area ID   ② 같은 서브넷/마스크   ③ MTU   ④ Hello/Dead 타이머   ⑤ 인증
+   ExStart / Exchange 에서 멈춰 있다  →  곧장 ③ MTU
+```
+
+## 4. IPv6 (M5)
+
+| 무엇을 볼 때 | 명령 | 정상이면 |
+|---|---|---|
+| 주소 | `ip -6 -br addr show eth1` | `{{ ip6.pc1 }}` + `fe80::…` |
+| **DAD 실패 확인** | `ip -6 addr show eth1` | `dadfailed` 가 **없어야** 한다 |
+| 기본 경로 | `ip -6 route show default` | `via {{ gw6.vlan10 }}` |
+| 이웃 (ARP 대응) | `ip -6 neigh show` | `REACHABLE` |
+| 라우터 | `sudo vtysh -c 'show ipv6 ospf6 neighbor'` | 2개 |
+
+> `-br` 를 붙이면 `dadfailed` 가 **안 보인다.** IPv6 주소가 있는데 통신이 안 되면
+> `-br` 를 빼고 다시 볼 것.
+
+## 5. 전송 · 포트 (M6)
+
+| 무엇을 볼 때 | 명령 | 정상이면 |
+|---|---|---|
+| 듣고 있는가 (서버) | `ss -ltnp` | 그 포트가 목록에 |
+| 세션 | `ss -tan state established` | 방금 연 연결이 보인다 |
+| 포트 열림 확인 | `nc -vz {{ ip.web }} 80` | `succeeded` |
+| ephemeral 범위 | `cat /proc/sys/net/ipv4/ip_local_port_range` | `32768 60999` |
+
+**★★ 연결 실패 4종 감별 — 이 표 하나가 M6 전부다**
+
+| 증상 | 시간 | 캡처에서 SYN 에 대한 응답 | 원인 |
+|---|---|---|---|
+| `Network is unreachable` | 즉시 | **패킷이 나가지도 않는다** | 경로 없음 |
+| 매달리다 타임아웃 | 10초+ | 아무것도 안 온다 | **DROP** |
+| `Connection refused` | 즉시 | `RST` | 포트 미개방 · REJECT |
+| 연결은 되는데 응답 없음 | 무한 | `SYN-ACK` 까지 정상, 그 뒤 침묵 | **서비스 행** |
+
+## 6. 서비스 (M8)
+
+| 무엇을 볼 때 | 명령 | 정상이면 |
+|---|---|---|
+| 이름 해석 (서버 지정) | `dig +short @{{ ip.dns }} web.{{ dns.zone }}` | `{{ ip.web }}` |
+| 이름 해석 (설정 경유) | `getent hosts web.{{ dns.zone }}` | `{{ ip.web }}` |
+| 클라이언트 설정 | `cat /etc/resolv.conf` | `nameserver {{ ip.dns }}` |
+| HTTP | `curl -sS -i http://{{ ip.web }}/health` | `200` + `X-Lab-Node: web` |
+| FTP (Passive) | `curl -sS ftp://{{ ip.ftp }}/hello.txt` | 파일 내용 |
+
+```
+이름 X · IP 로는 O   → DNS
+이름 O · IP 로도 X   → 경로 · 방화벽 · 서비스
+이름 O(값이 틀림)     → DNS 레코드 오류   ← 가장 놓치기 쉽다
+```
+
+## 7. 경계 · NAT · 방화벽 (M9)
+
+| 무엇을 볼 때 | 명령 (edge) | 정상이면 |
+|---|---|---|
+| 규칙 전체 | `sudo nft list ruleset` | snat · dnat · `ct state established` |
+| 세션 표 | `sudo conntrack -L` | 방금 나간 통신이 보인다 |
+| 세션 비우기 | `sudo conntrack -F` | (전체가 지워진다 — 주의) |
+
+```
+SNAT  나갈 때 출발지를 바꾼다   {{ lab_block }} → {{ public.nat_pool.snat_address }}
+DNAT  들어올 때 목적지를 바꾼다  공개 IP → 사설 IP
+      ▶ 리턴 트래픽을 여는 것은 `ct state established,related accept` 한 줄이다
+```
+
+## 8. 캡처 (M7)
+
+```bash
+sudo tcpdump -i eth1 -n -e 'not port 22'              # 기본형 (SSH 제외 필수)
+sudo tcpdump -i eth1 -n 'host {{ ip.web }} and tcp port 80'
+sudo tcpdump -i eth1 -n 'vlan and icmp'               # ★ 트렁크에서는 vlan 을 앞에
+sudo tcpdump -i eth1 -n 'tcp[tcpflags] & (tcp-syn|tcp-ack) == tcp-syn'   # SYN 만
+sudo tcpdump -i eth1 -w /tmp/a.pcap -C 10 -W 5        # 링 버퍼 (10MB × 5개)
+tcpdump -r /tmp/a.pcap -n | head                      # 읽기
+```
+
+| 옵션 | 뜻 |
+|---|---|
+| `-n` / `-nn` | 이름 / 이름·포트 해석 안 함 |
+| `-e` | 이더넷 헤더까지 (MAC 확인) |
+| `-w` / `-r` | 파일로 저장 / 파일 읽기 |
+| `-s <n>` | 패킷마다 앞 n 바이트만 |
+| `-C` `-W` | 링 버퍼 크기 · 개수 |
+
+**어디에 걸 것인가**
+
+```
+pc1 --- sw1 --- r1 === r2 === r4 --- sw2 --- web
+ A               B           C              D
+
+출발지(A)부터 → 나가기는 하는가
+안 보이면 A 문제. 보이면 가운데(C)로 이등분
+한 장비에서도 양쪽을 본다 — 들어오는 if 에는 있는데 나가는 if 에 없으면 그 장비가 버린 것
+```
+
+---
+
+## 9. 이 랩의 주소
+
+| 구역 | 대역 | 게이트웨이 | 비고 |
+|---|---|---|---|
+| VLAN{{ vlans[10].id }} `{{ vlans[10].name }}` | `{{ cidr.vlan10 }}` | `{{ gw.vlan10 }}` | pc1 `{{ ip.pc1 }}` |
+| VLAN{{ vlans[20].id }} `{{ vlans[20].name }}` | `{{ cidr.vlan20 }}` | `{{ gw.vlan20 }}` | pc2 `{{ ip.pc2 }}` |
+| VLAN{{ vlans[40].id }} `{{ vlans[40].name }}` | `{{ cidr.vlan40 }}` | `{{ gw.vlan40 }}` | web `{{ ip.web }}` · ftp `{{ ip.ftp }}` · dns `{{ ip.dns }}` |
+| Site-A 요약 | `{{ zone['site-a'] }}` | — | 광고 단위 |
+| Site-B 요약 | `{{ zone['site-b'] }}` | — | 광고 단위 |
+| 주 경로 r1↔r2 | `{{ p2p['r1-r2'].cidr }}` | — | cost {{ p2p['r1-r2'].ospf_cost }} |
+| 백업 r1↔r3 | `{{ p2p['r1-r3'].cidr }}` | — | cost {{ p2p['r1-r3'].ospf_cost }} |
+| 공인 회선 | `{{ public.transit.cidr }}` | — | edge `{{ public.transit.addresses.edge }}` · inet `{{ public.transit.addresses.inet }}` |
+| 관리망 (lab {{ lab_id }}) | `{{ mgmt_cidr }}` | — | **랩 설정과 무관하게 항상 통한다** |
+
+> **관리망으로 한 확인은 아무것도 검증하지 않는다.** 서비스망(`eth1`)으로 확인할 것.
+
+---
+
+## 10. 바꾸기 전 5초
+
+```bash
+sudo vtysh -c 'show running-config' > /tmp/before-$(date +%H%M%S).conf   # 라우터
+ip addr show > /tmp/addr-before.txt && ip route show > /tmp/route-before.txt
+sudo nft list ruleset > /tmp/nft-before.txt                              # 경계
+
+# 되돌린 뒤 확인 — "되돌렸다고 생각하는 것"과 "되돌아간 것"은 다르다
+sudo vtysh -c 'show running-config' | diff /tmp/before-XXXXXX.conf -
+```
+
+**한 번에 하나만 바꾸고, 바꾼 즉시 검증한다.**
+
+---
+
+## 11. 자주 틀리는 것
+
+| 하는 실수 | 실제 |
+|---|---|
+| 관리망으로 ping 해 보고 "정상" | 관리망은 항상 통한다. 아무것도 검증되지 않았다 |
+| `ping` 되니 네트워크는 정상 | ICMP 와 TCP 는 정책이 다르다. `telnet <ip> <포트>` 까지 |
+| 트렁크에서 `tcpdump ... icmp` | 802.1Q 로 오프셋이 밀린다. `vlan and icmp` |
+| `show ip route` 에 있으니 쓰인다 | `>` 가 없으면 안 쓰인다 |
+| 통신 되니 이중화도 정상 | 이중화는 **확인해야 존재한다** (`show ip ospf neighbor`) |
+| 프로세스 살아 있으니 서비스 정상 | `SIGSTOP` 을 보라. 연결은 되고 응답만 없다 |
+| DNS 응답 왔으니 DNS 정상 | **값**이 틀릴 수 있다 |
+| `-br` 로 IPv6 주소 확인 | `dadfailed` 가 안 보인다 |

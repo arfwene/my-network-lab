@@ -1,0 +1,34 @@
+---
+# M4-03 : OSPF 인증 불일치 (r2-r4)
+#   증상  : r4 의 인접이 하나 사라진다(r3 만 남는다). 링크·주소·MTU 는 전부 정상.
+#           통신은 유지된다 — r1 이 r3 경유로 돌아가기 때문이다.
+#   정답  : r2 의 eth2 에만 message-digest 인증이 걸려 있다.
+#           show ip ospf interface 를 양쪽에서 떠서 비교하면 보인다.
+#   노림수: 체크리스트 ①②③ 이 다 정상일 때 남는 것. 순서대로 밟는 훈련. (D5)
+- name: "scenario m04-03 :: OSPF 인증 불일치"
+  hosts: r2
+  become: true
+  gather_facts: false
+  tasks:
+    - name: 한쪽에만 인증을 건다
+      ansible.builtin.command: >-
+        vtysh -c "conf t" -c "interface eth2"
+        -c "ip ospf authentication message-digest"
+        -c "ip ospf message-digest-key 1 md5 labkey"
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: 인증 제거
+      ansible.builtin.command: >-
+        vtysh -c "conf t" -c "interface eth2"
+        -c "no ip ospf message-digest-key 1"
+        -c "no ip ospf authentication"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'r2 의 eth2(→r4) 에만 OSPF 인증을 걸었다. r4 에서 인접 하나가 사라진다.'
+             if scenario_action | default('break') == 'break'
+             else 'r2 eth2 인증 제거 완료. 양쪽에서 Full 을 확인할 것.' }}

@@ -1,0 +1,662 @@
+{% set dweb = public.nat_pool.dnat | selectattr('node','equalto','web') | first %}
+{% set dftp = public.nat_pool.dnat | selectattr('node','equalto','ftp') | first %}
+<!-- 자동 생성. 원본: modules/m09-nat-firewall/README.md.j2  ·  생성: make modules -->
+
+# M9. NAT 와 방화벽 — 사설과 공인의 경계
+
+> **소요 시간** {{ meta.duration }} · **랩 단계** `{{ stage }}` · **역량** {{ meta.competencies | join(', ') }}
+
+M2 에서 **개념으로만** 배운 것이 있다 — "사설 IP 는 인터넷에서 라우팅되지 않는다.
+밖으로 나가려면 NAT 가 필요하다."
+
+이번 모듈에서 그 문장을 **눈으로 확인한다.**
+경계 장비 양쪽에 캡처를 걸고, **출발지 주소가 바뀌는 순간**을 본다.
+
+그리고 현장에서 가장 흔한 오해 하나를 교정한다 — **NAT 는 보안 기능이 아니다.**
+
+## 학습 목표
+
+{% for o in meta.objectives %}
+{{ loop.index }}. {{ o }}
+{% endfor %}
+
+## 사전 지식 체크
+
+- 사설 IP 대역 세 개를 말할 수 있는가? 왜 생겼는가? (M2)
+- 연결 실패 4종 감별표에서 **"매달리다 타임아웃"** 은 무엇을 뜻하는가? (M6)
+- FTP 의 데이터 채널은 Active 와 Passive 에서 **누가 연결을 거는가**? (M8)
+
+---
+
+## 1. 이 단계의 랩
+
+```mermaid
+{{ topology }}
+```
+
+**드디어 "바깥" 이 생겼다.**
+
+| 구간 | 노드 · 인터페이스 | 주소 | 성격 |
+|---|---|---|---|
+| 내부 (사설) | `r4` `eth4` | `{{ p2p['r4-edge'].addresses.r4 }}` | 사내망 |
+| **경계 (안쪽)** | `edge` `eth1` | `{{ p2p['r4-edge'].addresses.edge }}` | **사설의 끝** |
+| **경계 (바깥쪽)** | `edge` `eth2` | `{{ public.transit.addresses.edge }}` | **공인의 시작** |
+| 외부 (공인) | `inet` `eth1` | `{{ public.transit.addresses.inet }}` | ISP 흉내 |
+| 외부 웹사이트 | `inet` `lo0` | `{{ public.external_site.inet_loopback }}` | "남의 사이트" |
+
+**NAT 설계**
+
+| 종류 | 변환 | 용도 |
+|---|---|---|
+| **SNAT (PAT)** | `{{ lab_block }}` → **`{{ public.nat_pool.snat_address }}`** | 내부 전체가 공인 주소 하나로 나간다 |
+| **DNAT** | `{{ dweb.public }}` → `{{ dweb.private }}` (`{{ dweb.ports | map('string') | join(', ') }}`) | web 공개 |
+| **DNAT** | `{{ dftp.public }}` → `{{ dftp.private }}` (`{{ dftp.ports | map('string') | join(', ') }}`) | ftp 공개 |
+
+> **공개 IP 는 어디서 왔는가?**
+> ISP 는 회선용 `/30`(`{{ public.transit.cidr }}`)과 별도로 **서비스용 공인 블록**
+> `{{ public.service_block.cidr }}` 을 우리 쪽으로 라우팅해 준다.
+> 회선 주소 두 개에 서버 공개 IP 를 욱여넣을 수 없기 때문이다. 실제 회선 계약이 이렇게 생겼다.
+
+> **`{{ public.external_site.inet_loopback }}` 은 일부러 다른 대역**(`198.51.100.0/24`)을 썼다.
+> "남의 네트워크" 라는 것이 주소만 봐도 보이게 하려는 것이다.
+
+**그리고 `inet` 에는 사내 대역으로 가는 경로가 없다.** 의도된 설계다 —
+이것이 **"사설 IP 는 인터넷에서 라우팅되지 않는다"** 를 증명하는 지점이다 (실습 4).
+
+---
+
+## 2. 개념
+
+### 2.1 NAT 의 세 종류 (G1)
+
+```
+SNAT :  나가는 패킷의 **출발지**를 바꾼다     내부 → 외부
+DNAT :  들어오는 패킷의 **목적지**를 바꾼다   외부 → 내부
+PAT  :  주소와 **함께 포트도** 바꾼다        여럿이 주소 하나를 공유
+```
+
+**PAT 가 없으면 안 되는 이유**
+
+```
+pc1 {{ ip.pc1 }}:41000  ─┐
+                          ├─ 둘 다 {{ public.nat_pool.snat_address }} 로 바뀌면…
+pc2 {{ ip.pc2 }}:41000  ─┘   응답이 돌아왔을 때 **누구 것인지 알 수 없다**
+```
+
+그래서 출발지 **포트까지** 바꾸고 그 대응을 표에 적어 둔다.
+
+| 원래 | 바뀐 것 | 표에 기록 |
+|---|---|---|
+| `{{ ip.pc1 }}:41000` | `{{ public.nat_pool.snat_address }}:52001` | pc1 의 41000 |
+| `{{ ip.pc2 }}:41000` | `{{ public.nat_pool.snat_address }}:52002` | pc2 의 41000 |
+
+> **그래서 공인 IP 하나로 동시에 열 수 있는 세션 수는 포트 수만큼**이 상한이다.
+> M6 에서 본 ephemeral 포트 고갈이 **경계 장비에서도** 일어난다.
+> 대규모 사업장에서 "가끔 접속이 안 된다" 의 원인이 이것인 경우가 있다.
+
+> **PAT 의 부작용**: 외부 로그에는 **공인 IP 하나만** 남는다.
+> 누가 무엇을 했는지 추적하려면 경계 장비의 **세션 로그**가 있어야 한다.
+> "NAT 로그를 남겨야 하는 이유" 가 이것이며, 법적 요구사항인 경우도 많다.
+
+### 2.2 ★ Stateful 방화벽 — 리턴 트래픽은 왜 열어 주지 않는가 (G2)
+
+이 랩의 경계 정책은 **네 줄**이 전부다.
+
+```
+chain forward {
+    policy drop;                                    ← 기본은 차단
+
+    ct state established,related accept             ← ★ 이 한 줄이 리턴 트래픽 전부를 담당
+    ct state invalid drop
+
+    iifname "eth1" oifname "eth2" accept            ← 내부 → 외부: 전부 허용
+    iifname "eth2" oifname "eth1" … accept          ← 외부 → 내부: 공개 서비스만
+}
+```
+
+**"외부 → 내부" 규칙은 공개 서비스 두 개뿐이다.**
+그런데 내부 PC 가 외부 사이트에 접속하면 **응답이 잘 돌아온다.** 왜인가?
+
+```
+① pc1 이 나갈 때  →  방화벽이 세션을 **기록**한다 (5-tuple + NAT 변환 정보)
+② 응답이 올 때    →  기록된 세션에 속하므로 **정책을 보지 않고** 통과시킨다
+```
+
+> **이것이 stateful 이다.** 그래서 정책은 **"먼저 연결을 거는 방향" 으로만** 쓴다.
+> 역방향 규칙을 따로 쓰면 필요 이상으로 열어 주는 셈이 된다 —
+> **"양방향 허용" 정책은 대부분 stateful 을 이해하지 못한 결과다.**
+
+| 상태 | 뜻 |
+|---|---|
+| `new` | 이 세션의 첫 패킷 → **정책으로 판정한다** |
+| `established` | 이미 기록된 세션 → 통과 |
+| `related` | 그 세션과 연관된 별개 연결 (FTP 데이터 채널 · ICMP 오류 등) |
+| `invalid` | 어느 세션에도 안 맞음 → 버린다 |
+
+> **`invalid` 가 왜 생기는가**: 비대칭 경로에서 **한쪽 방향만** 방화벽을 지나가면
+> 나머지 절반이 `invalid` 가 되어 끊긴다. M4 에서 cost 를 한쪽만 바꿔 만든 그 상황이
+> **방화벽이 있는 경로에서는 장애가 된다.**
+
+세션 표는 직접 볼 수 있다.
+
+```bash
+conntrack -L
+```
+
+> 방화벽 · 로드밸런서가 말하는 **"세션" 의 실체가 이 표**다 (M6 의 4-tuple + 프로토콜).
+> 외부 로그의 공인 IP·포트로 **내부 사용자를 역추적**할 때도 이 표를 쓴다.
+
+### 2.3 정책은 순서와 방향이다 (G3)
+
+**순서** — 대부분의 방화벽은 **첫 번째로 매칭되는 규칙**에서 판정을 끝낸다.
+
+```
+① 허용: 외부 → 내부 전부          ← 여기서 이미 끝난다
+② 차단: 특정 IP                   ← 영원히 도달하지 않는다
+```
+
+> **좁은 규칙(예외)이 위, 넓은 규칙이 아래.** 순서가 뒤집히면 조용히 안 먹는다.
+> 문법 오류가 아니므로 **아무 경고도 없다** — 그래서 찾기 어렵다.
+
+**방향** — `iifname`(들어온 인터페이스)과 `oifname`(나갈 인터페이스)을 함께 써야 의미가 분명해진다.
+
+```
+iifname "eth1" oifname "eth2"    내부 → 외부
+iifname "eth2" oifname "eth1"    외부 → 내부
+```
+
+> 주소만으로 정책을 쓰면 **어느 방향인지 모호**해진다.
+> "출발지 내부, 목적지 외부" 는 맞지만, 그 패킷이 **어디로 들어왔는지**는 알려 주지 않는다.
+> 인터페이스를 함께 쓰는 것이 스푸핑 방어에도 도움이 된다.
+
+### 2.4 ★★ NAT 는 보안 기능이 아니다
+
+현장에서 가장 흔한 오해다.
+
+| 오해 | 사실 |
+|---|---|
+| "NAT 를 쓰니 외부에서 못 들어온다" | **변환 표에 항목이 없어서** 못 들어온 것이다 |
+| "그러니까 NAT 가 막아 준 것이다" | 막기로 **결정한 적이 없다.** 부작용일 뿐이다 |
+| "NAT 가 있으면 방화벽은 덜 중요하다" | 정반대다. **통제는 방화벽이 한다** |
+
+**증거는 간단하다.** DNAT 를 한 줄 넣는 순간 외부에서 내부 서버로 **바로 들어온다.**
+"보안 기능" 이라면 규칙 한 줄로 이렇게 뚫리지 않는다.
+
+그리고 외부에서 사설 IP 로 못 들어오는 진짜 이유는 **두 가지**이며, 둘 다 NAT 가 아니다.
+
+```
+① 라우팅 : 인터넷의 라우터들이 사설 대역 경로를 갖고 있지 않다  ← 패킷이 나가지도 못한다
+② 방화벽 : 경계에서 "외부 → 내부" 를 기본 차단한다              ← 의도적인 통제
+```
+
+> **M5 와 이어진다.** IPv6 에는 NAT 가 없고 모든 단말이 공인 주소(GUA)를 가질 수 있다.
+> 그래도 안전한 이유는 **방화벽이 있기 때문**이다.
+> IPv4 시절 NAT 뒤에 숨어 있던 것들이 IPv6 로 가면 **그대로 드러난다** —
+> 그때 "원래 방화벽이 했어야 할 일" 이 무엇이었는지가 밝혀진다.
+
+### 2.5 FTP 가 NAT 를 싫어하는 진짜 이유 (F5)
+
+M8 에서 FTP 는 **연결이 두 개**라는 것을 봤다. NAT 와 부딪히는 지점은 여기다.
+
+```
+FTP 는 주소를 **패킷 본문(payload)에 담아** 보낸다
+   PORT  명령 : "내 주소는 …, 이 포트로 걸어 주세요"      (Active)
+   227   응답 : "내 주소는 …, 이 포트로 오세요"           (Passive)
+
+NAT 는 **헤더만** 바꾼다  →  본문 속 주소는 사설 그대로 나간다
+```
+
+| 상황 | 무슨 일이 생기나 | 해결 |
+|---|---|---|
+| **서버가 NAT 뒤** (이 랩) | `227` 응답에 **사설 IP** 가 실려 나간다 → 외부 클라이언트가 못 간다 | 서버에 **`pasv_address`** 로 공개 IP 를 알려 준다 |
+| **클라이언트가 NAT 뒤** (일반적인 회사) | Active 의 역방향 연결이 방화벽·NAT 에 막힌다 | **Passive 를 쓴다** |
+| 데이터 포트가 매번 다름 | 방화벽 정책을 쓸 수 없다 | **포트 대역을 고정**한다 (`{{ services.ftp.passive_range }}`) |
+
+> **그래서 이 랩의 vsftpd 설정에는 두 줄이 더 있다** — `pasv_address` 와 포트 대역.
+> 둘 중 하나만 빠져도 "제어는 되는데 전송만 안 되는" 전형적 장애가 난다 (장애 주입 `m09-04`).
+
+> **애플리케이션 계층 게이트웨이(ALG)** 라는 것도 있다.
+> 방화벽이 FTP 본문을 들여다보고 주소를 대신 고쳐 주는 기능이다.
+> 편리하지만 **암호화된 FTPS 에서는 동작하지 않고**, 예측 못 한 부작용도 있어
+> 요즘은 `pasv_address` + 포트 고정 쪽을 쓴다.
+
+### 2.6 경계에서 실패를 읽는 법 (E3 · E4 회수)
+
+M6 의 감별표가 **경계 장비 앞에서 그대로 쓰인다.**
+
+| 외부에서 시도한 결과 | 경계에서 무슨 일이 | 다음 확인 |
+|---|---|---|
+| **즉시 거부** (`refused`) | 패킷이 **서버까지 갔다.** 서비스가 없다 | 서버의 `ss -ltn` |
+| **매달리다 타임아웃** | **정책 drop** 또는 DNAT 대상이 아님 | 경계의 정책·DNAT 규칙 |
+| `Network is unreachable` | **경로가 없다** (사설 대상 등) | 출발지의 라우팅 테이블 |
+| 연결은 되는데 응답 없음 | L4 까지 정상 → 애플리케이션 | 서버 로그 |
+
+> **"타임아웃 = 방화벽" 이라는 감각**이 여기서 완성된다.
+> 그리고 그 방화벽이 **어디에 있는지**(경계인가 서버 자신인가)는
+> 경계 장비 안쪽에서 캡처해 보면 즉시 갈린다 (M7 의 이등분).
+
+---
+
+## 3. 실습
+
+> 터미널: `pc1`, `edge` × 2 (안쪽 · 바깥쪽 캡처), `inet`, `web`, `ftp`.
+> 경계 장비의 설정을 되돌리려면 **`sudo nft -f /etc/nftables.conf`** (파일 첫 줄이 `flush ruleset` 이다).
+
+### 실습 1 — ★★ 주소가 바뀌는 순간 (G1 · C7)
+
+**경계 장비의 양쪽에 동시에 캡처를 건다.** M7 에서 배운 그 방법이다.
+
+```bash
+# 터미널 A — edge 안쪽 (사설)
+sudo tcpdump -i eth1 -nn 'host {{ public.external_site.inet_loopback }}'
+```
+
+```bash
+# 터미널 B — edge 바깥쪽 (공인)
+sudo tcpdump -i eth2 -nn 'host {{ public.external_site.inet_loopback }}'
+```
+
+```bash
+# 터미널 C — pc1
+curl -s -o /dev/null -w '%{http_code}\n' http://{{ public.external_site.inet_loopback }}/
+```
+
+**터미널 A (안쪽)**
+
+```
+{{ ip.pc1 }}.41000 > {{ public.external_site.inet_loopback }}.80: Flags [S]
+```
+
+**터미널 B (바깥쪽)**
+
+```
+{{ public.nat_pool.snat_address }}.52001 > {{ public.external_site.inet_loopback }}.80: Flags [S]
+```
+
+> **같은 패킷이다. 출발지가 바뀌었다.**
+> `{{ ip.pc1 }}` → `{{ public.nat_pool.snat_address }}`, 그리고 **포트까지** 바뀌었다.
+> M2 에서 "사설 IP 로는 밖에 못 나간다" 고 배운 그 문장의 실체가 이 두 줄이다.
+
+**변환 표를 직접 본다.**
+
+```bash
+# edge
+sudo conntrack -L | grep {{ ip.pc1 }}
+```
+
+```
+tcp 6 118 TIME_WAIT src={{ ip.pc1 }} dst={{ public.external_site.inet_loopback }} sport=41000 dport=80
+    src={{ public.external_site.inet_loopback }} dst={{ public.nat_pool.snat_address }} sport=80 dport=52001 [ASSURED]
+```
+
+**한 줄에 변환 전과 후가 다 있다.**
+
+| 부분 | 뜻 |
+|---|---|
+| 앞 `src=` / `sport=` | **원래** 출발지 (사설) |
+| 뒤 `dst=` / `dport=` | **바뀐** 출발지 (공인) — 응답이 이리로 온다 |
+| `TIME_WAIT` | TCP 상태 (M6 의 그것) |
+
+> **외부 로그에 `{{ public.nat_pool.snat_address }}:52001` 만 남았을 때**,
+> 이 표가 있어야 "그게 누구였는지" 를 안다. NAT 로그를 남기는 이유다.
+
+### 실습 2 — 반대 방향, DNAT (G1)
+
+```bash
+# 터미널 A — edge 바깥쪽
+sudo tcpdump -i eth2 -nn "host {{ dweb.public }}"
+
+# 터미널 B — edge 안쪽
+sudo tcpdump -i eth1 -nn "host {{ dweb.private }}"
+```
+
+```bash
+# 터미널 C — inet (외부)
+curl -s -i http://{{ dweb.public }}/health
+```
+
+**바깥쪽**
+
+```
+{{ public.transit.addresses.inet }}.51000 > {{ dweb.public }}.80: Flags [S]
+```
+
+**안쪽**
+
+```
+{{ public.transit.addresses.inet }}.51000 > {{ dweb.private }}.80: Flags [S]
+```
+
+> **이번엔 목적지가 바뀌었다.** 출발지는 그대로다.
+> SNAT 와 정확히 반대다 — **나갈 때는 출발지, 들어올 때는 목적지.**
+
+```bash
+# 응답 헤더로 어느 서버가 답했는지 확인
+curl -s -I http://{{ dweb.public }}/ | grep X-Lab-Node
+```
+
+```
+X-Lab-Node: web
+```
+
+> **공개 IP 로 접속했는데 내부의 `web` 이 답했다.** DNAT 가 한 일이다.
+> M8 에서 이 헤더를 넣어 둔 이유가 여기서 회수된다.
+
+### 실습 3 — ★ 리턴 트래픽은 정책이 없다 (G2)
+
+**정책을 세어 본다.**
+
+```bash
+# edge
+sudo nft list ruleset | grep -A20 'chain forward'
+```
+
+```bash
+# "외부 → 내부" 허용 규칙이 몇 개인가?
+sudo nft list ruleset | grep -c 'iifname "eth2" oifname "eth1"'
+```
+
+**두 개다** (web · ftp 공개용). 그런데 pc1 은 외부 사이트에서 **응답을 잘 받는다.**
+
+> **응답을 위한 규칙은 0개다.** `ct state established,related accept` 한 줄이 전부 처리한다.
+
+**직접 증명한다 — 세션을 지워 본다.**
+
+```bash
+# pc1 — 연결을 하나 열어 둔다 (M6 에서 쓴 방법)
+exec 3<>/dev/tcp/{{ public.external_site.inet_loopback }}/80
+```
+
+```bash
+# edge — 세션 표를 비운다
+sudo conntrack -F
+```
+
+```bash
+# pc1 — 열어 둔 연결로 요청을 보내 본다
+printf 'GET / HTTP/1.0\r\n\r\n' >&3
+timeout 5 cat <&3 ; echo "rc=$?"
+```
+
+**응답이 오지 않는다.** 세션 기록이 사라져 리턴 패킷이 `invalid` 로 버려졌기 때문이다.
+
+```bash
+# 새 연결은?
+curl -s -o /dev/null -w '%{http_code}\n' http://{{ public.external_site.inet_loopback }}/
+```
+
+**정상이다.** 나가는 방향은 정책으로 허용돼 있으므로 새 세션이 바로 만들어진다.
+
+```bash
+# pc1 — 정리
+exec 3<&-
+```
+
+> **"방화벽 세션이 끊겼다" 는 말의 실체가 이것이다.**
+> 장비 재기동 · 세션 타임아웃 · 이중화 전환(세션 동기화 실패) 때 실제로 벌어진다.
+> 증상은 **"오래 열어 둔 연결만 끊기고 새로 접속하면 된다"** — 아주 특징적이다.
+
+### 실습 4 — ★★ 사설 IP 는 정말 못 오는가 (C7)
+
+**외부에서 내부 사설 주소로 시도한다.**
+
+```bash
+# inet
+ip route show
+```
+
+```
+{{ public.transit.cidr }} dev eth1 proto kernel scope link src {{ public.transit.addresses.inet }}
+{{ public.service_block.cidr }} via {{ public.transit.addresses.edge }} dev eth1
+```
+
+**`{{ lab_block }}` 이 없다.** 기본 경로도 없다.
+
+```bash
+ip route get {{ ip.web }}
+```
+
+```
+RTNETLINK answers: Network is unreachable
+```
+
+```bash
+ping -c 2 {{ ip.web }}
+```
+
+```
+ping: connect: Network is unreachable
+```
+
+> **방화벽까지 갈 일도 없었다.** 패킷이 **나가지도 못했다.**
+> "사설 IP 는 인터넷에서 라우팅되지 않는다" 는 말은 비유가 아니라 **라우팅 테이블의 사실**이다.
+>
+> 실제 인터넷의 라우터들도 마찬가지다. 사설 대역 경로를 갖지 않으며, 대개 명시적으로 버린다.
+
+**그럼 공개 IP 는?**
+
+```bash
+# inet
+ping -c 2 {{ dweb.public }}
+curl -s -o /dev/null -w '%{http_code}\n' http://{{ dweb.public }}/
+```
+
+**된다.** ISP 가 `{{ public.service_block.cidr }}` 을 우리 쪽으로 라우팅해 주기 때문이다.
+
+### 실습 5 — 열지 않은 포트는 어떻게 실패하는가 (E3 회수)
+
+```bash
+# inet — 공개된 포트
+time timeout 5 bash -c "echo > /dev/tcp/{{ dweb.public }}/80" ; echo "rc=$?"
+```
+
+```
+rc=0        ← 즉시 성공
+```
+
+```bash
+# inet — 공개하지 않은 포트
+time timeout 5 bash -c "echo > /dev/tcp/{{ dweb.public }}/22" ; echo "rc=$?"
+```
+
+```
+real  0m5.0s
+rc=124      ← 5초를 다 쓰고 타임아웃
+```
+
+> **`rc=124` 는 타임아웃이다 — M6 감별표의 ②(DROP).**
+> 만약 서버까지 갔다면 커널이 RST 를 줘서 **즉시 거부**(`rc=1`)였을 것이다.
+>
+> **실패까지 걸린 시간이 "어디서 막혔는지" 를 말해 준다.**
+> 즉시 거부 = 서버까지 갔다 / 타임아웃 = 중간에서 버려졌다.
+
+**경계에서 확인한다.**
+
+```bash
+# edge — 버려지는 것이 로그에 남는다
+sudo journalctl -k --since '2 min ago' | grep 'edge-drop'
+```
+
+> 이 랩의 정책에는 `log prefix "[edge-drop] "` 가 들어 있다.
+> **버려진 패킷을 로그로 남기는 것**은 트러블슈팅에 큰 도움이 된다.
+> (다만 `limit rate` 없이 걸면 로그가 폭주하므로 반드시 제한을 건다)
+
+### 실습 6 — ★ FTP 와 NAT (F5)
+
+**M8 에서 저장해 둔 캡처를 옆에 띄워 놓고 시작할 것.**
+
+**터미널 A — inet (캡처)**
+
+```bash
+sudo tcpdump -i eth1 -nn -A "host {{ dftp.public }} and tcp port 21"
+```
+
+**터미널 B — inet**
+
+```bash
+curl -sS -u ftpuser:labpass ftp://{{ dftp.public }}/hello.txt
+```
+
+**캡처에서 `227` 응답을 찾는다.**
+
+```
+227 Entering Passive Mode ({{ dftp.public.replace('.', ',') }},195,80)
+```
+
+> **공개 IP 가 들어 있다.** 서버는 내부에서 `{{ dftp.private }}` 를 쓰는데도.
+> vsftpd 의 **`pasv_address`** 설정이 한 일이다.
+
+**이 줄이 없으면 어떻게 되는지**는 장애 주입 `m09-04` 에서 확인한다.
+`227` 에 `{{ dftp.private.replace('.', ',') }}` 가 실려 나가고, 외부 클라이언트는
+그 주소로 갈 방법이 없다 (실습 4 에서 본 그대로).
+
+```bash
+# 데이터 채널이 어느 포트로 열렸는지 확인
+sudo tcpdump -i eth1 -nn "host {{ dftp.public }} and tcp[tcpflags] & (tcp-syn|tcp-ack) == tcp-syn"
+```
+
+```
+{{ public.transit.addresses.inet }}.51100 > {{ dftp.public }}.21:    Flags [S]
+{{ public.transit.addresses.inet }}.51102 > {{ dftp.public }}.50001: Flags [S]
+```
+
+> **데이터 채널이 `{{ services.ftp.passive_range }}` 안의 포트로 열렸다.**
+> 이 대역이 DNAT 규칙과 방화벽 정책에 **함께** 들어 있어야 전송이 된다.
+> 대역을 고정하지 않으면 매번 다른 포트를 쓰므로 정책을 쓸 수 없다.
+
+> **왜 Active 는 이 랩에서 시험하지 않는가**
+> 이 랩은 **서버가 NAT 뒤**에 있는 구성이다. 회사에서 흔한 것은 반대 —
+> **클라이언트가 NAT 뒤**이고, 그때 깨지는 것은 Active 다 (서버가 클라이언트로 거는 역방향 연결).
+> M8 에서 캡처한 Active 의 화살표 방향을 다시 보면서, **그 SYN 이 이 경계에 도착했다면
+> 어느 규칙에 걸렸을지** 정책을 보며 답해 볼 것 (과제 4).
+
+### 실습 7 — 정책 순서를 깨 본다 (G3)
+
+**규칙 하나를 맨 위에 넣어 본다.**
+
+```bash
+# edge — inet 을 차단하는 규칙을 forward 체인 **맨 아래**에 추가
+sudo nft add rule inet filter forward ip saddr {{ public.transit.addresses.inet }} drop
+```
+
+```bash
+# inet — 공개 서비스에 접속
+curl -s -o /dev/null -w '%{http_code}\n' -m5 http://{{ dweb.public }}/
+```
+
+**여전히 된다.** 위쪽의 허용 규칙에서 이미 판정이 끝났기 때문이다.
+
+```bash
+# edge — 이번엔 맨 위에 넣는다
+sudo nft insert rule inet filter forward ip saddr {{ public.transit.addresses.inet }} drop
+```
+
+```bash
+# inet
+curl -s -o /dev/null -w '%{http_code}\n' -m5 http://{{ dweb.public }}/
+```
+
+**이번엔 막힌다** (타임아웃).
+
+> **같은 규칙인데 위치에 따라 결과가 정반대다.**
+> 그리고 **문법 오류가 아니므로 아무 경고도 없다** — 이것이 정책 사고가 잦은 이유다.
+> **좁은 규칙(예외)이 위, 넓은 규칙이 아래.**
+
+**정리 (반드시 할 것)**
+
+```bash
+# edge
+sudo nft -f /etc/nftables.conf
+sudo nft list ruleset | grep -c "{{ public.transit.addresses.inet }}"      # 0 이어야 한다
+```
+
+---
+
+## 4. 관찰 포인트 정리
+
+| 확인할 것 | 명령 | 어디서 |
+|---|---|---|
+| 주소가 바뀌었나 | `tcpdump` 양쪽 동시 | **경계의 eth1 과 eth2** |
+| 변환 표 | `conntrack -L` | edge |
+| NAT 규칙 | `nft list ruleset` 의 `nat` 테이블 | edge |
+| 정책과 **순서** | `nft list ruleset` 의 `forward` 체인 | edge |
+| 버려진 패킷 | `journalctl -k \| grep edge-drop` | edge |
+| 경로가 있는가 | `ip route get <대상>` | 출발지 |
+| 실패의 성격 | `time` + 종료 코드 | 출발지 |
+| **되면 안 되는 것** | 외부에서 사설 IP 로 ping | inet |
+
+> **경계 장애의 순서**: ① 나가는가(안쪽 캡처) → ② 변환됐는가(바깥쪽 캡처)
+> → ③ 돌아오는가(바깥쪽) → ④ 안으로 들어왔는가(안쪽).
+> **네 지점이 아니라 두 인터페이스 × 두 방향**이다.
+
+---
+
+## 5. 장애 주입 챌린지
+
+```bash
+# 점프 호스트에서 (담당자)
+make break LAB={{ lab_id }} SCENARIO=m09-01
+```
+
+| # | 증상 | 힌트 |
+|---|---|---|
+| m09-01 | 내부에서 외부로 아무것도 안 된다. 내부끼리는 정상 | 경계 **바깥쪽**에서 캡처하면 이상한 것이 보인다 |
+| m09-02 | 외부에서 web 공개 IP 만 안 된다. ftp 는 정상 | 두 서비스의 차이가 무엇인가 |
+| m09-03 | 나가는 것은 되는데 **아무 응답도 안 돌아온다** | 응답을 허용하는 규칙이 원래 몇 개였는가 |
+| m09-04 | FTP 접속은 되는데 전송만 안 된다. 내부에서는 정상 | `227` 응답 안에 무엇이 들어 있는가 |
+
+**규칙**: 복구 전에 **원인을 먼저 말한다.**
+그리고 **NAT · 정책 · 라우팅 중 무엇인지**까지 답할 것.
+
+```bash
+make fix LAB={{ lab_id }} SCENARIO=m09-01
+```
+
+> m09-03 이 이 모듈의 핵심이다. 규칙 **한 줄**이 사라졌을 뿐인데 밖으로 나가는 통신이 전부 죽는다.
+
+---
+
+## 6. 흔한 오해 · 실무 팁
+
+| 오해 | 사실 |
+|---|---|
+| "NAT 는 보안 기능이다" | **주소 변환일 뿐이다.** 통제는 방화벽이 한다. DNAT 한 줄이면 바로 뚫린다. |
+| "NAT 뒤에 있으니 안전하다" | 안에서 나가는 것은 다 나간다. 악성코드는 **안에서 밖으로** 연결한다. |
+| "외부에서 사설 IP 는 방화벽이 막는다" | 그 앞에 **라우팅이 없다.** 패킷이 나가지도 못한다. |
+| "리턴 트래픽 허용 규칙을 써야 한다" | stateful 이면 **불필요**하다. 쓰면 오히려 더 열어 주는 것이다. |
+| "규칙만 맞으면 순서는 상관없다" | **첫 매칭에서 끝난다.** 순서가 곧 정책이다. |
+| "포트가 막히면 refused 가 뜬다" | DROP 이면 **타임아웃**이다. 시간이 원인을 말해 준다. |
+| "FTP 는 21 만 열면 된다" | 데이터 채널이 따로 있고, **본문에 주소가 실린다.** |
+| "IPv6 는 NAT 가 없어서 위험하다" | 통제는 원래 방화벽의 몫이다. NAT 가 하던 것은 부작용이었다. |
+
+**실무 팁**
+
+- 경계 장애는 **양쪽 인터페이스를 동시에** 뜬다. 한쪽만 보면 변환 여부를 알 수 없다.
+- `conntrack -L` 은 **"지금 누가 무엇을 하고 있는지"** 를 보여 준다. 세션 수 급증은 사고 신호다.
+- 정책을 추가할 때는 **어디에 넣을지**를 먼저 정한다. 맨 아래에 넣으면 대개 안 먹는다.
+- **drop 로그를 남기되 rate limit 을 반드시 건다.** 안 걸면 로그가 장비를 잡아먹는다.
+- 공개 서비스는 **포트 단위로** 연다. "서버 하나 통째로 열기" 는 사고의 시작이다.
+- 실장비 대응:
+
+  | 이 랩 (nftables) | 다른 곳 |
+  |---|---|
+  | `nft list ruleset` | Cisco ASA `show running-config` · iptables `iptables -L -n -v` |
+  | `conntrack -L` | ASA `show conn` · `show xlate` |
+  | `snat to <주소>` | ASA `nat (inside,outside) dynamic interface` |
+  | `dnat to <주소>` | 포트 포워딩 · ASA `static NAT` |
+  | `ct state established,related accept` | 대부분의 장비에서 **기본 동작** |
+
+---
+
+## 다음
+
+**M10 — 트러블슈팅 방법론과 캡스톤.**
+
+새로 배우는 기술은 없다. 대신 **M1~M9 에서 만든 점검표들을 하나로 묶고**,
+장애가 여러 개 주입된 랩을 받아 **제한 시간 안에 전부 복구**한다.
+
+지금까지 만든 점검표를 다시 꺼내 볼 것 —
+L1/L2(M1) · 리턴 경로(M3) · OSPF 인접(M4) · dual-stack(M5) · 연결 실패 4종(M6) · DNS 판별(M8).
+**그것들이 캡스톤의 무기다.**
+
+과제와 확인 문제는 [tasks.md](tasks.md) 에 있다.

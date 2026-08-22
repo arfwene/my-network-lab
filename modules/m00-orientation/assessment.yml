@@ -1,0 +1,98 @@
+# M0 평가 — 퀴즈 중심. 이 모듈은 개념보다 "랩을 다루는 감각"을 확인한다.
+quiz:
+  pass_score: 80
+  questions:
+    - id: q1
+      type: single
+      text: |
+        동료가 이렇게 보고했다. 무엇이 잘못됐는가?
+        "pc1 에서 pc2 의 관리망 IP 로 ping 해보니 정상 응답합니다. 네트워크 문제는 아닌 것 같습니다."
+      choices:
+        - "pc2 가 아니라 pc1 에서 쳤어야 한다. 확인 방향이 반대다"
+        - "traceroute 로 홉을 확인하지 않아 어느 구간인지 특정하지 못했다"
+        - "잘못된 것이 없다. 관리망으로도 도달성은 도달성이므로 정상 판단이다"
+        - "관리망은 랩 설정과 무관하게 항상 통하므로 아무것도 검증되지 않았다"
+      answer: [3]
+      explain: |
+        관리망(mgmt0)은 서비스망과 분리돼 있어 랩을 다 망가뜨려도 통한다.
+        모든 통신 확인은 eth1 이후의 서비스망 주소로 해야 한다.
+
+    - id: q2
+      type: single
+      text: "랩 노드에서 `sudo ip link set eth1 down` 을 실행했다. SSH 접속은 어떻게 되는가?"
+      choices:
+        - "끊기지 않는다. SSH 는 관리망(mgmt0)으로 들어와 있기 때문이다"
+        - "즉시 끊긴다. SSH 세션이 eth1 을 통해 들어와 있기 때문이다"
+        - "TCP 재전송이 모두 실패하는 30초쯤 뒤에 끊긴다"
+        - "링크가 내려가면 systemd-networkd 가 노드를 재기동해 접속이 끊긴다"
+      answer: [0]
+      explain: "SSH 세션은 mgmt0 위에 맺혀 있다. eth1 은 실습 대상이라 SSH 경로와 무관하다."
+
+    - id: q3
+      type: single
+      text: "`sudo ip link set mgmt0 down` 으로 접속이 끊겼다. 어떻게 복구하는가?"
+      choices:
+        - "Proxmox 웹 콘솔로 화면에 직접 접속해 링크를 올린다"
+        - "[랩 삭제] 후 [랩 생성] 으로 그 노드를 다시 만든다"
+        - "같은 관리망의 다른 노드로 들어가 거기서 이 노드에 접속해 고친다"
+        - "복구할 수 없다. 관리망이 끊기면 되살릴 방법이 없다"
+      answer: [0]
+      explain: |
+        콘솔은 네트워크와 무관하게 화면에 붙는다. 실장비의 콘솔 케이블·터미널 서버와 같은 역할이다.
+        SSH 만 알고 있으면 자기가 만든 장애를 스스로 복구하지 못한다.
+
+    - id: q4
+      type: multi
+      text: "다음 중 **L3 도달성만** 확인하는 도구를 모두 고르시오."
+      choices:
+        - "ping"
+        - "telnet <ip> 80 — 포트까지 확인하므로 L4 다"
+        - "traceroute"
+        - "curl -v — HTTP 응답까지 보므로 L7 이다"
+      answer: [0, 2]
+      explain: |
+        ping 과 traceroute 는 L3 도달성을 본다.
+        telnet <ip> <port> 와 curl 은 L4 포트/L7 서비스까지 확인한다.
+
+    - id: q5
+      type: short
+      text: "실제로 패킷이 오갔는지 눈으로 확인할 때 쓰는 명령은? (명령 이름만)"
+      answer: ["tcpdump", "tcp dump", "tcpdump 명령"]
+      explain: "추측이 아니라 증거로 말하는 습관의 출발점이다. M1 부터 매 모듈에서 쓴다."
+
+checks:
+  required: true
+  items:
+    # 판정 조건이 없는 것이 의도다 — 명령이 실행됐다는 사실 자체가 도달성의 증거다.
+    # 다만 실제로 확인하는 것은 pc1 하나뿐이므로 제목이 그렇게 말해야 한다.
+    # (다른 노드는 각자의 검사가 실행되는지로 확인된다)
+    - id: nodes-reachable
+      kind: state
+      title: "pc1 에 관리망으로 접속되는가"
+      host: pc1
+      run: "true"
+      hint: "노드가 기동되지 않았다면 [랩 생성] 을 먼저 누를 것"
+
+    - id: pc1-lab-link
+      kind: state
+      title: "pc1 의 서비스망 링크(eth1)가 살아 있는가"
+      host: pc1
+      run: "cat /sys/class/net/eth1/operstate"
+      expect: "up"
+      hint: "실습 4 에서 내린 링크를 되돌렸는지 확인할 것 — sudo ip link set eth1 up"
+
+    - id: pc1-mgmt-link
+      kind: state
+      title: "pc1 의 관리망 링크(mgmt0)가 살아 있는가"
+      host: pc1
+      run: "cat /sys/class/net/mgmt0/operstate"
+      expect: "up"
+      hint: "실습 5 에서 내린 관리 링크를 콘솔로 복구했는지 확인할 것"
+
+    - id: pc2-lab-link
+      kind: state
+      title: "pc2 의 서비스망 링크(eth1)가 살아 있는가"
+      host: pc2
+      run: "cat /sys/class/net/eth1/operstate"
+      expect: "up"
+      hint: "과제 3 에서 건드린 것을 되돌렸는지 확인할 것"

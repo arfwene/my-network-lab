@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ site_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+{% block body %}{% endblock %}
+
+{% if user %}
+{# Proxmox 상태 팝업 — 헤더 칩을 누르면 열린다. 모든 화면에서 같은 내용을 본다. #}
+<div class="modal-back" id="pvebox" hidden>
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="pvebox-title">
+    <h3 id="pvebox-title">Proxmox 연결 상태</h3>
+    <div class="pve-sum" id="pvebox-sum"></div>
+    <div class="modal-body"><ul class="pve-checks" id="pvebox-list"></ul></div>
+    <div class="modal-scope" id="pvebox-when"></div>
+    <div class="modal-actions">
+      <a class="btn" id="pvebox-fix" href="/admin/settings" hidden>연결 설정 →</a>
+      <button class="btn" id="pvebox-recheck">다시 점검</button>
+      <button class="btn primary" id="pvebox-close">닫기</button>
+    </div>
+  </div>
+</div>
+<script src="/static/health.js"></script>
+{% endif %}
+<script src="/static/app.js"></script>
+</body>
+</html>

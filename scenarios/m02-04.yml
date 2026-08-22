@@ -1,0 +1,39 @@
+---
+# M2-04 : Native VLAN 불일치 (가장 어려운 시나리오)
+#   증상  : pc1 만 게이트웨이에 닿지 못한다. sw1 의 트렁크에는 VLAN 10·20 이 다 있다.
+#           r1 에서 캡처하면 VLAN10 프레임이 **태그 없이** 도착한다.
+#   정답  : sw1 트렁크의 native 가 미사용 VLAN(999) 에서 VLAN10 으로 바뀌었다.
+#           VLAN10 프레임이 태그 없이 나가고, r1 은 그것을 eth1(주소 없음)에서 받는다.
+#           eth1.10 까지 올라가지 못하므로 게이트웨이에 닿지 않는다.
+#   노림수: "설정이 있다"와 "설정이 맞다"는 다르다. 태그가 붙는지 캡처로 확인해야 보인다. (B5)
+#           양 끝의 native 가 어긋나면 로그도 안 남고 링크도 UP 이다 — 실무에서 가장 성가신 부류.
+- name: "scenario m02-04 :: native VLAN 불일치"
+  hosts: sw1
+  become: true
+  gather_facts: false
+  vars:
+    trunk: "{{ lab_interfaces | selectattr('name', 'equalto', 'eth3') | first }}"
+    vid: "{{ ipv4.segments.vlan10.vlan }}"
+  tasks:
+    - name: native 를 미사용 VLAN 에서 VLAN10 으로 바꾼다
+      ansible.builtin.shell: |
+        bridge vlan del dev {{ trunk.name }} vid {{ trunk.native }} 2>/dev/null || true
+        bridge vlan add dev {{ trunk.name }} vid {{ vid }} pvid untagged
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: native 복구 (VLAN10 은 태그된 채로, native 는 미사용 VLAN 으로)
+      ansible.builtin.shell: |
+        bridge vlan del dev {{ trunk.name }} vid {{ vid }} 2>/dev/null || true
+        bridge vlan add dev {{ trunk.name }} vid {{ vid }}
+        bridge vlan add dev {{ trunk.name }} vid {{ trunk.native }} pvid untagged
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'sw1 트렁크의 native 를 ' ~ trunk.native ~ ' 에서 ' ~ vid ~ ' 로 바꿨다.
+              VLAN' ~ vid ~ ' 이 태그 없이 나간다. bridge vlan show 만 보면 정상처럼 보인다.'
+             if scenario_action | default('break') == 'break'
+             else 'sw1 트렁크 native 복구 완료 (native=' ~ trunk.native ~ ').' }}

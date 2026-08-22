@@ -1,0 +1,283 @@
+# M6 평가 — 퀴즈 비중이 큰 모듈 (PLAN 6.1). 검사는 "서비스가 정상인가 · 뒷정리를 했는가" 중심.
+quiz:
+  pass_score: 80
+  questions:
+    - id: q1
+      type: single
+      text: |
+        `nc -vz {{ ip.web }} 9999` 를 실행하니 **즉시** `Connection refused` 가 떴다.
+        무엇을 뜻하는가?
+      choices:
+        - "가는 경로가 없어 패킷이 나가지도 못했다 (라우팅 테이블에 항목이 없다)"
+        - "중간 방화벽이 조용히 버리고 있다 (아무 응답 없이 매달린다)"
+        - "패킷이 상대 호스트까지 도달했고, 그 포트를 듣는 프로그램이 없다 (RST 를 돌려받았다)"
+        - "상대 호스트가 꺼져 있어 ARP 단계에서 이미 실패했다 (MAC 을 얻지 못해 프레임을 못 만든다)"
+      answer: [2]
+      explain: |
+        `refused` 는 **좋은 소식**이다. 네트워크는 끝까지 정상이라는 뜻이기 때문이다.
+        상대 커널이 "그 포트는 안 듣는다" 고 **RST 로 명확히 답해 준** 것이다.
+        → 이 시점에서 문제 범위는 **서버의 서비스 하나**로 좁혀진다. 네트워크 담당이 볼 일이 아니다.
+
+    - id: q2
+      type: single
+      text: |
+        같은 명령이 **10초 넘게 아무 반응 없이 매달렸다가** 타임아웃 났다. 가장 유력한 원인은?
+      choices:
+        - "포트가 닫혀 있다 — 듣는 프로그램이 없어 실패한 것이다"
+        - "DNS 가 느리다 — 이름 해석에 시간이 걸린 것이다"
+        - "중간 또는 목적지의 방화벽이 조용히 버리고 있다(DROP)"
+        - "서버 CPU 가 높다 — 부하 때문에 응답이 늦은 것이다"
+      answer: [2]
+      explain: |
+        **즉시 실패냐, 매달리느냐** — 이 하나가 원인을 절반으로 가른다.
+        DROP 은 아무 응답도 주지 않으므로 클라이언트는 SYN 을 몇 번 재전송하다 포기한다.
+        REJECT(RST)로 설정된 방화벽이라면 `refused` 가 뜬다.
+        → 그래서 방화벽 정책을 DROP 으로 둘지 REJECT 로 둘지는 **진단 편의와 보안의 트레이드오프**다.
+
+    - id: q3
+      type: single
+      text: |
+        `telnet {{ ip.web }} 80` 은 성공해서 화면이 넘어갔다. 그런데 아무 응답이 없다.
+        캡처를 보니 **SYN → SYN-ACK → ACK 까지는 정상**이고 그 뒤로 조용하다. 무엇을 의심하는가?
+      choices:
+        - "경로 문제 — 중간 구간에서 패킷이 사라지고 있다"
+        - "서비스가 떠 있으나 응답하지 못하는 상태 (행 · 과부하 · 백엔드 대기)"
+        - "방화벽 DROP — 응답 방향만 정책에 막혀 있다"
+        - "포트가 닫혀 있다 — 듣던 프로그램이 내려가 연결만 남고 응답이 없는 것이다"
+      answer: [1]
+      explain: |
+        3-way handshake 는 **커널이** 처리한다. 애플리케이션이 죽어 있어도 큐가 남아 있으면 연결은 된다.
+        연결이 됐다는 것은 **L4 까지는 완벽하다**는 뜻이므로, 이 시점부터는 **애플리케이션 문제**다.
+        → 네트워크 담당이 "저희 쪽은 정상입니다" 라고 말할 수 있는 근거가 바로 이 캡처다.
+
+    - id: q4
+      type: multi
+      text: |
+        "접속이 안 됩니다" 신고를 받았을 때, **원인을 감별하는 데 실제로 쓰이는 단서**를 모두 고르시오.
+      choices:
+        - "서버의 CPU 사용률"
+        - "에러 메시지 (refused / unreachable / timeout)"
+        - "캡처에서 SYN 에 대한 응답이 무엇인가 (RST / SYN-ACK / 무응답)"
+        - "실패까지 걸리는 시간 (즉시 vs 매달림)"
+      answer: [1, 2, 3]
+      explain: |
+        이 세 가지가 **감별표의 전부**다. 셋 중 둘만 있어도 원인이 하나로 좁혀진다.
+        CPU 는 ④(서비스 행)로 이미 좁혀진 **다음에** 볼 것이지, 감별 단계의 단서가 아니다.
+
+    - id: q5
+      type: single
+      text: |
+        하나의 TCP 세션을 유일하게 식별하는 것은?
+      choices:
+        - "목적지 IP 와 포트 — 서버 쪽만 알면 세션이 특정된다"
+        - "출발지 IP 와 포트 — 클라이언트 쪽만 알면 어느 세션인지 유일하게 특정된다"
+        - "출발지 MAC 과 목적지 MAC 의 쌍"
+        - "출발지 IP · 출발지 포트 · 목적지 IP · 목적지 포트 (4-tuple)"
+      answer: [3]
+      explain: |
+        **한쪽 끝만으로는 부족하다.** 서버 하나에 클라이언트가 여럿이면 목적지 IP·포트는 전부 같고,
+        방화벽처럼 가운데서 보는 장비는 양쪽을 다 봐야 어느 세션인지 안다.
+        여기에 프로토콜(TCP/UDP)을 더해 **5-tuple** 이라 부르기도 한다.
+        방화벽 · 로드밸런서가 말하는 "세션" 은 정확히 이 조합의 상태 기록이다.
+        브라우저가 같은 서버에 여러 개를 동시에 열 수 있는 이유도 **출발지 포트가 다르기 때문**이다.
+
+    - id: q6
+      type: single
+      text: |
+        `ss -tan` 출력에 `TIME-WAIT` 상태의 세션이 잔뜩 보인다. 어떻게 판단해야 하는가?
+      choices:
+        - "장애다. 세션이 쌓이고 있으므로 즉시 서버를 재기동한다"
+        - "공격을 받고 있다. 연결 요청이 비정상적으로 많다는 뜻이다"
+        - "메모리 누수다. 닫힌 세션이 정리되지 않고 남아 있는 것이다"
+        - "정상이다. 연결을 먼저 끊은 쪽이 일정 시간 유지하는 상태다"
+      answer: [3]
+      explain: |
+        늦게 도착한 패킷이 **다음 연결에 섞여 들어가는 것을 막기 위해** 잠시 남겨 둔다.
+        문제가 되는 경우는 딱 하나 — **포트가 고갈될 때**다.
+        (짧은 연결을 초당 수천 개 만드는 서버) 그때의 해법은 재기동이 아니라
+        Keep-Alive · 연결 재사용 · 포트 범위 조정이다.
+
+    - id: q7
+      type: single
+      text: |
+        클라이언트가 서버의 80 포트로 접속했다. **클라이언트 쪽 포트 번호**는 어떻게 정해지는가?
+      choices:
+        - "서버와 같은 80 을 쓴다 — 양쪽 포트가 같아야 세션이 맺힌다"
+        - "관리자가 애플리케이션 설정에서 미리 지정해 둔다"
+        - "커널이 ephemeral 범위에서 비어 있는 것을 골라 준다"
+        - "DNS 응답의 SRV 레코드가 함께 알려 준다"
+      answer: [2]
+      explain: |
+        리눅스 기본 범위는 `/proc/sys/net/ipv4/ip_local_port_range` 에서 볼 수 있다 (보통 32768~60999).
+        **이 범위가 곧 한 대상에 동시에 열 수 있는 연결 수의 상한**이다.
+        범위를 좁히거나 TIME-WAIT 가 쌓이면 `Cannot assign requested address` 가 난다.
+
+    - id: q8
+      type: single
+      text: "TCP 대신 UDP 를 고르는 것이 타당한 경우는?"
+      choices:
+        - "늦게 도착한 데이터가 무의미할 때 (실시간 음성·영상, DNS 질의 같은 짧은 요청)"
+        - "파일을 정확히 전송해야 할 때 — 재전송이 필요 없어 빠르다"
+        - "보안이 중요할 때 — 연결 상태가 없어 추적이 어렵다"
+        - "연결이 오래 유지돼야 할 때 — handshake 부담이 없어 세션을 길게 끌 수 있다"
+      answer: [0]
+      explain: |
+        TCP 의 재전송은 **늦게라도 정확히** 를 위한 것이다.
+        통화 중 0.5초 전 음성을 재전송받아 봐야 쓸모가 없다 — 그 시간에 다음 소리를 트는 편이 낫다.
+        DNS 가 UDP 를 먼저 쓰는 이유는 다르다: **질의 하나에 handshake 3번은 낭비**이기 때문이다
+        (응답이 크면 TCP 로 넘어간다).
+
+    - id: q9
+      type: single
+      text: |
+        UDP 로 보낸 요청이 실패했다. TCP 와 비교했을 때 **진단이 어려운 이유**는?
+      choices:
+        - "연결 개념이 없어 실패를 알려 주는 것이 ICMP 뿐이고, ICMP 가 막히면 아무 신호도 없다"
+        - "UDP 는 처리 속도가 빨라 패킷이 캡처 전에 지나가 버리기 때문"
+        - "UDP 는 커널이 세션 테이블에 남기지 않아 캡처로도 흐름을 이어서 추적할 수 없기 때문"
+        - "UDP 는 포트 번호를 쓰지 않아 어느 서비스인지 구분할 수 없기 때문"
+      answer: [0]
+      explain: |
+        TCP 는 실패를 **RST 로 명확히** 알려 준다. UDP 에는 그런 장치가 없다.
+        닫힌 포트로 보내면 **ICMP port unreachable** 이 오는데, 그마저 방화벽이 막으면
+        보낸 쪽은 성공인지 실패인지조차 알 수 없다.
+        → "UDP 는 되는지 어떻게 확인하나요" 의 답은 **양쪽에서 동시에 캡처** 다 (M7).
+
+    - id: q10
+      type: single
+      text: |
+        MAC 주소 · IP 주소 · 포트 번호는 각각 **어디까지** 유효한 주소인가?
+      choices:
+        - "셋 다 엔드투엔드다 — 출발지에서 목적지까지 그대로 유지된다"
+        - "MAC = 같은 세그먼트 / IP = 엔드투엔드(호스트까지) / 포트 = 호스트 안의 프로세스까지"
+        - "MAC = 엔드투엔드 / IP = 세그먼트 / 포트 = 세션"
+        - "셋 다 같은 세그먼트 안에서만 유효하고, 라우터를 넘을 때마다 세 가지가 전부 새로 붙는다"
+      answer: [1]
+      explain: |
+        **주소는 세 층으로 쌓여 있고 각각 유효 범위가 다르다.**
+        M1 에서 MAC, M2 에서 IP, 지금 포트까지 왔다.
+        "어느 장비까지 갔는가" 는 IP 가 답하고, "그 장비 안의 무엇까지 갔는가" 는 포트가 답한다.
+        진단할 때 이 순서로 좁혀 가는 것이 계층별 접근(M10)의 뼈대다.
+
+checks:
+  required: true
+  items:
+    - id: web-listening
+      kind: state
+      title: "web 이 80 포트를 듣고 있는가"
+      host: web
+      run: "ss -ltnH '( sport = :80 )'"
+      expect_all: ["LISTEN", ":80"]
+      hint: |
+        sudo systemctl status nginx 로 확인. 죽어 있으면 sudo systemctl start nginx
+        (장애 주입 m06-02 를 복구하지 않았을 수도 있다)
+
+    - id: web-http
+      kind: connectivity
+      title: "pc1 → web HTTP 응답이 오는가"
+      host: pc1
+      run: "curl -sS -m5 -i http://{{ ip.web }}/health"
+      expect_all: ["200", "X-Lab-Node: web", "ok"]
+      hint: |
+        ping 은 되는데 이것만 안 되면 L3 가 아니라 L4 이상의 문제다.
+        감별표대로 볼 것 — 즉시 거부인가, 매달리는가, 연결은 되는데 응답이 없는가.
+
+    - id: closed-port-refused
+      kind: state
+      title: "닫힌 포트에 접속하면 **즉시 거부**되는가 ★"
+      host: pc1
+      run: "timeout 3 bash -c 'echo > /dev/tcp/{{ ip.web }}/9999' 2>/dev/null; echo rc=$?"
+      expect: "rc=1"
+      hint: |
+        rc=1  → 즉시 거부(RST). 정상이다.
+        rc=124 → 3초를 다 쓰고 타임아웃 = **누군가 조용히 버리고 있다(DROP)**.
+        실습 4 나 장애 주입에서 만든 nft 규칙이 남아 있는지 확인할 것:
+          sudo nft list ruleset
+
+    - id: established-session
+      kind: state
+      title: "세션을 열면 `ss` 에 ESTABLISHED 로 보이는가"
+      host: pc1
+      run: "exec 3<>/dev/tcp/{{ ip.web }}/80 && ss -tanH state established dst {{ ip.web }}"
+      expect: "{{ ip.web }}:80"
+      hint: |
+        bash 가 fd 3 으로 연결을 열어 둔 채 ss 를 돌린다.
+        아무것도 안 나오면 연결 자체가 안 된 것이다 — web-http 검사부터 볼 것.
+
+    - id: no-drop-rules
+      kind: config
+      title: "실습·장애 주입에서 만든 방화벽 규칙을 정리했는가"
+      host: web
+      become: true
+      run: "nft list ruleset 2>/dev/null | grep -c drop || true"
+      expect: "0"
+      hint: |
+        sudo nft delete table inet labtest
+        (장애 주입이면 make fix LAB=<N> SCENARIO=m06-01)
+        규칙이 남으면 다음 모듈 내내 "가끔 안 되는" 상태가 된다.
+
+    - id: no-temp-listeners
+      kind: config
+      title: "실습에서 띄운 임시 리스너를 정리했는가"
+      host: web
+      run: "ss -ltnH | grep -cE ':(8080|8081|8082)' || true"
+      expect: "0"
+      hint: |
+        `nc -l` 을 띄워 둔 터미널에서 Ctrl-C 로 종료할 것.
+        남아 있으면 다음 실습에서 "닫혀 있어야 할 포트가 열려 있는" 상태가 된다.
+
+    - id: port-range-restored
+      kind: config
+      title: "실습 6 에서 좁힌 ephemeral 포트 범위를 되돌렸는가"
+      host: pc1
+      run: "cat /proc/sys/net/ipv4/ip_local_port_range"
+      expect_all: ["32768", "60999"]
+      hint: |
+        sudo sysctl -w net.ipv4.ip_local_port_range="32768 60999"
+        좁은 채로 두면 다음 모듈에서 원인 모를 "Cannot assign requested address" 를 만난다.
+
+    - id: nginx-not-stopped
+      kind: state
+      title: "web 의 nginx 프로세스가 정지(STOP) 상태가 아닌가"
+      host: web
+      # stat 코드에서 T/t 는 '정지됨' 하나뿐이다 (S·R·D 등과 겹치지 않는다)
+      run: "ps -o stat= -C nginx | grep -c '[Tt]' || true"
+      expect: "0"
+      hint: |
+        장애 주입 m06-03 은 프로세스를 죽이지 않고 **멈춰** 둔다 (연결은 되는데 응답이 없다).
+        sudo pkill -CONT -x nginx  또는  make fix LAB=<N> SCENARIO=m06-03
+
+written:
+  items:
+    - id: four-way
+      title: "연결 실패 4종 감별 — 무엇을 근거로 갈랐는가 ★"
+      kind: text
+      review: optional
+      auto_pass: true
+      min_chars: 270          # 네 경우를 다 짚은 완결된 답이 290자 안팎이다 — 350 이면 알찬 답도 검토 큐로 간다
+      prompt: |
+        실습 4 에서 만든 네 가지 상황을 **자기 문장으로** 정리할 것.
+        표를 옮겨 적는 것이 아니라, **무엇을 보고 무엇을 배제했는지**를 남긴다.
+
+          1. 네 가지 원인 각각의 **증상**과 **걸리는 시간**
+          2. 각 경우 **캡처에서 무엇이 보였는가** (SYN 에 대한 응답)
+          3. 네 가지 중 둘을 헷갈렸다면 무엇으로 갈랐는가
+          4. 이 감별표를 "접속이 안 된다" 신고에 **어떤 순서로** 적용할 것인가
+          5. 그중 **네트워크 담당이 볼 일이 아닌 경우**는 어느 것이고, 왜 그렇게 말할 수 있는가
+      rubric:
+        - key: 경로없음
+          desc: "경로 없음의 증상을 짚었는가"
+          any: ["unreachable", "경로", "라우팅", "No route", "Network is"]
+        - key: DROP
+          desc: "DROP(타임아웃)을 짚었는가"
+          any: ["DROP", "drop", "타임아웃", "timeout", "매달", "무응답", "응답 없"]
+        - key: REJECT
+          desc: "REJECT·포트 미개방(즉시 거부)을 짚었는가"
+          any: ["refused", "거부", "RST", "reset", "즉시"]
+        - key: 서비스행
+          desc: "연결은 되나 응답이 없는 경우를 짚었는가"
+          any: ["서비스 행", "행 상태", "멈춰", "hang", "응답이 없", "응답만 없",
+                 "handshake 는", "연결은 되", "무한 대기", "애플리케이션", "SIGSTOP"]
+        - key: 증거
+          desc: "캡처·명령 결과를 근거로 삼았는가"
+          any: ["tcpdump", "캡처", "SYN", "ss ", "ss -", "패킷"]

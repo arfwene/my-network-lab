@@ -1,0 +1,37 @@
+---
+# M4-01 : 백업 경로(r1-r3)의 Area 불일치
+#   증상  : **없다.** 통신은 완전히 정상이다. 주 경로가 살아 있기 때문이다.
+#           담당자는 "이중화 점검"만 지시하고 시작한다.
+#   정답  : r1 의 eth3 가 area 0.0.0.1 이라 r3 와 인접이 서지 않는다.
+#           show ip ospf neighbor 에 이웃이 하나뿐이다.
+#   노림수: "지금 잘 되니 괜찮다"는 판단의 위험. 이중화는 확인해야 존재한다. (D5)
+- name: "scenario m04-01 :: 백업 경로 Area 불일치"
+  hosts: r1
+  become: true
+  gather_facts: false
+  vars:
+    good: "{{ routing.ospf.area }}"
+    bad: "0.0.0.1"
+  tasks:
+    - name: 백업 링크의 Area 를 바꾼다
+      ansible.builtin.command: >-
+        vtysh -c "conf t" -c "interface eth3"
+        -c "no ip ospf area {{ good }}"
+        -c "ip ospf area {{ bad }}"
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: Area 복구
+      ansible.builtin.command: >-
+        vtysh -c "conf t" -c "interface eth3"
+        -c "no ip ospf area {{ bad }}"
+        -c "ip ospf area {{ good }}"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'r1 의 eth3(백업 경로) Area 를 ' ~ bad ~ ' 로 바꿨다. 통신은 정상이므로 교육생에게는 "이중화 점검을 하라"고만 지시할 것.'
+             if scenario_action | default('break') == 'break'
+             else 'r1 eth3 Area 복구 완료 (' ~ good ~ '). show ip ospf neighbor 로 Full 2개를 확인할 것.' }}

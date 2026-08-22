@@ -1,0 +1,24 @@
+# 부록 목록. 웹 콘솔의 [부록] 화면과 dist/appendix/ 렌더링이 이 순서를 따른다.
+#
+# 부록은 모듈이 아니다 — 통과 게이팅도, 퀴즈도 없다.
+# **과정 중에는 곁에 두고 보고, 수료 후에는 현장에서 꺼내 보는 것**이 목적이다.
+appendix:
+  - id: cheatsheet
+    title: "한 장 치트시트 — 무엇을 볼 때 무슨 명령"
+    summary: "3-step 순서대로 정리한 명령 모음. 인쇄해서 키보드 옆에 둘 것."
+    print: true
+
+  - id: flowchart
+    title: "트러블슈팅 플로우차트 — 증상에서 원인까지"
+    summary: "신고 문장에서 시작해 원인까지 가는 결정 트리. 감별이 갈리는 지점만 담았다."
+    print: true
+
+  - id: glossary
+    title: "용어집"
+    summary: "이 과정에 나온 용어를 한 줄로. 흔한 오해를 함께 적었다."
+    print: false
+
+  - id: vendor-cli
+    title: "벤더 CLI 매핑 — FRR · Linux ↔ Cisco IOS"
+    summary: "개념은 같고 명령어만 바뀐다. 실장비로 넘어갈 때 이 표만 있으면 된다."
+    print: true

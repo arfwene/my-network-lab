@@ -1,0 +1,51 @@
+#!/bin/bash
+# =============================================================================
+#  {{ node }} 스위칭 설정   (자동 생성 — 직접 수정하지 말 것)
+#  단계: {{ lab_stage }}
+#
+#  이 스크립트를 그대로 읽으면 "스위치가 무엇을 하는가"가 보인다.
+#    ip link ... master BR   = 포트를 스위치에 꽂는다
+#    bridge vlan add ...     = 포트에 VLAN 을 할당한다 (access / trunk)
+#
+#  확인 명령:
+#    bridge fdb show br {{ bridge_name_local }}    <- MAC 주소 테이블 (= show mac address-table)
+#    bridge vlan show                     <- 포트별 VLAN 할당 (= show vlan brief)
+#    bridge link show                     <- 포트 상태
+# =============================================================================
+set -uo pipefail
+BR={{ bridge_name_local }}
+{% set si = stages.index(lab_stage) %}
+{% set vf = stage_override.switch_vlan_filtering | default(true) %}
+
+ip link show "$BR" >/dev/null 2>&1 || ip link add name "$BR" type bridge
+{% if vf %}
+# VLAN 필터링 ON — 포트마다 VLAN 을 할당해야 통신이 된다
+ip link set "$BR" type bridge vlan_filtering 1 vlan_default_pvid 0
+{% else %}
+# VLAN 필터링 OFF — 모든 포트가 하나의 브로드캐스트 도메인 ({{ lab_stage }} 단계)
+#   M2 에서 VLAN 이 도입되면 여기가 1 로 바뀌고, 두 PC 의 통신이 끊긴다.
+ip link set "$BR" type bridge vlan_filtering 0
+{% endif %}
+# MAC 학습 에이징 타임. 단위는 1/100초이므로 30000 = 300초 (리눅스 기본값).
+#   M1 에서 "테이블이 비면 다시 플러딩한다"를 관찰하려면 이 값을 3000(30초)으로 낮춘다.
+ip link set "$BR" type bridge ageing_time 30000
+ip link set "$BR" up
+
+{% for i in lab_interfaces if i.active and i.bridge_id %}
+# ---- {{ i.name }} -> {{ i.peer }}{% if i.mode %} ({{ i.mode }}){% endif %}{% if i.desc %}  {{ i.desc }}{% endif %}
+ip link set {{ i.name }} up
+ip link set {{ i.name }} master "$BR"
+{%   if vf %}
+bridge vlan del dev {{ i.name }} vid 1 2>/dev/null || true
+{%     if i.mode == 'access' %}
+bridge vlan add dev {{ i.name }} vid {{ i.vlan }} pvid untagged
+{%     elif i.mode == 'trunk' %}
+{%       for v in i.vlan %}
+bridge vlan add dev {{ i.name }} vid {{ v }}          # 태그된 VLAN
+{%       endfor %}
+bridge vlan add dev {{ i.name }} vid {{ i.native }} pvid untagged   # native VLAN (미사용 VLAN 지정 = 실무 관례)
+{%     endif %}
+{%   endif %}
+{% endfor %}
+
+exit 0

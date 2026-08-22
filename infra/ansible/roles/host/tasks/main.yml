@@ -1,0 +1,29 @@
+---
+# PC 노드. M8 전까지는 이름 해석이 없다 — 일부러 그렇게 둔다.
+# "이름이 안 되면 IP 로 확인한다"가 트러블슈팅의 기본이고,
+# M8 에서 DNS 를 붙이는 순간 이름이 살아나는 경험이 F1(DNS vs 네트워크 구분) 교재가 된다.
+- name: systemd-resolved 스텁 해제 (M8 이상)
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    enabled: false
+    state: stopped
+  when: stages.index(lab_stage) >= stages.index('m8')
+
+- name: resolv.conf 설정 (M8 이상)
+  ansible.builtin.copy:
+    dest: /etc/resolv.conf
+    follow: false
+    mode: "0644"
+    content: |
+      # 자동 생성 (Ansible / roles/host)
+      search {{ lab_domain }}
+      nameserver {{ dns.server }}
+      {% if stages.index(lab_stage) >= stages.index('m5') %}
+      nameserver {{ dns.server_v6 }}
+      {% endif %}
+  when: stages.index(lab_stage) >= stages.index('m8')
+
+- name: M8 이전에는 이름 해석 없음 (의도된 상태)
+  ansible.builtin.debug:
+    msg: "단계 {{ lab_stage }} — DNS 미구성. 통신 확인은 IP 로 할 것."
+  when: stages.index(lab_stage) < stages.index('m8')

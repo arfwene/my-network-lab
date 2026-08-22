@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}연결 설정 · {{ site_name }}{% endblock %}
+{% block body %}
+<header class="top">
+  <div class="brand">{{ site_name }}</div>
+  {% if confirmed %}<a class="ghost" href="/">← 랩으로</a>
+  <a class="ghost" href="/admin">계정 관리</a>
+  <a class="ghost" href="/admin/exams">시험</a>
+  <a class="ghost" href="/admin/reviews">검토 큐</a>{% endif %}
+  <div class="spacer"></div>
+  {% include "_health.html" %}
+  <div class="who">{{ user.name | default(user.username) }}<span class="role">{{ user.role_label }}</span></div>
+  <a class="ghost" href="/logout">나가기</a>
+</header>
+
+<main class="admin">
+  {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="flash bad">{{ err }}</div>{% endif %}
+  {% if errors %}<div class="flash bad">{% for e in errors %}<div>· {{ e }}</div>{% endfor %}</div>{% endif %}
+
+  {% if setup %}
+  <div class="flash warn setup">
+    <b>먼저 이 랩이 어느 Proxmox 를 쓸지 정해야 한다.</b>
+    <p>이 콘솔은 Proxmox 위에서 직접 돌 수도, 다른 서버에서 원격 Proxmox 에 붙을 수도 있다.
+       아래 값을 확인하고 <b>[확인하고 저장]</b> 을 눌러야 랩 생성·실행 버튼이 열린다.
+       그전까지는 교육생도 랩을 시작할 수 없다.</p>
+  </div>
+  {% endif %}
+
+  <section class="card">
+    <h3>Proxmox 연결
+      {% if pve.is_local %}<small>지금은 이 서버(localhost) 를 가리키고 있다</small>
+      {% else %}<small>원격 — {{ pve.endpoint }}</small>{% endif %}
+    </h3>
+
+    <form method="post" action="/admin/settings" class="pveform" id="pveform">
+      <div class="grid2">
+        <label>주소 <small>Proxmox 의 IP 또는 호스트명</small>
+          <input name="host" value="{{ pve.host }}" required placeholder="127.0.0.1">
+        </label>
+        <label>포트
+          <input name="port" value="{{ pve.port }}" required pattern="[0-9]+" style="max-width:8rem">
+        </label>
+        <label>노드 이름 <small>Proxmox 에서 <code>hostname -s</code></small>
+          <input name="node" value="{{ pve.node }}" required placeholder="pve">
+        </label>
+        <label>데이터스토어 <small>VM 디스크가 놓일 곳</small>
+          <input name="datastore" value="{{ pve.datastore }}" required placeholder="local-lvm">
+        </label>
+        <label>API 토큰 ID <small>사용자@영역!토큰이름</small>
+          <input name="token_id" value="{{ pve.token_id }}" placeholder="terraform@pve!lab">
+        </label>
+        <label>API 토큰 비밀값
+          <input name="token_secret" type="password" autocomplete="new-password"
+                 placeholder="{{ '저장돼 있다 — 바꿀 때만 입력' if pve.token_secret_set else '토큰 생성 시 한 번만 보이는 값' }}">
+        </label>
+      </div>
+      <label class="chk"><input type="checkbox" name="insecure_tls" {{ 'checked' if pve.insecure_tls }}>
+        인증서 검증 건너뛰기 <small>Proxmox 기본(자체 서명) 인증서를 쓰면 켜 둔다</small></label>
+      {% if pve.token_secret_set %}
+      <label class="chk"><input type="checkbox" name="clear_token"> 저장된 토큰 지우기</label>
+      {% endif %}
+
+      <div class="row">
+        <button class="btn" type="button" id="pvetest">지금 점검</button>
+        <button class="btn" type="submit" name="confirm" value="">저장만</button>
+        <button class="btn primary" type="submit" name="confirm" value="1">확인하고 저장</button>
+      </div>
+      <label class="chk"><input type="checkbox" name="force_confirm">
+        점검 실패해도 확인 처리 <small>Proxmox 를 아직 켜지 않았을 때만</small></label>
+
+      <div id="pveresult" class="pve-result">
+        {% if health %}
+        <div class="pve-sum {{ health.level }}">{{ health.summary }}</div>
+        <ul class="pve-checks">
+          {% for c in health.checks %}
+          <li class="{{ c.status }}">
+            <span class="m">{{ {'ok':'✔','warn':'!','error':'✕'}.get(c.status,'·') }}</span>
+            <div><b>{{ c.title }}</b>
+              <div class="d">{{ c.detail }}</div>
+              {% if c.hint %}<div class="h">→ {{ c.hint }}</div>{% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </form>
+
+    <p class="note">
+      {% if pve.confirmed_at %}마지막 확인: <b>{{ pve.confirmed_at }}</b> · {{ pve.confirmed_by }}
+      {% else %}<b>아직 확인하지 않았다.</b> 확인 전에는 모든 랩 작업이 막힌다.{% endif %}
+    </p>
+  </section>
+
+  <section class="card">
+    <h3>API 토큰 만들기 <small>Proxmox 셸에서 한 번</small></h3>
+    <pre class="code">pveum user add terraform@pve
+pveum role add Terraform -privs "Datastore.Allocate Datastore.AllocateSpace \
+  Datastore.Audit Sys.Audit Sys.Console Sys.Modify VM.Allocate VM.Audit VM.Clone \
+  VM.Config.CDROM VM.Config.Cloudinit VM.Config.CPU VM.Config.Disk VM.Config.HWType \
+  VM.Config.Memory VM.Config.Network VM.Config.Options VM.Migrate VM.Monitor \
+  VM.PowerMgmt User.Modify Pool.Allocate"
+pveum aclmod / -user terraform@pve -role Terraform
+pveum user token add terraform@pve lab --privsep 0</pre>
+    <p class="note">
+      마지막 명령이 출력하는 <b>value</b> 가 토큰 비밀값이다. <b>그때 한 번만 보인다.</b><br>
+      <code>Sys.Modify</code> 는 랩 브리지를 만들 때 필요하다 — 빼면 VM 은 만들어져도 배선이 안 된다.<br>
+      <code>--privsep 0</code> 은 토큰이 사용자 권한을 그대로 물려받게 한다. 켜면 토큰에도 따로 권한을 줘야 한다.
+    </p>
+  </section>
+
+  <section class="card">
+    <h3>이 값이 어디에 쓰이는가</h3>
+    <table class="users">
+      <tbody>
+        <tr><td><b>Terraform</b></td><td>VM·브리지 생성/삭제 — 주소·노드·데이터스토어·토큰 전부</td></tr>
+        <tr><td><b>Ansible</b></td><td>랩 노드 설정 — 관리망 경유. Proxmox 자체에는 붙지 않는다</td></tr>
+        <tr><td><b>문서·토폴로지</b></td><td>교재의 콘솔 접속 주소</td></tr>
+      </tbody>
+    </table>
+    <p class="note">
+      저장하면 <code>var/runtime.yml</code> 로 내보내져 CLI 도구도 같은 값을 본다.
+      <b>토큰 비밀값만은 파일에 쓰지 않고</b> <code>var/console.db</code>(0600) 에 두었다가
+      작업 실행 시 환경변수로 넘긴다. 템플릿 VM 은 <b>VMID {{ template_vmid }}</b> 를 쓴다.
+    </p>
+  </section>
+</main>
+
+<script>
+  // 저장하지 않고 지금 입력값으로만 점검한다 — 잘못된 값을 저장부터 하지 않게.
+  document.getElementById('pvetest').onclick = async () => {
+    const box = document.getElementById('pveresult');
+    box.innerHTML = '<div class="pve-sum">점검 중…</div>';
+    const r = await fetch('/admin/settings/test',
+      { method: 'POST', body: new FormData(document.getElementById('pveform')) });
+    const h = await r.json();
+    const esc = s => String(s || '').replace(/[&<>"]/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const M = { ok: '✔', warn: '!', error: '✕' };
+    box.innerHTML = `<div class="pve-sum ${h.level}">${esc(h.summary)}</div><ul class="pve-checks">`
+      + h.checks.map(c => `<li class="${c.status}"><span class="m">${M[c.status] || '·'}</span>
+          <div><b>${esc(c.title)}</b><div class="d">${esc(c.detail)}</div>
+          ${c.hint ? `<div class="h">→ ${esc(c.hint)}</div>` : ''}</div></li>`).join('')
+      + '</ul>';
+    if (window.pveHealth) window.pveHealth.refresh(true);
+  };
+</script>
+{% endblock %}

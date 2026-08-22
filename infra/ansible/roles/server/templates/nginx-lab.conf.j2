@@ -1,0 +1,13 @@
+# 자동 생성 (Ansible / roles/server)
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    root /var/www/html;
+    index index.html;
+    server_name {{ node }}.{{ lab_domain }};
+
+    # 응답 헤더에 노드 이름을 넣는다 — curl -I 로 "어느 서버가 응답했는지" 즉시 확인
+    add_header X-Lab-Node "{{ node }}" always;
+
+    location /health { return 200 "ok\n"; add_header Content-Type text/plain; }
+}

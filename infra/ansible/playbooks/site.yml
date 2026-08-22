@@ -1,0 +1,42 @@
+---
+# 랩 전체 설정 적용
+#   ansible-playbook -i inventory/lab1 playbooks/site.yml -e lab_stage=m4
+#
+# lab_stage 가 "지금 어느 모듈까지 배웠는가"를 결정한다.
+# 배선(VM/NIC)은 Terraform 이 항상 전체를 만들어 두고, 설정만 단계별로 올린다.
+# -> 실제 현장과 같다. 케이블은 꽂혀 있지만 설정이 없으면 통신은 안 된다.
+- name: "my-network-lab :: 설정 적용"
+  hosts: all
+  become: true
+  gather_facts: true
+  serial: "{{ ansible_serial | default('100%') }}"
+
+  pre_tasks:
+    - name: lab_stage 유효성 확인
+      ansible.builtin.assert:
+        that: lab_stage in stages
+        fail_msg: "lab_stage 는 {{ stages | join(', ') }} 중 하나여야 한다 (받은 값: {{ lab_stage }})"
+        quiet: true
+      run_once: true
+
+    - name: 적용 대상 안내
+      ansible.builtin.debug:
+        msg: >-
+          lab{{ lab_id }} / 단계 {{ lab_stage }} — {{ inventory_hostname }} ({{ node_role }})
+          {{ '· 설정 적용' if node_active else '· 배선만 (설정은 ' ~ stage | upper ~ ' 부터)' }}
+
+  roles:
+    - role: common
+    # node_active = 이 단계에서 설정을 올리는 노드인가.
+    # 아직 등장하지 않은 노드도 common 은 적용한다 — 배선과 관리 접속은 이미 끝나 있어야 하고,
+    # 교육생이 "설정 없는 장비"를 직접 관찰할 수 있어야 하기 때문이다 (M1 플러딩 실습).
+    - role: switch
+      when: node_role == 'switch' and node_active
+    - role: router
+      when: node_role in ['router', 'edge'] and node_active
+    - role: host
+      when: node_role == 'host' and node_active
+    - role: server
+      when: services | length > 0 and node_active
+    - role: edge
+      when: node_role == 'edge' and node_active

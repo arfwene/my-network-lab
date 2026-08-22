@@ -1,0 +1,31 @@
+---
+# M6-01 : web 의 80 포트를 방화벽에서 조용히 버린다 (DROP)
+#   증상  : ping 은 되는데 HTTP 만 매달리다 타임아웃. 즉시 실패가 아니다.
+#   정답  : 감별표 ② — 어딘가에서 DROP 되고 있다.
+#           캡처에 SYN 만 여러 번 나가고 아무것도 안 돌아온다.
+#   노림수: "오래 걸린다"는 것 자체가 단서다. 즉시 거부와 구분하기. (E3)
+- name: "scenario m06-01 :: 방화벽이 조용히 버린다"
+  hosts: web
+  become: true
+  gather_facts: false
+  tasks:
+    - name: 80 포트 DROP 규칙 추가
+      ansible.builtin.shell: |
+        nft add table inet labbreak
+        nft add chain inet labbreak input '{ type filter hook input priority 0; }'
+        nft add rule inet labbreak input tcp dport 80 drop
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: 규칙 제거
+      ansible.builtin.command: "nft delete table inet labbreak"
+      changed_when: true
+      failed_when: false
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'web 의 80 포트를 DROP 으로 막았다. ping 은 되고 HTTP 만 매달린다. nginx 는 정상이다.'
+             if scenario_action | default('break') == 'break'
+             else 'web 방화벽 규칙 제거 완료 (nft list ruleset 으로 확인할 것).' }}
