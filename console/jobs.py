@@ -35,6 +35,7 @@ def _bin(name):
 APB = _bin("ansible-playbook")
 TF = "terraform"                      # PATH 에서 찾는다 (Proxmox 관리 워크스테이션에 설치)
 ANSIBLE = L.ROOT / "infra/ansible"
+JUMP_HELPER = "/usr/local/sbin/lab-access-apply"
 
 
 def tf_env(lab_id):
@@ -42,13 +43,13 @@ def tf_env(lab_id):
 # 설치·준비 작업. 랩이 아니라 **환경**을 만드는 것이라 lab_id 0 (가상의 랩)에서 돈다.
 #   전에는 이것들이 전부 `make ...` 였다. 관리자가 서버에 SSH 로 들어가
 #   저장소 경로를 찾아 명령을 외워야 한다는 뜻이었고, 그게 배포를 어렵게 만든 주범이다.
-SETUP_ACTIONS = {"setup-mgmt", "setup-docs", "setup-access"}
+SETUP_ACTIONS = {"setup-mgmt", "setup-docs", "setup-access", "setup-jump-apply"}
 SETUP_LAB = 0
 ACTIONS = {"deploy", "destroy", "apply", "verify", "reset", "break", "fix", "check",
            "exam"} | SETUP_ACTIONS
 # 문서·계정 파일 생성은 Proxmox 와 무관하다. 여기에 관문을 두면
 # "Proxmox 가 아직 안 되니 안내 문서도 못 만든다" 는 막다른 길이 생긴다.
-NO_PVE = {"setup-docs", "setup-access"}
+NO_PVE = {"setup-docs", "setup-access", "setup-jump-apply"}
 
 # Terraform 은 Proxmox API 를 직접 부른다 — 실패하면 상태 파일만 어긋난다.
 # 나머지도 결국 그 위의 VM 을 만지므로 모두 막되, 무거운 쪽만 캐시를 무시하고 새로 확인한다.
@@ -101,6 +102,11 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
         # 교육생 접속에 필요한 두 스크립트. 만들기만 한다 — 적용은 root 가 한다.
         return [(L.ROOT, [PY, "tools/gen-jumpaccess.py"]),
                 (L.ROOT, [PY, "tools/gen-console-access.py"])]
+    if action == "setup-jump-apply":
+        # root 헬퍼. 저장소가 아니라 **root 소유 /usr/local/sbin** 의 프로그램을 부른다.
+        # 여기서 저장소의 스크립트를 sudo 로 돌리면, 저장소를 쓸 수 있는 이 프로세스가
+        # 곧 root 가 된다 — sudo 를 나눈 의미가 사라진다.
+        return [(L.ROOT, ["sudo", "-n", JUMP_HELPER])]
     if action == "setup-mgmt":
         n = L.SITE["labs"]["default_count"]
         env = L.ROOT / "infra/terraform/envs/mgmt"

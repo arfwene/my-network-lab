@@ -132,20 +132,33 @@ ssh {{ example_node }}</code></pre>
       <p>자기가 관리 링크를 내리면 <b>SSH 자체가 끊긴다.</b> 그때 되돌릴 유일한 길이
          화면에 직접 붙는 <b>콘솔</b>이다. 실무의 콘솔 케이블·터미널 서버와 같은 자리다.</p>
       <p>콘솔은 키를 쓸 수 없다. 그래서 여기만 비밀번호로 들어간다.</p>
-      {% if console_pw %}
+      <p><b>비밀번호를 두 번 넣는다.</b> 하나는 Proxmox 웹에 들어가는 것,
+         하나는 그 안에서 열린 노드 화면에 로그인하는 것이다. 서로 다른 값이다.</p>
       <table>
-        <tr><th>Proxmox</th><td><code>{{ pve_url }}</code> — 별도로 발급받은 계정
-            <span class="muted">(Realm: Proxmox VE authentication server)</span></td></tr>
-        <tr><th>VM</th><td><code>{{ vm_name }}</code> 선택 → <b>Console</b></td></tr>
-        <tr><th>노드 계정</th><td><code>{{ lab_user }}</code></td></tr>
-        <tr><th>비밀번호</th><td><code>{{ console_pw }}</code></td></tr>
+        <tr><th>① Proxmox 주소</th><td><code>{{ pve_url }}</code></td></tr>
+        <tr><th>&nbsp;&nbsp;&nbsp;Realm</th>
+            <td><b>Proxmox VE authentication server</b>
+            <span class="muted">— 기본값 'Linux PAM' 이면 로그인되지 않는다</span></td></tr>
+        {% if pve_user and pve_pw %}
+        <tr><th>&nbsp;&nbsp;&nbsp;계정</th><td><code>{{ pve_user }}</code>
+            <span class="muted">({{ lab_label }} 공용)</span></td></tr>
+        <tr><th>&nbsp;&nbsp;&nbsp;비밀번호</th><td><code>{{ pve_pw }}</code></td></tr>
+        {% else %}
+        <tr><th>&nbsp;&nbsp;&nbsp;계정</th>
+            <td class="muted">아직 발급되지 않았다 — 교육 담당자에게 요청할 것</td></tr>
+        {% endif %}
+        <tr><th>② VM 고르기</th><td><code>{{ vm_name }}</code> 선택 → <b>Console</b>
+            <span class="muted">(목록에는 {{ lab_label }} VM 만 보인다)</span></td></tr>
+        <tr><th>③ 노드 계정</th><td><code>{{ lab_user }}</code></td></tr>
+        <tr><th>&nbsp;&nbsp;&nbsp;비밀번호</th>
+            <td>{% if console_pw %}<code>{{ console_pw }}</code>
+            {% else %}<span class="muted">랩을 만들면 여기에 나타난다</span>{% endif %}</td></tr>
       </table>
-      <p class="muted">이 비밀번호는 <b>콘솔 전용</b>이다. SSH 는 이 값으로 들어갈 수 없다
-         (노드의 sshd 가 비밀번호 로그인을 받지 않는다).</p>
-      {% else %}
-      <p class="note">아직 랩을 만들지 않아 콘솔 비밀번호가 없다.
-         <b>[랩 생성]</b> 뒤에 여기에 나타난다.</p>
-      {% endif %}
+      <p class="muted">③ 의 비밀번호는 <b>콘솔 전용</b>이다. SSH 는 이 값으로 들어갈 수 없다
+         (노드의 sshd 가 비밀번호 로그인을 아예 받지 않는다).</p>
+      <p class="note">Proxmox 계정은 <b>{{ lab_label }} 교육생이 함께 쓴다.</b>
+         이 계정으로는 <b>화면 보기</b>만 된다 — VM 을 끄거나 지우거나 설정을 바꿀 수 없다.
+         그건 이 웹 콘솔의 버튼이 하는 일이다.</p>
     </article>
   </section>
 </main>

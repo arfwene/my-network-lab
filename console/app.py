@@ -253,7 +253,12 @@ def _sshkey_ctx(request, user, errors=(), saved=""):
             # 콘솔은 운영 서버에서 돌고 있으니 여기서 바로 확인해 알려준다.
             "jump_ready": _jump_account_exists(user["username"]),
             "pve_url": L.IPAM["access"]["proxmox"]["api_endpoint"],
-            "vm_name": L.vm_name(lab_id or 1, node)}
+            "vm_name": L.vm_name(lab_id or 1, node),
+            # Proxmox 로그인 계정 — **자기 랩 것만**. 랩당 1계정이라 여기서 보여 줄 수 있고,
+            # 그래서 관리자가 사람마다 비밀번호를 전달할 일이 없다.
+            # create=False: 아직 만들지 않았으면 화면 여는 것만으로 만들지 않는다.
+            **dict(zip(("pve_user", "pve_pw"),
+                       db.lab_pve_account(lab_id, create=False) if lab_id else ("", "")))}
 
 
 @app.get("/sshkey", response_class=HTMLResponse)
@@ -790,6 +795,18 @@ async def exam_op(request: Request, exam_id: int, op: str, minutes: str = Form("
 #  "설치하고 GUI 열면 그냥 쓸 수 있어야 한다" — 맞는 말이다.
 #  남은 준비 작업을 화면 하나에 모으고, 콘솔이 스스로 할 수 있는 것은 버튼으로 만든다.
 #  root 나 다른 호스트가 필요한 것만 명령으로 보여 준다 (복사 버튼과 함께).
+def _setup_buttons(jump_ready):
+    b = list(SETUP_BUTTONS)
+    if jump_ready:
+        b.insert(0, {
+            "action": "setup-jump-apply", "label": "점프 계정 적용",
+            "what": ("콘솔에 등록된 교육생 키로 운영 서버의 점프 계정을 만들고 "
+                     "sshd 제한을 갱신한다. 교육생을 추가하거나 키를 바꾼 뒤에 누른다. "
+                     "빠진 사람은 만들고, 콘솔에서 사라진 사람은 접근을 회수한다."),
+            "need": "install.sh --jump-apply 로 설치된 root 헬퍼"})
+    return b
+
+
 SETUP_BUTTONS = [
     {"action": "setup-mgmt", "label": "관리망 브리지 만들기",
      "what": "Proxmox 에 VLAN 브리지 1개를 만든다. 전 랩 공용이라 최초 1회면 된다.",
@@ -805,7 +822,24 @@ SETUP_BUTTONS = [
 ]
 
 
-def _setup_manual():
+def _jump_apply_ready():
+    """콘솔이 점프 계정을 직접 적용할 수 있는가 (install.sh --jump-apply 를 했는가).
+
+    파일 존재만 보지 않는다 — sudoers 규칙이 실제로 이 계정에 걸려 있는지
+    `sudo -n -l` 로 물어본다. 규칙 없이 버튼만 보이면 눌렀을 때 비밀번호를
+    묻다가 조용히 실패한다.
+    """
+    if not Path(jobs.JUMP_HELPER).exists():
+        return False
+    try:
+        r = subprocess.run(["sudo", "-n", "-l", jobs.JUMP_HELPER],
+                           capture_output=True, text=True, timeout=5)
+        return r.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _setup_manual(jump_ready=False):
     """콘솔이 대신 할 수 없는 절차. 왜 못 하는지까지 같이 적는다."""
     root = str(L.ROOT)
     node = L.SITE["access"]["proxmox"].get("node_name", "<노드>")
@@ -822,15 +856,20 @@ def _setup_manual():
          "where": "이 운영 서버, sudo",
          "why": "netplan 을 쓰는 데 root 가 필요하다. 콘솔은 root 로 돌지 않는다. 최초 1회.",
          "cmd": f"cd {root} && make mgmt-net"},
-        {"title": "점프 계정 적용",
-         "where": "이 운영 서버, sudo",
-         "why": "OS 계정과 sshd 설정을 건드린다. 교육생이 늘 때마다.",
-         "cmd": (f"cd {root} && sudo ./dist/jump-access.sh\n"
-                 "sudo cp dist/jump-access.conf /etc/ssh/sshd_config.d/60-lab-jump.conf\n"
-                 "sudo sshd -t && sudo systemctl reload ssh")},
+        *([] if jump_ready else [
+            {"title": "점프 계정 적용",
+             "where": "이 운영 서버, sudo",
+             "why": ("OS 계정과 sshd 설정을 건드린다. 교육생이 늘 때마다 필요하다. "
+                     "아래 한 줄을 한 번 실행해 두면 이 일이 위쪽 버튼으로 바뀐다 — "
+                     f"cd {root} && ./install.sh --jump-apply --no-apt"),
+             "cmd": (f"cd {root} && sudo ./dist/jump-access.sh\n"
+                     "sudo cp dist/jump-access.conf /etc/ssh/sshd_config.d/60-lab-jump.conf\n"
+                     "sudo sshd -t && sudo systemctl reload ssh")}]),
         {"title": "Proxmox 콘솔 계정 적용",
          "where": f"Proxmox 호스트({node}) 에서 root",
-         "why": "pveum 은 Proxmox 호스트에만 있다. 교육생이 늘 때마다.",
+         "why": ("pveum 은 Proxmox 호스트에만 있다. 랩당 1계정이라 "
+                 "교육생이 늘어도 다시 할 필요는 없다 — 랩을 늘릴 때만 한다. "
+                 "비밀번호는 교육생이 [접속 키] 화면에서 직접 본다."),
          "cmd": "./console-access.sh          # dist/ 에서 복사해 온 파일"},
     ]
 
@@ -845,6 +884,7 @@ async def admin_setup(request: Request, lab: int = 1):
     # make doctor 와 **같은 검사**를 부른다. 화면과 CLI 가 다른 말을 하면 안 된다.
     # 소켓을 쓰므로 이벤트 루프를 막지 않게 스레드로 돌린다.
     checks = await asyncio.to_thread(preflight.collect, lab)
+    jump_ready = await asyncio.to_thread(_jump_apply_ready)
     n = {"ok": 0, "warn": 0, "error": 0, "skip": 0}
     for c in checks:
         if c["status"] in n:
@@ -853,7 +893,8 @@ async def admin_setup(request: Request, lab: int = 1):
         "user": user, "site_name": L.SITE["site"]["name"],
         "health": pve.last(), "pending": db.count_pending(),
         "checks": checks, "counts": n, "lab": lab,
-        "buttons": SETUP_BUTTONS, "manual": _setup_manual(),
+        "buttons": _setup_buttons(jump_ready),
+        "manual": _setup_manual(jump_ready), "jump_ready": jump_ready,
         "busy": runner.busy(jobs.SETUP_LAB),
     })
 
@@ -901,8 +942,9 @@ async def admin_create(request: Request, username: str = Form(...), name: str = 
     if redir:
         return redir
     username = username.strip()
-    if not username or not username.replace("-", "").replace("_", "").isalnum():
-        return RedirectResponse("/admin?err=아이디는 영문·숫자·-·_ 만 쓸 수 있다", status_code=303)
+    okname, why = auth.valid_username(username)
+    if not okname:
+        return RedirectResponse(f"/admin?err={why}", status_code=303)
     if db.get_user(username):
         return RedirectResponse(f"/admin?err=이미 있는 계정: {username}", status_code=303)
     if role not in ("admin", "user"):

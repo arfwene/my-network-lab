@@ -46,20 +46,19 @@ def students(lab_ids):
     return out
 
 
-RESERVED = {"root", "daemon", "bin", "sys", "sync", "games", "man", "lp", "mail",
-            "news", "uucp", "proxy", "www-data", "backup", "list", "irc", "nobody",
-            "sshd", "systemd-network", "ubuntu", "admin", "lab", "trainee"}
-
-
 def main(lab, outdir):
     lo, hi = L.IPAM["labs"]["id_range"]
     labs = [lab] if lab else list(range(lo, L.IPAM["labs"]["default_count"] + 1))
     rows = students(labs)
-    clash = [r["username"] for r in rows if r["username"].lower() in RESERVED]
+    # 이름 규칙은 console/auth.py 한 곳에만 둔다. 여기서 따로 목록을 들고 있으면
+    # 한쪽만 고쳐지고, 그 틈으로 시스템 계정 이름이 useradd 까지 흘러간다.
+    import auth                                        # noqa: PLC0415
+    clash = [(r["username"], auth.valid_username(r["username"])[1]) for r in rows
+             if not auth.valid_username(r["username"])[0]]
     if clash:
-        sys.exit(f"거부: 시스템 계정과 이름이 겹친다: {', '.join(clash)}\n"
-                 f"  이 이름으로 점프 계정을 만들면 그 시스템 계정을 망가뜨린다.\n"
-                 f"  콘솔에서 다른 이름으로 바꿀 것")
+        sys.exit("거부: 점프 계정으로 쓸 수 없는 이름이 있다.\n"
+                 + "\n".join(f"  {u} — {why}" for u, why in clash)
+                 + "\n  콘솔에서 계정 이름을 바꿀 것 (이 이름이 OS 계정이 된다).")
     per_lab = {n: [L.mgmt_ip(n, x["name"]) for x in L.TOPO["nodes"]] for n in labs}
     out = Path(outdir)
     out.mkdir(parents=True, exist_ok=True)

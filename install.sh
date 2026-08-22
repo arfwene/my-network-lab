@@ -8,6 +8,7 @@
 #    ./install.sh                 설치만
 #    ./install.sh --service       설치 + systemd 서비스 등록 (부팅 시 자동 기동)
 #    ./install.sh --no-apt        OS 패키지 설치를 건너뛴다 (권한이 없거나 이미 있을 때)
+#    ./install.sh --jump-apply    콘솔이 점프 계정을 직접 적용할 수 있게 한다 (아래 설명)
 #
 #  폐쇄망이면 Terraform zip 을 미리 받아 두고:
 #    TERRAFORM_ZIP=/tmp/terraform_1.9.8_linux_amd64.zip ./install.sh
@@ -22,6 +23,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV="$ROOT/console/.venv"
 DO_APT=1
 DO_SERVICE=0
+DO_JUMP=0
 PORT="${PORT:-8080}"
 
 G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; B=$'\033[34m'; N=$'\033[0m'
@@ -33,6 +35,7 @@ die()  { echo "  ${R}✘${N} $*" >&2; exit 1; }
 for a in "$@"; do
   case "$a" in
     --service) DO_SERVICE=1 ;;
+    --jump-apply) DO_JUMP=1 ;;
     --no-apt)  DO_APT=0 ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) die "모르는 옵션: $a" ;;
@@ -51,7 +54,7 @@ case "${ID_LIKE:-$ID}" in
 esac
 
 SUDO=""
-if [ "$DO_APT" = 1 ] || [ "$DO_SERVICE" = 1 ] || ! command -v terraform >/dev/null; then
+if [ "$DO_APT" = 1 ] || [ "$DO_SERVICE" = 1 ] || [ "$DO_JUMP" = 1 ] || ! command -v terraform >/dev/null; then
   command -v sudo >/dev/null || die "sudo 가 필요하다"
   sudo -v || die "sudo 권한이 없다. --no-apt 로 돌리고 Terraform 은 직접 설치할 것"
   SUDO=sudo
@@ -173,6 +176,58 @@ if [ "$DO_SERVICE" = 1 ]; then
   fi
 fi
 
+# ------------------------------------------------- 6.5 점프 계정 적용 권한 (선택)
+#  교육생이 늘 때마다 관리자가 서버에 들어가 `sudo ./dist/jump-access.sh` 를 치는 일을
+#  콘솔 버튼으로 옮긴다. 그러려면 콘솔 계정에 sudo 를 줘야 하는데, 순진하게 주면
+#
+#      콘솔 계정이 dist/jump-access.sh 를 쓸 수 있다
+#        + sudo 로 그 파일을 실행할 수 있다
+#        = 콘솔 계정이 곧 root 다  (sudo 를 준 의미가 없다)
+#
+#  그래서 **콘솔 계정이 건드릴 수 없는 것만** 실행하게 한다.
+#    · 실행되는 코드는 root 소유 /usr/local/sbin/lab-access-apply 하나뿐이고
+#      저장소(tools/, dist/)를 읽지도 실행하지도 않는다
+#    · 주소·경로는 root 소유 policy.json 에서 온다
+#    · 콘솔에서 오는 것은 DB 의 데이터뿐이고 헬퍼가 이름·공개키를 다시 검증한다
+#    · sudoers 규칙에는 인자 자리가 없다 (와일드카드 금지)
+if [ "$DO_JUMP" = 1 ]; then
+  step "점프 계정 적용 권한"
+  HELPER=/usr/local/sbin/lab-access-apply
+  POLDIR=/etc/my-network-lab
+  SUDOERS=/etc/sudoers.d/my-network-lab
+  ME="$(id -un)"
+
+  $SUDO install -o root -g root -m 0755 "$ROOT/deploy/lab-access-apply.py" "$HELPER"
+  ok "$HELPER  (root:root 0755)"
+
+  $SUDO install -d -o root -g root -m 0755 "$POLDIR"
+  python3 "$ROOT/tools/gen-policy.py" | $SUDO tee "$POLDIR/policy.json" >/dev/null
+  $SUDO chown root:root "$POLDIR/policy.json"
+  $SUDO chmod 0644 "$POLDIR/policy.json"
+  ok "$POLDIR/policy.json  (랩 주소 · DB 경로)"
+
+  # visudo -c 로 먼저 검사한다. 깨진 sudoers 를 넣으면 그 서버에서 sudo 자체가 죽는다.
+  TMPS=$(mktemp)
+  printf '# my-network-lab — 웹 콘솔이 교육생 점프 계정을 적용한다.\n' > "$TMPS"
+  printf '# 인자 없음: 이 프로그램 그대로만 실행할 수 있다.\n' >> "$TMPS"
+  printf '%s ALL=(root) NOPASSWD: %s\n' "$ME" "$HELPER" >> "$TMPS"
+  printf 'Defaults!%s !requiretty\n' "$HELPER" >> "$TMPS"
+  if $SUDO visudo -cf "$TMPS" >/dev/null; then
+    $SUDO install -o root -g root -m 0440 "$TMPS" "$SUDOERS"
+    ok "$SUDOERS  ($ME 가 이 프로그램만 root 로 실행)"
+  else
+    rm -f "$TMPS"
+    die "sudoers 조각이 문법 검사를 통과하지 못했다 — 설치하지 않았다"
+  fi
+  rm -f "$TMPS"
+
+  if sudo -n "$HELPER" --dry-run >/dev/null 2>&1; then
+    ok "콘솔에서 [점프 계정 적용] 버튼을 쓸 수 있다"
+  else
+    warn "sudo -n 확인에 실패했다 — 콘솔은 계속 '복사할 명령' 으로 안내한다"
+  fi
+fi
+
 # ---------------------------------------------------------------- 7. 사전 점검
 step "사전 점검"
 set +e
@@ -205,6 +260,10 @@ cat <<EOF
          · root 가 필요한 것은 복사할 명령     (sudo make mgmt-net 등)
 
   4. 초록이 되면 랩 화면에서 [랩 생성]. make 를 칠 일은 없다.
+
+  ※ 교육생이 늘 때마다 서버에 들어와 점프 계정을 만드는 일이 번거롭다면
+       ./install.sh --jump-apply --no-apt
+     한 번 실행해 두면 그 일도 콘솔 버튼이 된다 (root 소유 헬퍼 + 인자 없는 sudoers).
 
   전체 절차: docs/DEPLOY.md
 EOF

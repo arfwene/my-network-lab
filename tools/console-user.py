@@ -136,6 +136,9 @@ def main():
         return
 
     if args.cmd == "add":
+        okname, why = auth.valid_username(args.username)
+        if not okname:
+            sys.exit(f"거부: {why}")
         if db.get_user(args.username):
             sys.exit(f"이미 있는 계정: {args.username}")
         if args.role == "user" and args.lab is None:

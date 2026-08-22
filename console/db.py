@@ -290,6 +290,40 @@ def set_lab_console_password(value):
     set_setting("lab.console_password", value or "")
 
 
+# ---------------------------------------------------------- Proxmox 콘솔 계정
+#  왜 교육생 1인 1계정이 아니라 **랩당 1계정**인가
+#    · 계정을 하나로 통일하면 남의 랩 화면이 열린다. 노드 `lab` 비밀번호는
+#      전 랩 공용이라(위 lab_console_password), 화면만 열리면 바로 로그인된다.
+#      랩 격리도 시험도 그 자리에서 무너진다.
+#    · 반대로 1인 1계정은 교육생이 늘 때마다 Proxmox 호스트에서 root 작업이 생긴다.
+#    · 같은 랩 교육생은 어차피 **같은 VM 13대**를 함께 쓴다. 랩 경계 안에서
+#      계정을 나눠 봐야 지키는 것이 없다.
+#  그래서 랩당 1개다. 만들 일은 랩을 늘릴 때뿐이고, 교육생 수와 무관하다.
+#
+#  비밀번호를 DB 에 두는 이유: 교육생 [접속 키] 화면이 **자기 랩 것만** 보여 준다.
+#  관리자가 사람마다 비밀번호를 전달하는 일 자체를 없앤다.
+PVE_CONSOLE_USER = "lab{lab_id}-console"
+# 헷갈리는 글자를 뺀다 (0/O, 1/l/I). 화면 보고 손으로 치는 값이다.
+PVE_PW_ALPHABET = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def lab_pve_account(lab_id, create=True):
+    """그 랩의 Proxmox 콘솔 계정. (userid, 비밀번호) — 없으면 만든다."""
+    lab_id = int(lab_id)
+    uid = PVE_CONSOLE_USER.format(lab_id=lab_id) + "@pve"
+    key = f"lab{lab_id}.pve_console_password"
+    v = get_setting(key)
+    if not v and create:
+        # 콘솔 화면은 붙여넣기가 안 되는 경우가 많다. 불러 주기 쉬운 문자만 쓴다.
+        v = "".join(secrets.choice(PVE_PW_ALPHABET) for _ in range(14))
+        set_setting(key, v)
+    return uid, (v or "")
+
+
+def set_lab_pve_password(lab_id, value):
+    set_setting(f"lab{int(lab_id)}.pve_console_password", value or "")
+
+
 # ============================================================ SSH 공개키
 def set_ssh_key(username, key):
     """공개키 저장(빈 문자열이면 제거). 검증은 부르는 쪽에서 한다."""

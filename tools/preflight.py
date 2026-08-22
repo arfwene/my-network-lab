@@ -402,8 +402,11 @@ def check_students():
         warn("교육생 점프 계정", f"{len(no_jump)}/{len(rows)} 명이 없다: "
              + ", ".join(no_jump[:6]) + ("…" if len(no_jump) > 6 else ""),
              "이 사람들은 ssh 로 랩에 못 들어간다 (비밀번호를 묻고 끝난다).\n"
-             "콘솔 [관리자 → 설치] 에서 '교육생 접속 파일 만들기' 를 누른 뒤\n"
-             "  sudo ./dist/jump-access.sh")
+             + ("콘솔 [관리자 → 설치] 의 [점프 계정 적용] 버튼을 누를 것"
+                if Path("/usr/local/sbin/lab-access-apply").exists() else
+                "콘솔 [관리자 → 설치] 에서 '교육생 접속 파일 만들기' 를 누른 뒤\n"
+                "  sudo ./dist/jump-access.sh\n"
+                "이 일을 버튼으로 바꾸려면 한 번만:  ./install.sh --jump-apply --no-apt"))
     else:
         ok("교육생 점프 계정", f"{len(rows)}명 모두 있다")
 

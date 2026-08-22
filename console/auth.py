@@ -8,6 +8,7 @@
 권한은 매 요청 DB 에서 다시 읽는다. 세션 쿠키에는 username 만 담는다.
 그래야 계정을 막거나 랩을 옮겼을 때 즉시 반영된다.
 """
+import re
 import sys
 from pathlib import Path
 
@@ -37,6 +38,35 @@ ACTION_CAP = {"deploy": "lab.deploy", "destroy": "lab.destroy", "apply": "lab.ap
               "verify": "lab.verify", "reset": "lab.reset",
               "break": "lab.break", "fix": "lab.fix"}
 ROLE_LABEL = {"admin": "관리자", "user": "사용자"}
+
+# ---------------------------------------------------------------------- 계정 이름
+#  콘솔 계정 이름은 **운영 서버의 OS 계정 이름이 된다** (점프 계정).
+#  그 이름은 root 권한으로 도는 useradd 에 그대로 들어가므로 여기서 좁게 막는다.
+#
+#  `str.isalnum()` 을 쓰면 안 된다 — 파이썬은 유니코드까지 참으로 본다.
+#  '한글'.isalnum() 도, 아랍 숫자 '٠' 도 통과한다. OS 계정으로는 곤란하다.
+USERNAME_RE = re.compile(r"^[a-z][a-z0-9_-]{2,31}$")
+
+# 이 이름으로 점프 계정을 만들면 시스템 계정을 덮어쓴다.
+RESERVED_NAMES = {
+    "root", "daemon", "bin", "sys", "sync", "games", "man", "lp", "mail", "news",
+    "uucp", "proxy", "www-data", "backup", "list", "irc", "gnats", "nobody",
+    "systemd-network", "systemd-resolve", "messagebus", "syslog", "_apt", "tss",
+    "uuidd", "tcpdump", "landscape", "pollinate", "sshd", "ubuntu", "debian",
+    "admin", "adm", "sudo", "docker", "terraform", "ansible", "lab",
+}
+
+
+def valid_username(name):
+    """(괜찮은가, 사유). 사유는 화면에 그대로 보여 줄 수 있는 문장이다."""
+    n = (name or "").strip()
+    if not USERNAME_RE.match(n):
+        return False, ("아이디는 영문 소문자로 시작하고 3~32자여야 한다. "
+                       "쓸 수 있는 글자는 영문 소문자 · 숫자 · - · _ 뿐이다 "
+                       "(이 이름이 운영 서버의 OS 계정이 된다)")
+    if n in RESERVED_NAMES:
+        return False, f"'{n}' 은 시스템이 쓰는 이름이다. 다른 이름을 쓸 것"
+    return True, ""
 
 
 def can(user, cap):

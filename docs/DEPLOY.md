@@ -521,24 +521,59 @@ make config LAB=1 STAGE=m2      # VM 은 그대로. 설정 범위만 넓어진�
 모듈 해설(`answers.md`)과 캡스톤 장애 대응표를 읽을 수 있고, 다른 랩 관리망으로도 나갈 수 있다.
 그래서 점프 계정은 **셸이 없고 자기 랩 노드로만 나간다.**
 
+### 절차 — 한 번만 준비해 두면 버튼이다
+
 ```bash
-# ① 교육생이 콘솔 [접속 키] 에서 자기 공개키를 등록한다
-python3 tools/console-user.py keys --lab 1        # 등록 현황 확인
+./install.sh --jump-apply --no-apt     # 최초 1회. 아래 "왜 이렇게 하나" 참고
+```
 
-# ② 그 키로 점프 계정 절차를 생성한다
+그 뒤로는 교육생이 늘 때마다 **[관리자 → 설치] → [점프 계정 적용]** 을 누르면 끝이다.
+빠진 사람은 만들고, 콘솔에서 사라지거나 키를 지운 사람은 **접근을 회수한다.**
+
+교육생 쪽에서 할 일도 콘솔 안에서 끝난다 — **[접속 키]** 에서 공개키를 등록하고
+**[내 SSH 설정 내려받기]** 로 `~/.ssh/config` 조각을 직접 받는다.
+관리자가 파일을 나눠 줄 일이 없다.
+
+<details><summary>준비해 두지 않았다면 (손으로 하는 절차)</summary>
+
+```bash
 make jumpaccess                                    # → dist/jump-access.{sh,conf}
-
-# ③ 운영 서버에 적용 (root)
 sudo ./dist/jump-access.sh
 sudo cp dist/jump-access.conf /etc/ssh/sshd_config.d/60-lab-jump.conf
 sudo sshd -t && sudo systemctl reload ssh          # -t 로 먼저 검사할 것
+```
+</details>
 
-# ④ 교육생에게 나눠 줄 ssh 설정
-python3 tools/gen-ssh-config.py --lab 1 --user user01 > ssh-config-lab1
+### 왜 콘솔에 sudo 를 통째로 주지 않는가
+
+`--jump-apply` 는 콘솔 계정에 sudo 를 주는 것이 맞다. 다만 **무엇에 대해** 주는지가 전부다.
+
+```
+콘솔 계정이 dist/jump-access.sh 를 쓸 수 있다
+  + sudo 로 그 파일을 실행할 수 있다
+  = 콘솔 계정이 곧 root 다            ← 순진하게 주면 이렇게 된다
 ```
 
-교육생은 콘솔 **[접속 키]** 에서 공개키를 등록하고 **[내 SSH 설정 내려받기]** 로
-`~/.ssh/config` 조각을 직접 받는다. 관리자가 파일을 나눠 줄 필요가 없다.
+그래서 콘솔이 부르는 것은 저장소의 스크립트가 아니라 **root 소유 전용 프로그램** 하나다.
+
+| | |
+|---|---|
+| 실행되는 코드 | `/usr/local/sbin/lab-access-apply` (root:root 0755) **하나뿐** |
+| 저장소 참조 | 없다. `tools/` 도 `dist/` 도 읽지 않는다 |
+| 주소·경로 | `/etc/my-network-lab/policy.json` (root 소유). 헬퍼가 소유·권한을 확인하고 거부한다 |
+| 콘솔에서 오는 것 | `var/console.db` 의 **데이터뿐** — 이름과 공개키를 헬퍼가 다시 검증한다 |
+| sudoers 규칙 | 인자 자리가 없다. 와일드카드 금지 |
+| 셸 | 거치지 않는다. 스크립트를 만들어 돌리지 않고 헬퍼가 직접 처리한다 |
+
+공개키 검증은 특히 중요하다. `command="..."` 같은 **옵션이 앞에 붙은 줄**이 통과하면
+셸 없는 계정에서도 우리가 정하지 않은 명령이 돈다. 헬퍼는 줄이 키 타입으로 시작할 것을
+요구하고, base64 를 풀어 **안에 적힌 타입과 줄 앞의 타입이 같은지**까지 본다.
+
+랩 구성(주소·랩 수)을 바꾸면 policy.json 을 다시 만들어야 한다.
+
+```bash
+python3 tools/gen-policy.py | sudo tee /etc/my-network-lab/policy.json >/dev/null
+```
 
 ### 콘솔 접속 (M0 실습 5 가 요구한다)
 
@@ -549,13 +584,26 @@ SSH 는 키로 들어가지만, 교육생이 **자기 관리 링크를 내리면
 make consoleaccess                      # → dist/console-access.sh
 scp dist/console-access.sh root@<proxmox>:/tmp/
 # Proxmox 호스트에서
-/tmp/console-access.sh                  # 계정 생성 + 비밀번호 1회 출력
+/tmp/console-access.sh
 ```
+
+**계정은 랩당 1개다** (교육생 1인 1계정이 아니다). 그래서 교육생이 늘어도 다시 하지
+않는다 — **랩을 늘릴 때만** 한다.
+
+왜 전체를 하나로 통일하지 않는가: 노드 `lab` 계정 비밀번호는 **전 랩 공용**이고
+교육생 본인 화면에 표시된다. 계정을 하나로 합치면 남의 랩 화면이 열리고, 거기서
+이미 아는 비밀번호로 로그인된다 — 랩 격리도 시험도 그 자리에서 무너진다.
+반대로 랩 경계 **안에서** 계정을 나누는 것은 지키는 것이 없다. 같은 랩 교육생은
+어차피 같은 VM 13대를 함께 쓴다.
 
 | 무엇 | 어디에 |
 |---|---|
-| Proxmox 로그인 계정 | 위 스크립트가 만든다. **자기 랩 VM 13대의 콘솔만** 열린다 (`VM.Console`+`VM.Audit`) |
-| 노드 `lab` 계정 비밀번호 | `var/console.db` 에만. 교육생 콘솔 **[접속 키] → 5. 콘솔** 에 표시된다 |
+| Proxmox 로그인 계정 | `lab<N>-console@pve`. **그 랩 VM 13대의 콘솔만** 열린다 (`VM.Console`+`VM.Audit`) |
+| 그 비밀번호 | `var/console.db`. 교육생 **[접속 키] → 5. 콘솔** 에 **자기 랩 것만** 표시된다 |
+| 노드 `lab` 계정 비밀번호 | 같은 화면에 있다. 위와 **다른 값**이다 |
+
+비밀번호를 DB 에 두고 화면이 보여 주기 때문에 관리자가 사람마다 전달할 일이 없다.
+스크립트를 다시 실행해도 같은 값으로 맞춘다 — 교육생에게 다시 알릴 필요가 없다.
 
 노드 비밀번호는 Terraform 이 VM 을 만들 때 cloud-init 으로 넣는다 —
 `TF_VAR_lab_password` 로 **실행 시에만** 전달되고 tfvars 에는 들어가지 않는다.
@@ -571,7 +619,7 @@ SSH 는 이 비밀번호로 들어갈 수 없다(노드 sshd 가 비밀번호 �
 > include 되므로, 닫지 않으면 **그 뒤의 전역 설정이 전부 마지막 Match 안에 갇힌다.**
 > 생성기가 이 줄을 자동으로 넣는다.
 
-교육생이 늘거나 키를 바꾸면 ②③ 을 다시 하면 된다.
+교육생이 늘거나 키를 바꾸면 **[점프 계정 적용]** 을 다시 누르면 된다.\nProxmox 콘솔 계정은 랩당 1개라 다시 할 필요가 없다.
 
 ---
 
