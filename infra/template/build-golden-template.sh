@@ -5,7 +5,19 @@
 #  랩 노드는 인터넷에 나갈 수 없다(의도된 격리). 그러므로 필요한 패키지를
 #  전부 템플릿에 미리 넣어둔다. 노드는 이 템플릿의 linked clone 으로 만들어진다.
 #
-#  usage:  ./build-golden-template.sh [--storage local-lvm] [--vmid 9000]
+#  두 단계로 나눠 실행할 수 있다. 하이퍼바이저에 저장소를 추가하거나 도구를 깔지
+#  않으려면 이쪽을 쓴다 (libguestfs-tools 는 Debian main 에 있고, Proxmox 저장소에는 없다).
+#
+#    ① 이미지 만들기 — 운영 서버(Ubuntu)에서. 여기는 apt 가 자유롭다.
+#         sudo apt install -y libguestfs-tools
+#         ./build-golden-template.sh --image-only --out /tmp/lab.img
+#         scp /tmp/lab.img root@<proxmox>:/var/lib/vz/template/lab/
+#
+#    ② 템플릿 등록 — Proxmox 호스트에서. qm 만 있으면 된다.
+#         ./build-golden-template.sh --from-image /var/lib/vz/template/lab/lab.img
+#
+#  한 대에서 다 할 수 있으면(호스트에 libguestfs-tools 가 있으면) 그냥:
+#    usage:  ./build-golden-template.sh [--storage local-lvm] [--vmid 9000]
 # =============================================================================
 set -euo pipefail
 
@@ -16,12 +28,18 @@ IMG_URL=https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd6
 WORK=/var/lib/vz/template/lab
 
 FORCE=0
+MODE=all           # all | image-only | from-image
+OUT=""             # --image-only 의 결과 파일
+FROM=""            # --from-image 의 입력 파일
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --storage) STORAGE="$2"; shift 2;;
     --vmid)    VMID="$2";    shift 2;;
     --force)   FORCE=1;      shift;;
+    --image-only) MODE=image-only; shift;;
+    --out)     OUT="$2";     shift 2;;
+    --from-image) MODE=from-image; FROM="$2"; shift 2;;
     *) echo "unknown arg: $1" >&2; exit 1;;
   esac
 done
@@ -30,7 +48,10 @@ done
 #  virt-customize 로 cloud 이미지 안에 패키지를 미리 넣는다. 랩 노드는 인터넷에
 #  못 나가므로 이 단계를 건너뛸 수 없다.
 #  "Unable to locate package" 는 대개 apt 목록이 없어서다 — 먼저 apt update.
-if ! command -v virt-customize >/dev/null; then
+need_virt() { [[ "$MODE" != "from-image" ]]; }
+need_qm()   { [[ "$MODE" != "image-only" ]]; }
+
+if need_virt && ! command -v virt-customize >/dev/null; then
   CODENAME=$(. /etc/os-release 2>/dev/null && echo "${VERSION_CODENAME:-bookworm}")
   echo "중단: virt-customize 가 없다 (libguestfs-tools)" >&2
   echo >&2
@@ -47,19 +68,33 @@ if ! command -v virt-customize >/dev/null; then
   echo "      > /etc/apt/sources.list.d/pve-no-subscription.list" >&2
   echo "    apt update && apt install -y libguestfs-tools" >&2
   echo >&2
-  echo "  Debian 기본 저장소(main)가 비어 있지 않은지도 확인할 것:" >&2
-  echo "    grep -rh '^deb ' /etc/apt/sources.list /etc/apt/sources.list.d/ | grep -v proxmox" >&2
+  echo "  Debian 기본 저장소(main)가 비어 있지 않은지도 확인할 것 —" >&2
+  echo "  libguestfs-tools 는 **Debian main** 에 있다. Proxmox 저장소에는 없다:" >&2
+  echo "    apt-cache policy libguestfs-tools" >&2
+  echo "    grep -rhE '^\\s*(deb |URIs:)' /etc/apt/sources.list /etc/apt/sources.list.d/" >&2
+  echo >&2
+  echo "  ▸ 하이퍼바이저에 저장소를 추가하고 싶지 않다면 두 단계로 나눌 것." >&2
+  echo "    이미지는 운영 서버(Ubuntu)에서 만들고, 여기서는 등록만 한다:" >&2
+  echo >&2
+  echo "      # 운영 서버에서" >&2
+  echo "      sudo apt install -y libguestfs-tools" >&2
+  echo "      ./infra/template/build-golden-template.sh --image-only --out /tmp/lab.img" >&2
+  echo "      scp /tmp/lab.img root@$(hostname -s 2>/dev/null || echo proxmox):/var/lib/vz/template/lab/" >&2
+  echo >&2
+  echo "      # 이 호스트에서" >&2
+  echo "      ./infra/template/build-golden-template.sh --from-image /var/lib/vz/template/lab/lab.img" >&2
   exit 1
 fi
 
-for c in wget qm; do
-  command -v "$c" >/dev/null || { echo "중단: $c 가 없다" >&2; exit 1; }
-done
+need_virt && { command -v wget >/dev/null || { echo "중단: wget 이 없다" >&2; exit 1; }; }
+need_qm   && { command -v qm   >/dev/null || {
+  echo "중단: qm 이 없다 — 이 명령은 Proxmox 호스트에서 실행해야 한다" >&2
+  echo "      운영 서버에서라면 --image-only 로 이미지만 만들 것" >&2; exit 1; }; }
 
 # --- 남의 VM 을 지우지 않는다 -------------------------------------------------
 #  이 스크립트는 회사 Proxmox 에서 돈다. $VMID 에 운영 VM 이 있는데 그냥 지우면
 #  되돌릴 수 없다. 우리가 만든 템플릿일 때만 다시 만든다.
-if qm config "$VMID" >/dev/null 2>&1; then
+if need_qm && qm config "$VMID" >/dev/null 2>&1; then
   IS_TPL=$(qm config "$VMID" | awk -F': ' '/^template:/{print $2}')
   CUR_NAME=$(qm config "$VMID" | awk -F': ' '/^name:/{print $2}')
   if [[ "$IS_TPL" != "1" || "$CUR_NAME" != "$NAME" ]]; then
@@ -95,23 +130,47 @@ PKG
 )
 PKG_CSV=$(echo "$PACKAGES" | tr '\n' ' ' | tr -s ' ' | sed 's/ $//' | tr ' ' ',')
 
-echo "==> 작업 디렉토리 준비: $WORK"
-mkdir -p "$WORK"; cd "$WORK"
+if [[ "$MODE" == "from-image" ]]; then
+  [[ -f "$FROM" ]] || { echo "중단: 이미지가 없다: $FROM" >&2; exit 1; }
+  BUILD="$FROM"
+  echo "==> 미리 만들어 둔 이미지를 쓴다: $BUILD"
+else
+  # --image-only 는 Proxmox 가 아닌 곳(운영 서버)에서도 돈다. 그때는 /var/lib/vz 가 없다.
+  if [[ "$MODE" == "image-only" ]]; then
+    WORK=$(dirname "${OUT:-/tmp/lab.img}")
+    BUILD="${OUT:-/tmp/lab.img}"
+  else
+    BUILD="$WORK/build.img"
+  fi
+  echo "==> 작업 디렉토리 준비: $WORK"
+  mkdir -p "$WORK"
 
-echo "==> Ubuntu 24.04 cloud image 다운로드"
-[[ -f noble.img ]] || wget -O noble.img "$IMG_URL"
-cp -f noble.img build.img
+  echo "==> Ubuntu 24.04 cloud image 다운로드"
+  BASE="$WORK/noble.img"
+  [[ -f "$BASE" ]] || wget -O "$BASE" "$IMG_URL"
+  cp -f "$BASE" "$BUILD"
 
-echo "==> 필요한 도구 설치 (libguestfs-tools 필요: apt install libguestfs-tools)"
-virt-customize -a build.img \
-  --install "$PKG_CSV" \
-  --run-command 'systemctl enable qemu-guest-agent' \
-  --run-command 'systemctl disable --now nginx vsftpd named frr systemd-networkd-wait-online || true' \
-  --run-command 'sed -i "s/^#\?PermitRootLogin.*/PermitRootLogin no/" /etc/ssh/sshd_config' \
-  --run-command 'echo "lab ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-lab && chmod 440 /etc/sudoers.d/90-lab' \
-  --run-command 'mkdir -p /etc/netplan && rm -f /etc/netplan/*.yaml' \
-  --run-command 'printf "net.ipv4.ip_forward=0\n" > /etc/sysctl.d/99-lab-default.conf' \
-  --truncate /etc/machine-id
+  echo "==> 필요한 도구 설치 (virt-customize)"
+  virt-customize -a "$BUILD" \
+    --install "$PKG_CSV" \
+    --run-command 'systemctl enable qemu-guest-agent' \
+    --run-command 'systemctl disable --now nginx vsftpd named frr systemd-networkd-wait-online || true' \
+    --run-command 'sed -i "s/^#\?PermitRootLogin.*/PermitRootLogin no/" /etc/ssh/sshd_config' \
+    --run-command 'echo "lab ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-lab && chmod 440 /etc/sudoers.d/90-lab' \
+    --run-command 'mkdir -p /etc/netplan && rm -f /etc/netplan/*.yaml' \
+    --run-command 'printf "net.ipv4.ip_forward=0\n" > /etc/sysctl.d/99-lab-default.conf' \
+    --truncate /etc/machine-id
+fi
+
+if [[ "$MODE" == "image-only" ]]; then
+  echo
+  echo "완료: $BUILD"
+  echo "  다음 — Proxmox 호스트로 옮기고 등록한다:"
+  echo "    scp $BUILD root@<proxmox>:/var/lib/vz/template/lab/"
+  echo "    ./infra/template/build-golden-template.sh \\"
+  echo "        --from-image /var/lib/vz/template/lab/$(basename "$BUILD") --storage $STORAGE"
+  exit 0
+fi
 
 echo "==> Proxmox VM 생성 및 템플릿화 (VMID=$VMID)"
 qm create "$VMID" --name "$NAME" --memory 512 --cores 1 --net0 virtio,bridge=vmbr0 \
@@ -119,7 +178,7 @@ qm create "$VMID" --name "$NAME" --memory 512 --cores 1 --net0 virtio,bridge=vmb
   --serial0 socket --vga serial0
 # 볼륨 이름은 스토리지 종류마다 다르다 (local-lvm: vm-9000-disk-0, dir: vm-9000-disk-0.raw).
 # 이름을 짐작하지 말고 importdisk 가 알려주는 값을 쓴다.
-IMPORTED=$(qm importdisk "$VMID" build.img "$STORAGE" 2>&1 | tee /dev/stderr \
+IMPORTED=$(qm importdisk "$VMID" "$BUILD" "$STORAGE" 2>&1 | tee /dev/stderr \
            | sed -n "s/.*mported disk as '\([^']*\)'.*/\1/p" \
            | sed "s/^unused[0-9]*://")
 if [[ -z "$IMPORTED" ]]; then

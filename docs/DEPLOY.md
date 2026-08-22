@@ -386,6 +386,28 @@ apt update && apt install -y libguestfs-tools
 ./infra/template/build-golden-template.sh --storage local-lvm
 ```
 
+#### libguestfs-tools 를 하이퍼바이저에 깔 수 없다면 (권장 경로)
+
+`libguestfs-tools` 는 **Debian main** 에 있다 — Proxmox 저장소에는 없다.
+하이퍼바이저에 Debian 저장소를 추가하는 것 자체가 이 프로젝트가 피하려는 일이므로,
+**이미지는 운영 서버(Ubuntu)에서 만들고 Proxmox 는 등록만** 하는 편이 낫다.
+
+```bash
+# ① 운영 서버에서 — 여기는 apt 가 자유롭다
+sudo apt install -y libguestfs-tools
+./infra/template/build-golden-template.sh --image-only --out /tmp/lab.img
+scp /tmp/lab.img root@<proxmox>:/var/lib/vz/template/lab/
+
+# ② Proxmox 호스트에서 — qm 만 있으면 된다
+./infra/template/build-golden-template.sh \
+    --from-image /var/lib/vz/template/lab/lab.img --storage local-lvm
+```
+
+호스트에 저장소도 도구도 추가하지 않는다. 스크립트가 어느 모드에 무엇이 필요한지
+확인하고, 없으면 시작 전에 멈춘다.
+
+#### 그래도 호스트에 깔겠다면
+
 `Unable to locate package libguestfs-tools` 가 나오면 **패키지 목록이 없는 것**이다.
 `apt update` 를 먼저 돌린다. 그것도 실패하면 구독이 없는 설치라 enterprise 저장소가
 401 을 뱉는 경우다:

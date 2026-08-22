@@ -115,9 +115,12 @@ config/site.yml        design/ipam.yml           tools/labdesign.py
 # 0. Proxmox 호스트에서 API 토큰 준비 (권한 확인까지 해 준다)
 ./infra/proxmox-setup.sh
 
-# 1. Proxmox 호스트에서 골든 템플릿 생성
-#    (랩 노드는 인터넷에 못 나가므로 필요한 패키지를 전부 여기 넣는다)
-apt install -y libguestfs-tools
+# 1. 골든 템플릿 생성 — 랩 노드는 인터넷에 못 나가므로 패키지를 전부 여기 넣는다
+#    libguestfs-tools 는 Debian main 에 있다. 하이퍼바이저에 저장소를 더하고
+#    싶지 않으면 이미지는 운영 서버에서 만들고 Proxmox 는 등록만 한다:
+#      (운영 서버)  ./infra/template/build-golden-template.sh --image-only --out /tmp/lab.img
+#      (Proxmox)   ./infra/template/build-golden-template.sh --from-image /var/lib/vz/template/lab/lab.img
+apt update && apt install -y libguestfs-tools     # 호스트에서 다 할 경우
 ./infra/template/build-golden-template.sh --storage local-lvm
 
 # 2. (선택) Proxmox 호스트에 랩 관리망 IP 부여
