@@ -187,14 +187,24 @@ echo "==========================================================================
 cat <<EOF
   1. config/site.local.yml 을 사내 값으로 고친다
        - access.proxmox        Proxmox 주소 · 노드 이름 · 데이터스토어
-       - access.ssh_public_keys 위에 찍힌 이 서버의 공개키 + 교육생 공개키
+       - access.ssh_public_keys 위에 찍힌 이 서버의 공개키
        - forbidden             사내에서 이미 쓰는 대역
-  2. Proxmox 호스트에서 골든 템플릿을 만든다 (아직 없다면)
-       infra/template/build-golden-template.sh
-  3. 콘솔을 띄우고 admin/admin 으로 로그인 → 비밀번호 변경 → [관리자 → 연결 설정]
-       $([ "$DO_SERVICE" = 1 ] && echo "이미 서비스로 떠 있다" || echo "make console")
-  4. make doctor   (= 이 사전 점검을 다시 돌린다)
-  5. make gen LAB=1 && make deploy LAB=1
+
+  2. Proxmox 호스트에서 root 로 한 번 (다른 호스트라 여기서 못 한다)
+       ./infra/proxmox-setup.sh                      # 권한 · API 토큰
+       ./infra/template/build-golden-template.sh     # 골든 템플릿 VMID 9000
+
+  3. 브라우저로 콘솔에 들어간다 — **여기서부터는 화면에서 끝난다**
+       $([ "$DO_SERVICE" = 1 ] && echo "이미 서비스로 떠 있다" || echo "make console 로 띄운다")
+       admin / admin  →  비밀번호 변경  →  [연결 설정] 에 Proxmox 토큰 입력
+       확인을 누르면 [설치] 화면으로 넘어간다.
+
+       [설치] 화면이 남은 것을 전부 보여 준다:
+         · 무엇이 준비됐고 무엇이 안 됐는지 (make doctor 와 같은 검사)
+         · 콘솔이 대신 할 수 있는 것은 버튼    (관리망 브리지 · 접속 파일 · 문서)
+         · root 가 필요한 것은 복사할 명령     (sudo make mgmt-net 등)
+
+  4. 초록이 되면 랩 화면에서 [랩 생성]. make 를 칠 일은 없다.
 
   전체 절차: docs/DEPLOY.md
 EOF

@@ -1,4 +1,5 @@
 """모듈 교재를 랩별로 렌더링하고 HTML 로 바꾼다. 다이어그램은 인라인 SVG 로 치환한다."""
+import importlib.util
 import re
 import sys
 import yaml
@@ -9,6 +10,13 @@ import markdown as md
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import labdesign as L
 import topology_svg  # noqa: E402  (console 패키지 내부)
+
+# tools/render-labmap.py 는 하이픈이 있어 import 문으로 부를 수 없다.
+# CLI(make docs)와 웹 콘솔이 **같은 코드**로 지도를 만들게 하려고 그대로 불러온다.
+_spec = importlib.util.spec_from_file_location(
+    "render_labmap", L.ROOT / "tools/render-labmap.py")
+_labmap = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_labmap)
 
 SRC = L.ROOT / "modules"
 MERMAID_FENCE = re.compile(r"```mermaid\n(.*?)```", re.S)
@@ -62,17 +70,16 @@ def render_appendix(doc_id, lab_id):
     return env.get_template(src.name).render(**L.doc_context(lab_id, "m10"), meta=d)
 
 
-def lab_map():
+def lab_map(lab_id=1, stage="m10"):
     """랩 지도 — 교육생이 상시 참조하는 문서.
 
-    `make gen`(tools/render-labmap.py)이 만든 dist/lab-map.md 를 그대로 읽는다.
-    교재가 "지도를 보라" 고 하는데 볼 곳이 없으면 안 된다 —
-    교육생은 파일 시스템에 접근할 수 없다.
+    **파일을 읽지 않고 그 자리에서 만든다.** 전에는 `make gen` 이 만들어 둔
+    dist/lab-map.md 를 읽었는데, 두 가지가 잘못돼 있었다.
+      · 관리자가 make 를 돌리기 전에는 교재가 "지도를 보라" 고 하는데 볼 곳이 없었다
+      · 그 파일은 늘 lab1 기준이라 lab3 교육생에게 lab1 주소를 보여 줬다
+    설계(design/*.yml)에서 바로 만들면 둘 다 생기지 않는다.
     """
-    f = L.ROOT / "dist/lab-map.md"
-    if not f.exists():
-        return None
-    return f.read_text(encoding="utf-8")
+    return _labmap.render(stage, lab_id)
 
 
 def render_markdown(module, lab_id, kind="README"):

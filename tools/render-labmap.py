@@ -87,7 +87,8 @@ def mermaid(stage):
     return "\n".join(lines)
 
 
-def node_rows(stage):
+def node_rows(stage, lab_id=None):
+    lab_id = LAB_ID if lab_id is None else int(lab_id)
     seg = IPAM["ipv4"]["segments"]
     lo = IPAM["ipv4"]["loopback"]
     rows = []
@@ -108,12 +109,18 @@ def node_rows(stage):
         if n["name"] == "inet":
             addrs.append(f'{IPAM["public"]["ipv4"]["transit"]["addresses"]["inet"]}/30 *(공인)*')
             addrs.append(f'{IPAM["public"]["ipv4"]["external_site"]["inet_loopback"]} *(외부 사이트)*')
-        rows.append((n, mgmt_ip(n["name"], LAB_ID),
+        rows.append((n, mgmt_ip(n["name"], lab_id),
                      "<br>".join(addrs) or ("*L2 전용 — 랩 IP 없음*" if n["role"] == "switch" else "-")))
     return rows
 
 
-def render(stage="m10"):
+def render(stage="m10", lab_id=None):
+    """랩 지도 마크다운. lab_id 를 주면 그 랩 기준으로 주소를 채운다.
+
+    전역 LAB_ID 를 쓰지 않는 이유: 웹 콘솔은 여러 랩의 지도를 동시에 렌더한다.
+    전역을 바꿔 가며 부르면 옆 랩 요청이 남의 주소를 받는다.
+    """
+    lab_id = LAB_ID if lab_id is None else int(lab_id)
     d = []
     A = d.append
     A("<!-- 자동 생성 파일. 직접 수정하지 말 것.")
@@ -149,7 +156,7 @@ def render(stage="m10"):
     A("")
     A("| 노드 | 역할 | 구역 | 관리 IP (mgmt0) | 랩 IP (eth1~) |")
     A("|---|---|---|---|---|")
-    for n, mgmt, addrs in node_rows(stage):
+    for n, mgmt, addrs in node_rows(stage, lab_id):
         A(f'| **{n["name"]}** | {n["role"]} | {n["zone"]} | `{mgmt}` | {addrs} |')
     A("")
     A("> **관리 IP 로 통신 테스트를 하지 말 것.** 관리망은 랩과 분리돼 있어 항상 통한다.")
@@ -157,7 +164,7 @@ def render(stage="m10"):
     A("")
     A("## 4. 링크 · 브리지 일람")
     A("")
-    A(f'물리 브리지 이름 = `vmbr{{lab_id}}<ID>` — 이 문서는 **lab_id={LAB_ID}** 기준: `101` → `vmbr{LAB_ID}101`')
+    A(f'물리 브리지 이름 = `vmbr{{lab_id}}<ID>` — 이 문서는 **lab_id={lab_id}** 기준: `101` → `vmbr{lab_id}101`')
     A("")
     A("| ID | 별칭 | 구역 | 등장 | 연결 | 대역 |")
     A("|---|---|---|---|---|---|")
@@ -248,7 +255,7 @@ def render(stage="m10"):
     A("|---|---|---|---|")
     for n in nodes_at(stage):
         nid = f'{n["id"]:02x}'
-        A(f'| {n["name"]} | `0x{nid}` | `{mgmt_ip(n["name"], LAB_ID)}` | `52:54:00:{nid}:00:*` |')
+        A(f'| {n["name"]} | `0x{nid}` | `{mgmt_ip(n["name"], lab_id)}` | `52:54:00:{nid}:00:*` |')
     A("")
     A("> M1 에서 `bridge fdb show` 결과를 볼 때, MAC 만 보고 어느 노드인지 바로 알 수 있다.")
     A("")

@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}설치 · {{ site_name }}{% endblock %}
+{% block body %}
+<header class="top">
+  <div class="brand">{{ site_name }}</div>
+  <a class="ghost" href="/">← 랩으로</a>
+  <a class="ghost" href="/admin">계정 관리</a>
+  <a class="ghost" href="/admin/settings">연결 설정</a>
+  <div class="spacer"></div>
+  {% include "_health.html" %}
+  <div class="who">{{ user.name }}<span class="role">{{ user.role_label }}</span></div>
+  <a class="ghost" href="/logout">나가기</a>
+</header>
+
+<main class="admin">
+
+  <section class="card">
+    <h3>설치 상태</h3>
+    <p class="legend">
+      <code>make doctor</code> 와 <b>같은 검사</b>다. 두 곳이 다른 말을 하면 안 되므로
+      같은 코드를 부른다. 랩 {{ lab }} 기준.
+    </p>
+    <p class="setup-sum">
+      <span class="tag ok">통과 {{ counts.ok }}</span>
+      <span class="tag warn">경고 {{ counts.warn }}</span>
+      <span class="tag bad">오류 {{ counts.error }}</span>
+      <a class="btn" href="/admin/setup?lab={{ lab }}">다시 검사</a>
+    </p>
+
+    {% if counts.error %}
+    <p class="flash bad">오류를 먼저 해결할 것. 이 상태로 랩을 만들면 중간에 멈춘다.</p>
+    {% elif counts.warn %}
+    <p class="flash">경고는 배포를 막지 않는다. 다만 무슨 뜻인지는 보고 넘어갈 것.</p>
+    {% else %}
+    <p class="flash ok">준비됐다. 랩 화면에서 <b>[랩 생성]</b> 을 누르면 된다.</p>
+    {% endif %}
+
+    <table class="pve-checks setup-checks">
+      {% for c in checks %}
+        {% if c.status == 'section' %}
+        <tr class="sec"><th colspan="2">{{ c.title }}</th></tr>
+        {% else %}
+        <tr class="{{ c.status }}">
+          <td class="m">{% if c.status=='ok' %}✔{% elif c.status=='warn' %}!{% elif c.status=='error' %}✘{% else %}·{% endif %}</td>
+          <td>
+            <b>{{ c.title }}</b>{% if c.detail %} <span class="muted">— {{ c.detail }}</span>{% endif %}
+            {% if c.hint and c.status in ('warn','error') %}<div class="h">→ {{ c.hint }}</div>{% endif %}
+          </td>
+        </tr>
+        {% endif %}
+      {% endfor %}
+    </table>
+  </section>
+
+  <section class="card">
+    <h3>여기서 바로 할 수 있는 것</h3>
+    <p class="legend">
+      전에는 서버에 SSH 로 들어가 <code>make</code> 를 쳐야 했다. 이제 버튼이다.
+      같은 명령을 콘솔이 대신 돌리고 로그를 아래에 그대로 보여 준다.
+    </p>
+    <div class="setup-acts">
+      {% for b in buttons %}
+      <div class="act">
+        <button class="btn primary" data-setup="{{ b.action }}">{{ b.label }}</button>
+        <div class="what">{{ b.what }}{% if b.need %}<br><span class="muted">필요: {{ b.need }}</span>{% endif %}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="joblog" id="setuplog" hidden><pre id="setupout"></pre></div>
+  </section>
+
+  <section class="card">
+    <h3>여기서는 할 수 없는 것</h3>
+    <p class="legend">
+      root 권한이나 <b>다른 호스트</b>가 필요한 절차다. 콘솔은 root 로 돌지 않고
+      Proxmox 호스트에 셸을 갖고 있지도 않다 — 그렇게 만들면 콘솔이 뚫렸을 때
+      Proxmox 전체가 함께 넘어간다. 아래를 복사해 그 자리에서 실행할 것.
+    </p>
+    {% for m in manual %}
+    <div class="manual">
+      <div class="mh"><b>{{ m.title }}</b> <span class="muted">— {{ m.where }}</span></div>
+      <div class="why muted">{{ m.why }}</div>
+      <pre><code>{{ m.cmd }}</code></pre>
+      <button class="btn copy" data-copy="{{ m.cmd }}">복사</button>
+    </div>
+    {% endfor %}
+  </section>
+</main>
+
+<script>
+(function () {
+  const out = document.getElementById('setupout');
+  const box = document.getElementById('setuplog');
+
+  function stream(id) {
+    return new Promise(res => {
+      const es = new EventSource(`/jobs/${id}/stream`);
+      // 서버는 로그 한 줄을 기본 message 이벤트에 JSON 문자열로 싣는다 (app.py sse()).
+      es.onmessage = e => {
+        out.textContent += JSON.parse(e.data) + '\n';
+        out.scrollTop = out.scrollHeight;
+      };
+      es.addEventListener('done', e => { es.close(); res(JSON.parse(e.data)); });
+      es.onerror = () => { es.close(); res(null); };
+    });
+  }
+
+  document.addEventListener('click', async e => {
+    const b = e.target.closest('[data-setup]');
+    if (b) {
+      const btns = document.querySelectorAll('[data-setup]');
+      btns.forEach(x => x.disabled = true);
+      box.hidden = false;
+      out.textContent = '';
+      const r = await fetch('/admin/setup/' + b.dataset.setup, { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok) {
+        out.textContent = '실행하지 못했다: ' + (j.error || r.status);
+      } else {
+        const d = await stream(j.job_id);
+        if (d && d.status === 'ok') {
+          out.textContent += '\n완료. 위쪽 [다시 검사] 로 상태를 확인할 것.\n';
+        }
+      }
+      btns.forEach(x => x.disabled = false);
+      return;
+    }
+    const c = e.target.closest('[data-copy]');
+    if (c) {
+      navigator.clipboard.writeText(c.dataset.copy).then(() => {
+        const t = c.textContent; c.textContent = '복사됨'; setTimeout(() => c.textContent = t, 1200);
+      });
+    }
+  });
+})();
+</script>
+{% endblock %}

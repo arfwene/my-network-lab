@@ -355,6 +355,8 @@ def check_runtime():
              "export PROXMOX_VE_API_TOKEN='terraform@pve!lab=...' "
              "— 없으면 terraform 이 credentials 오류로 멈춘다")
 
+    check_students()
+
     port = int(os.environ.get("PORT", 8080))
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=1.0):
@@ -362,6 +364,56 @@ def check_runtime():
                  "콘솔이 이미 떠 있다면 정상. 아니면 PORT=... 로 바꿀 것")
     except OSError:
         ok(f"{port} 포트", "비어 있다")
+
+
+def check_students():
+    """등록된 교육생이 실제로 들어올 수 있는 상태인가.
+
+    콘솔에 계정을 만드는 것과 **운영 서버에 점프 계정을 만드는 것은 다른 일**이다.
+    둘째를 빠뜨리면 교육생이 `ssh pc1` 을 쳤을 때 있지도 않은 비밀번호를 묻는다.
+    그때서야 알게 되면 이미 수업 중이다. 여기서 먼저 잡는다.
+    """
+    if not (L.ROOT / "var/console.db").exists():
+        return
+    try:
+        import db                                       # noqa: PLC0415
+        with db.connect() as con:
+            rows = con.execute(
+                "SELECT username, ssh_key FROM users "
+                " WHERE role='user' AND disabled=0 ORDER BY username").fetchall()
+    except Exception as e:                              # noqa: BLE001
+        warn("교육생 계정", f"확인하지 못했다: {e}")
+        return
+    if not rows:
+        skip("교육생 계정", "아직 등록된 교육생이 없다")
+        return
+
+    import pwd                                          # noqa: PLC0415
+    no_jump, no_key = [], []
+    for r in rows:
+        try:
+            pwd.getpwnam(r["username"])
+        except KeyError:
+            no_jump.append(r["username"])
+        if not r["ssh_key"]:
+            no_key.append(r["username"])
+
+    if no_jump:
+        warn("교육생 점프 계정", f"{len(no_jump)}/{len(rows)} 명이 없다: "
+             + ", ".join(no_jump[:6]) + ("…" if len(no_jump) > 6 else ""),
+             "이 사람들은 ssh 로 랩에 못 들어간다 (비밀번호를 묻고 끝난다).\n"
+             "콘솔 [관리자 → 설치] 에서 '교육생 접속 파일 만들기' 를 누른 뒤\n"
+             "  sudo ./dist/jump-access.sh")
+    else:
+        ok("교육생 점프 계정", f"{len(rows)}명 모두 있다")
+
+    if no_key:
+        # 키는 본인이 등록하는 것이라 관리자 잘못이 아니다 — 그래서 오류가 아니다.
+        skip("교육생 SSH 키", f"{len(no_key)}명 미등록: "
+             + ", ".join(no_key[:6]) + ("…" if len(no_key) > 6 else "")
+             + " — 본인이 콘솔 [접속 키] 에서 등록한다")
+    else:
+        ok("교육생 SSH 키", f"{len(rows)}명 모두 등록")
 
 
 # ===================================================== 출력
@@ -387,12 +439,36 @@ def report():
     print("-" * 74)
     print(f"  통과 {n['ok']} · 경고 {n['warn']} · 오류 {n['error']} · 건너뜀 {n['skip']}")
     if n["error"]:
-        print(f"\n{R}오류를 해결하기 전에는 배포하지 말 것.{N} 절차는 docs/DEPLOY.md 에 있다.")
+        print(f"\n{R}오류를 해결하기 전에는 배포하지 말 것.{N}"
+              "\n같은 목록을 웹 콘솔 [관리자 → 설치] 에서도 볼 수 있고, 고칠 수 있는 것은 거기서 버튼이다."
+              "\n배경 설명은 docs/DEPLOY.md.")
     elif n["warn"]:
         print("\n경고는 배포를 막지 않는다. 다만 무엇을 뜻하는지는 확인하고 넘어갈 것.")
     else:
-        print("\n준비됐다.  다음:  make gen LAB=1  →  make deploy LAB=1")
+        print("\n준비됐다.  웹 콘솔에서 [랩 생성] 을 누르면 된다."
+              "\n              (터미널로 하려면:  make deploy LAB=1  →  make config LAB=1 STAGE=m1)")
     return 1 if n["error"] else 0
+
+
+def collect(lab_id=1, skip_proxmox=False):
+    """검사를 돌리고 결과 목록을 돌려준다 — 웹 콘솔의 [설치] 화면이 쓴다.
+
+    CLI 와 화면이 **같은 검사**를 봐야 한다. 화면용으로 따로 만들면
+    "make doctor 는 초록인데 화면은 빨강" 같은 상황이 생기고,
+    그때 어느 쪽을 믿어야 하는지 아무도 모른다.
+    """
+    RESULTS.clear()
+    check_tools()
+    check_config(lab_id)
+    if skip_proxmox:
+        section("Proxmox 연결")
+        skip("전체", "건너뜀")
+    else:
+        check_proxmox(lab_id)
+        check_mgmt(lab_id)
+    check_runtime()
+    return [{"status": st, "title": t, "detail": d, "hint": h}
+            for st, t, d, h in RESULTS]
 
 
 def main():

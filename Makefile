@@ -18,6 +18,9 @@ APB := $(shell test -x $(VENV)/bin/ansible-playbook && echo $(CURDIR)/$(VENV)/bi
         mgmt-net mgmt-net-dry consoleaccess
 
 help:
+	@echo "▸ 보통은 make 를 칠 일이 없다 — 웹 콘솔 [관리자 → 설치] 화면이 같은 일을 한다."
+	@echo "  아래는 콘솔 없이 터미널에서 같은 일을 할 때 쓴다."
+	@echo ""
 	@echo "make doctor         배포 사전 점검 (도구 · 설정 · Proxmox · 관리망)"
 	@echo "make check          설정 검사 (대역 충돌 · 용량 · 공개 안전성)"
 	@echo "make gen LAB=1      설계 -> Terraform/Ansible/문서 전부 생성"

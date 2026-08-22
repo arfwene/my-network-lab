@@ -33,6 +33,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 
 import labdesign as L          # noqa: E402
+import preflight              # noqa: E402  (tools/ — make doctor 와 같은 검사)
 import assess, auth, db, docs, exam, jobs, passwords, pve, sshkeys, state, topology_svg  # noqa: E402
 
 db.init()   # 스키마 생성 + (있다면) 예전 YAML 계정 이관
@@ -592,7 +593,10 @@ async def action(request: Request, lab: int = Form(...), action: str = Form(...)
 async def job_stream(request: Request, job_id: str):
     user = current_user(request)
     job = runner.jobs.get(job_id)
-    if not user or not job or job.lab_id not in auth.allowed_labs(user):
+    # 설치 작업(lab 0)은 배정된 랩이 아니다 — 관리자에게만 연다.
+    allowed = (job and job.lab_id == jobs.SETUP_LAB and auth.can(user, "user.manage")) \
+        or (job and job.lab_id in auth.allowed_labs(user))
+    if not user or not allowed:
         return JSONResponse({"error": "권한 없음"}, status_code=403)
 
     reveal = auth.can(user, "lab.all")
@@ -627,15 +631,14 @@ async def labmap(request: Request):
     user, redir = require(request)
     if redir:
         return redir
-    md = docs.lab_map()
-    if md is None:
-        return HTMLResponse(
-            '<div class="notice">랩 지도가 아직 생성되지 않았다. '
-            '관리자가 <code>make gen</code> 을 실행해야 한다.</div>', status_code=404)
+    # 설계 파일에서 그 자리에 만든다 — 관리자가 미리 돌려 둘 것이 없다.
+    # 배정된 랩 기준이라 옆 랩 주소가 섞이지 않는다.
+    lab_id = pick_lab(user) or 1
+    md = docs.lab_map(lab_id)
     return tpl.TemplateResponse(request, "labmap.html", {
         "request": request, "user": user, "site_name": L.SITE["site"]["name"],
         "health": pve.last(), "pve": pve.public(),
-        "lab_id": pick_lab(user),
+        "lab_id": lab_id,
         "doc_html": Markup(docs.to_html(md)),
     })
 
@@ -783,6 +786,97 @@ async def exam_op(request: Request, exam_id: int, op: str, minutes: str = Form("
 
 
 # ------------------------------------------------------------------ 계정 관리
+# ------------------------------------------------------------------ 설치
+#  "설치하고 GUI 열면 그냥 쓸 수 있어야 한다" — 맞는 말이다.
+#  남은 준비 작업을 화면 하나에 모으고, 콘솔이 스스로 할 수 있는 것은 버튼으로 만든다.
+#  root 나 다른 호스트가 필요한 것만 명령으로 보여 준다 (복사 버튼과 함께).
+SETUP_BUTTONS = [
+    {"action": "setup-mgmt", "label": "관리망 브리지 만들기",
+     "what": "Proxmox 에 VLAN 브리지 1개를 만든다. 전 랩 공용이라 최초 1회면 된다.",
+     "need": "Proxmox 연결"},
+    {"action": "setup-access", "label": "교육생 접속 파일 만들기",
+     "what": "점프 계정 스크립트와 Proxmox 콘솔 계정 스크립트를 dist/ 에 만든다. "
+             "만들기만 하고 적용하지 않는다 — 적용은 아래 root 절차다.",
+     "need": ""},
+    {"action": "setup-docs", "label": "문서 생성",
+     "what": "교재·부록·랩 지도·접속 안내를 dist/ 에 파일로 뽑는다. "
+             "웹 화면은 이것 없이도 나온다 — 인쇄·배포용이다.",
+     "need": ""},
+]
+
+
+def _setup_manual():
+    """콘솔이 대신 할 수 없는 절차. 왜 못 하는지까지 같이 적는다."""
+    root = str(L.ROOT)
+    node = L.SITE["access"]["proxmox"].get("node_name", "<노드>")
+    return [
+        {"title": "Proxmox 권한·API 토큰",
+         "where": f"Proxmox 호스트({node}) 에서 root",
+         "why": "Proxmox 자신의 계정을 만드는 일이라 API 로는 할 수 없다. 최초 1회.",
+         "cmd": "./infra/proxmox-setup.sh"},
+        {"title": "골든 템플릿 (VMID 9000)",
+         "where": f"Proxmox 호스트({node}) 에서 root",
+         "why": "디스크 이미지를 내려받아 가공한다. 최초 1회.",
+         "cmd": "./infra/template/build-golden-template.sh --storage local-lvm"},
+        {"title": "이 서버를 관리망에 연결",
+         "where": "이 운영 서버, sudo",
+         "why": "netplan 을 쓰는 데 root 가 필요하다. 콘솔은 root 로 돌지 않는다. 최초 1회.",
+         "cmd": f"cd {root} && make mgmt-net"},
+        {"title": "점프 계정 적용",
+         "where": "이 운영 서버, sudo",
+         "why": "OS 계정과 sshd 설정을 건드린다. 교육생이 늘 때마다.",
+         "cmd": (f"cd {root} && sudo ./dist/jump-access.sh\n"
+                 "sudo cp dist/jump-access.conf /etc/ssh/sshd_config.d/60-lab-jump.conf\n"
+                 "sudo sshd -t && sudo systemctl reload ssh")},
+        {"title": "Proxmox 콘솔 계정 적용",
+         "where": f"Proxmox 호스트({node}) 에서 root",
+         "why": "pveum 은 Proxmox 호스트에만 있다. 교육생이 늘 때마다.",
+         "cmd": "./console-access.sh          # dist/ 에서 복사해 온 파일"},
+    ]
+
+
+@app.get("/admin/setup", response_class=HTMLResponse)
+async def admin_setup(request: Request, lab: int = 1):
+    # skip_setup: 이 화면은 **연결 설정을 확인하기 전에도** 열려야 한다.
+    # 여기가 무엇이 안 됐는지 알려 주는 곳인데, 안 됐다는 이유로 튕기면 순환이다.
+    user, redir = require(request, "user.manage", skip_setup=True)
+    if redir:
+        return redir
+    # make doctor 와 **같은 검사**를 부른다. 화면과 CLI 가 다른 말을 하면 안 된다.
+    # 소켓을 쓰므로 이벤트 루프를 막지 않게 스레드로 돌린다.
+    checks = await asyncio.to_thread(preflight.collect, lab)
+    n = {"ok": 0, "warn": 0, "error": 0, "skip": 0}
+    for c in checks:
+        if c["status"] in n:
+            n[c["status"]] += 1
+    return tpl.TemplateResponse(request, "setup.html", {
+        "user": user, "site_name": L.SITE["site"]["name"],
+        "health": pve.last(), "pending": db.count_pending(),
+        "checks": checks, "counts": n, "lab": lab,
+        "buttons": SETUP_BUTTONS, "manual": _setup_manual(),
+        "busy": runner.busy(jobs.SETUP_LAB),
+    })
+
+
+@app.post("/admin/setup/{action}")
+async def admin_setup_run(request: Request, action: str):
+    user = current_user(request)
+    if not user or not auth.can(user, "user.manage"):
+        return JSONResponse({"error": "권한이 없다"}, status_code=403)
+    if action not in jobs.SETUP_ACTIONS:
+        return JSONResponse({"error": f"모르는 작업: {action}"}, status_code=400)
+    try:
+        job = await runner.submit(jobs.SETUP_LAB, action, "m10", None,
+                                  user.get("username"))
+    except jobs.NotReady as e:
+        return JSONResponse({"error": e.message, "health": e.health}, status_code=503)
+    except RuntimeError as e:
+        return JSONResponse({"error": str(e)}, status_code=409)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    return JSONResponse({"job_id": job.id})
+
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request, msg: str = "", err: str = ""):
     user, redir = require(request, "user.manage")
@@ -966,9 +1060,10 @@ async def settings_save(request: Request, host: str = Form(...), port: str = For
         if confirm:
             if health["ok"]:
                 pve.mark_confirmed(user["username"])
-                return RedirectResponse(
-                    "/admin/settings?msg=" + "연결 정보를 확인했다. 이제 랩을 실행할 수 있다.",
-                    status_code=303)
+                # 연결이 되면 다음 관문은 "환경이 준비됐는가" 다. 그 화면으로 바로 보낸다.
+                # 여기서 설정 화면에 머물게 하면, 다음에 무엇을 해야 하는지를
+                # 관리자가 문서에서 찾아내야 한다 — 그게 배포를 어렵게 만든다.
+                return RedirectResponse("/admin/setup", status_code=303)
             if force_confirm:
                 pve.mark_confirmed(user["username"], forced=True)
                 return RedirectResponse(

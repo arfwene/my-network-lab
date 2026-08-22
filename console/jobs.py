@@ -39,7 +39,16 @@ ANSIBLE = L.ROOT / "infra/ansible"
 
 def tf_env(lab_id):
     return L.ROOT / f"infra/terraform/envs/lab{lab_id}"
-ACTIONS = {"deploy", "destroy", "apply", "verify", "reset", "break", "fix", "check", "exam"}
+# 설치·준비 작업. 랩이 아니라 **환경**을 만드는 것이라 lab_id 0 (가상의 랩)에서 돈다.
+#   전에는 이것들이 전부 `make ...` 였다. 관리자가 서버에 SSH 로 들어가
+#   저장소 경로를 찾아 명령을 외워야 한다는 뜻이었고, 그게 배포를 어렵게 만든 주범이다.
+SETUP_ACTIONS = {"setup-mgmt", "setup-docs", "setup-access"}
+SETUP_LAB = 0
+ACTIONS = {"deploy", "destroy", "apply", "verify", "reset", "break", "fix", "check",
+           "exam"} | SETUP_ACTIONS
+# 문서·계정 파일 생성은 Proxmox 와 무관하다. 여기에 관문을 두면
+# "Proxmox 가 아직 안 되니 안내 문서도 못 만든다" 는 막다른 길이 생긴다.
+NO_PVE = {"setup-docs", "setup-access"}
 
 # Terraform 은 Proxmox API 를 직접 부른다 — 실패하면 상태 파일만 어긋난다.
 # 나머지도 결국 그 위의 VM 을 만지므로 모두 막되, 무거운 쪽만 캐시를 무시하고 새로 확인한다.
@@ -79,6 +88,25 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
     inv = f"inventory/lab{lab_id}"
     gen = (L.ROOT, [PY, "tools/gen-inventory.py", "--lab", str(lab_id), "--stage", stage])
     gen_tf = (L.ROOT, [PY, "tools/gen-tfvars.py", "--lab", str(lab_id)])
+
+    if action == "setup-docs":
+        # dist/ 산출물. 콘솔 화면은 이것 없이도 돌지만, 관리자가 손에 쥐는 문서다.
+        return [(L.ROOT, [PY, "tools/render-modules.py",  "--lab", str(lab_id or 1)]),
+                (L.ROOT, [PY, "tools/render-appendix.py", "--lab", str(lab_id or 1)]),
+                (L.ROOT, [PY, "tools/render-labmap.py"]),
+                (L.ROOT, [PY, "tools/render-access.py"]),
+                (L.ROOT, [PY, "tools/render-host-guard.py"]),
+                (L.ROOT, [PY, "tools/render-opsvm.py"])]
+    if action == "setup-access":
+        # 교육생 접속에 필요한 두 스크립트. 만들기만 한다 — 적용은 root 가 한다.
+        return [(L.ROOT, [PY, "tools/gen-jumpaccess.py"]),
+                (L.ROOT, [PY, "tools/gen-console-access.py"])]
+    if action == "setup-mgmt":
+        n = L.SITE["labs"]["default_count"]
+        env = L.ROOT / "infra/terraform/envs/mgmt"
+        return [(L.ROOT, [PY, "tools/gen-mgmt.py", "--labs", str(n)]),
+                (env, [TF, "init", "-input=false"]),
+                (env, [TF, "apply", "-auto-approve", "-input=false"])]
 
     if action == "deploy":
         # 브리지 + VM 생성. 배선은 항상 전체 토폴로지로 만든다 (설정만 단계별).
@@ -192,10 +220,11 @@ class Runner:
             if why:
                 raise Locked(why)
         # Proxmox 점검. 소켓을 쓰므로 이벤트 루프를 막지 않게 스레드로 돌린다.
-        ok, why, health = await asyncio.to_thread(
-            pve.gate, action in FRESH_CHECK, lab_id if action in PREFLIGHT else None)
-        if not ok:
-            raise NotReady(why, health)
+        if action not in NO_PVE:
+            ok, why, health = await asyncio.to_thread(
+                pve.gate, action in FRESH_CHECK, lab_id if action in PREFLIGHT else None)
+            if not ok:
+                raise NotReady(why, health)
         job = Job(lab_id, action, stage, scenario, steps, user, module, secret)
         self.jobs[job.id] = job
         self.active[lab_id] = job.id                           # 동기적으로 점유

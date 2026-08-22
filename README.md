@@ -4,7 +4,7 @@
 
 - **커리큘럼 · 설계 근거** → [PLAN.md](PLAN.md)
 - **배포 (서버에 올려서 실제로 돌리기)** → [docs/DEPLOY.md](docs/DEPLOY.md)
-- **랩 지도 (교육생 상시 참조)** → `dist/lab-map.md` (`make gen` 이 만든다)
+- **랩 지도 (교육생 상시 참조)** → 웹 콘솔 **[랩 지도]** (설계 파일에서 그때그때 만든다)
 - **접근 방법 · 격리 설계** → `dist/access.md` (원본: `docs/templates/access.md.j2`)
 
 ---
@@ -25,16 +25,29 @@ make ipam           # 계산된 주소 계획 확인
 
 **실제로 랩을 띄울 때** — 리눅스 서버 한 대에 올린다. 자세한 절차는 [docs/DEPLOY.md](docs/DEPLOY.md).
 
+터미널에서 하는 일은 네 줄이고, **나머지는 웹 콘솔 [관리자 → 설치] 화면에서 끝난다.**
+
 ```bash
-./install.sh --service   # 패키지 · Terraform · venv · SSH 키 · systemd 등록까지 한 번에
-$EDITOR config/site.local.yml   # Proxmox 주소 · SSH 공개키 · 사내 금지 대역
-make mgmt LABS=9         # 관리망 브리지 1개 — 최초 1회. 전 랩 공용(VLAN 분리)
-make opsvm VMID=9100     # 운영 서버 트렁크 NIC 연결 절차 → dist/ops-server.md (1회)
-make doctor              # 사전 점검 — 도구 · 설정 · Proxmox · 관리망 도달성
-make gen LAB=1 && make deploy LAB=1
+# ① 운영 서버에서
+./install.sh --service            # 패키지 · Terraform · venv · SSH 키 · systemd 등록
+$EDITOR config/site.local.yml     # Proxmox 주소 · 노드 이름 · 사내 금지 대역
+
+# ② Proxmox 호스트에서 root 로 (다른 호스트라 콘솔이 대신 할 수 없다)
+./infra/proxmox-setup.sh                                    # 권한 · API 토큰
+./infra/template/build-golden-template.sh --storage local-lvm   # 골든 템플릿
 ```
 
-`make doctor` 가 오류 0 이 되기 전에는 배포하지 않는다. 여기서 걸리는 게 배포 도중에 걸리는 것보다 싸다.
+그다음 브라우저로 `:8080` → `admin/admin` → 비밀번호 변경 → **[연결 설정]** 에 토큰을 넣고
+확인을 누르면 **[설치]** 화면으로 넘어간다. 그 화면이 남은 것을 전부 보여 준다.
+
+| | |
+|---|---|
+| 무엇이 준비됐나 | `make doctor` 와 **같은 검사**를 화면에서 돌린다 |
+| 콘솔이 할 수 있는 것 | 버튼 — 관리망 브리지 · 교육생 접속 파일 · 문서 생성 |
+| root 가 필요한 것 | 복사할 명령 — `sudo make mgmt-net`, `sudo ./dist/jump-access.sh` 등 |
+
+오류가 0 이 되면 랩 화면에서 **[랩 생성]**. `make` 를 칠 일은 없다.
+오류가 남아 있는 채로 배포하지 않는다 — 여기서 걸리는 게 배포 도중에 걸리는 것보다 싸다.
 
 ### 필요한 것
 

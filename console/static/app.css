@@ -442,3 +442,29 @@ pre.code{background:var(--code-bg);padding:14px 16px;border-radius:10px;overflow
   .doc h2, .doc h3 { page-break-after: avoid; }
   a[href^="/"]::after { content: ""; }   /* 내부 링크 주소는 인쇄에 필요 없다 */
 }
+
+/* ---------------------------------------------------------------- 설치 화면 */
+.setup-sum{display:flex;gap:8px;align-items:center;margin:10px 0}
+.setup-sum .tag{padding:2px 9px;border-radius:10px;font-size:12.5px;font-weight:600}
+.setup-sum .tag.ok{background:#e7f6ec;color:#186a3b}
+.setup-sum .tag.warn{background:#fdf3e0;color:#8a5a00}
+.setup-sum .tag.bad{background:#fdeaea;color:#a12a2a}
+.setup-checks td.m{width:1.4em;text-align:center;font-weight:700}
+.setup-checks tr.ok td.m{color:#186a3b}
+.setup-checks tr.warn td.m{color:#8a5a00}
+.setup-checks tr.error td.m{color:#a12a2a}
+.setup-checks tr.skip td.m{color:#8a8f98}
+.setup-checks tr.sec th{padding-top:14px;font-size:12.5px;letter-spacing:.04em;
+  text-transform:uppercase;color:#5a6068;border-bottom:1px solid #e3e6ea}
+.setup-acts{display:grid;gap:12px}
+.setup-acts .act{display:grid;grid-template-columns:220px 1fr;gap:12px;align-items:start}
+.setup-acts .act .what{font-size:13px;color:#4a5058;line-height:1.55}
+.joblog{margin-top:14px}
+.joblog pre{max-height:340px;overflow:auto;background:#12151a;color:#dfe4ea;
+  padding:12px;border-radius:6px;font-size:12.5px;line-height:1.5;white-space:pre-wrap}
+.manual{border-top:1px solid #e3e6ea;padding:12px 0}
+.manual .mh{margin-bottom:2px}
+.manual .why{font-size:13px;margin-bottom:8px}
+.manual pre{margin:0 0 6px}
+.btn.copy{font-size:12px;padding:3px 10px}
+@media (max-width:720px){.setup-acts .act{grid-template-columns:1fr}}
