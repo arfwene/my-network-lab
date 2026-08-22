@@ -72,6 +72,13 @@
 
   function bind() {
     $$('.tab').forEach(t => t.onclick = () => loadModule(curModule(), t.dataset.kind));
+    // 교재 본문에서 [과제](#tasks) 같은 링크를 누르면 그 탭으로 간다.
+    // 교재는 웹과 인쇄본 양쪽으로 나가므로, 인쇄본에서는 그냥 앵커로 남는다.
+    $$('.doc a[href^="#"]').forEach(a => {
+      const kind = a.getAttribute('href').slice(1);
+      if (!['tasks', 'quiz', 'README'].includes(kind)) return;
+      a.onclick = e => { e.preventDefault(); loadModule(curModule(), kind); };
+    });
     const f = $('#quizform');
     if (f) f.onsubmit = submitAssessment;
     $$('[data-goto]').forEach(b => b.onclick = () => loadModule(b.dataset.goto));

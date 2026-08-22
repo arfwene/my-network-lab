@@ -87,7 +87,13 @@ a.mod{text-decoration:none;color:var(--ink)}
   color:var(--accent-ink);padding:4px 8px;border-radius:5px}
 .module-head h2{font-size:21px;margin:10px 0 4px}
 .module-head .meta{color:var(--muted);font-size:13px;margin:0}
-.tabs{display:flex;gap:4px;margin:16px 0 20px;border-bottom:1px solid var(--line)}
+/* 교재가 길어 스크롤하면 탭이 화면 밖으로 나간다. 그러면 과제·퀴즈가
+   있다는 사실 자체를 모르고 지나친다. 위에 붙여 둔다. */
+.tabs{display:flex;gap:4px;margin:16px 0 20px;border-bottom:1px solid var(--line);
+  position:sticky;top:0;z-index:5;background:var(--panel);
+  padding-top:4px;margin-top:0}
+/* 미완료 표시. 통과 표시(✔)만 있으면 '아직 안 했다' 가 눈에 띄지 않는다. */
+.tab .todo{color:var(--warn);font-size:10px;vertical-align:middle;margin-left:2px}
 .tab{background:none;border:0;padding:9px 14px;cursor:pointer;color:var(--muted);
   font-size:13px;border-bottom:2px solid transparent}
 .tab.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}

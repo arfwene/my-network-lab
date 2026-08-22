@@ -16,7 +16,8 @@
   {% if quiz or has_checks or written %}
   <button class="tab {{ 'on' if kind|default('') == 'quiz' }}" data-kind="quiz">
     퀴즈 · 검증{% if written %} · 서술{% endif %}
-    {% if mstate.complete %}<span class="tick">✔</span>{% endif %}
+    {% if mstate.complete %}<span class="tick">✔</span>
+    {% else %}<span class="todo" title="아직 통과하지 못했다">●</span>{% endif %}
   </button>
   {% endif %}
   {% if user.role == 'admin' %}
