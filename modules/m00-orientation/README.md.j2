@@ -131,26 +131,57 @@ ssh pc1
 불편하게 하려는 게 아니라 실무 기본값이다 — 키는 개인키 없이는 쓸 수 없고,
 누가 언제 들어왔는지가 계정별로 남는다.
 
+**터미널을 연다.** Windows 는 **PowerShell** 을 쓴다 —
+시작 메뉴에서 `PowerShell` 을 검색해 실행한다. (설치할 것은 없다. Windows 10 이상에는
+SSH 가 기본으로 들어 있다.)
+
+> `ssh : 용어가 인식되지 않습니다` 가 나오면 SSH 가 꺼져 있는 것이다.
+> **설정 → 시스템 → 선택적 기능 → 기능 추가** 에서 `OpenSSH 클라이언트` 를 켠다.
+
 **1) 내 PC 에서 키를 만든다** (이미 있으면 건너뛴다)
 
-```bash
+```powershell
 ssh-keygen -t ed25519 -C "내이름@내PC"
-cat ~/.ssh/id_ed25519.pub
 ```
 
-`.pub` 로 끝나는 쪽이 **공개키**다. 확장자 없는 쪽은 **개인키**이며 누구에게도 주지 않는다.
-둘을 바꿔 내는 것이 이 바닥에서 가장 흔한 사고다.
+세 번 묻는다. **전부 그냥 Enter** 를 친다 (저장 위치 기본값, 암호 없음).
 
-**2) 웹 콘솔 → [접속 키]** 에 공개키를 붙여넣고 저장한다.
+```powershell
+Get-Content $HOME\.ssh\id_ed25519.pub
+```
+
+`ssh-ed25519 AAAA...` 로 시작하는 **한 줄**이 나온다. 그게 공개키다.
+
+> 같은 폴더에 이름이 비슷한 파일이 둘 있다.
+> `id_ed25519.pub` 는 **공개키** — 남에게 줘도 되는 자물쇠다.
+> `id_ed25519` (`.pub` 없음) 는 **개인키** — 누구에게도 주지 않는 열쇠다.
+> **둘을 바꿔 내는 것이 이 바닥에서 가장 흔한 사고다.** 콘솔은 개인키를 붙여넣으면 거절한다.
+
+**2) 웹 콘솔 → [접속 키]** 에 그 한 줄을 붙여넣고 저장한다.
 
 등록한 키는 **배정받은 랩의 노드에만** 들어간다. 남의 랩에는 들어가지 않는다.
+저장한 뒤 **[지금 랩에 반영]** 을 누른다.
 
-**3) 같은 화면에서 [내 SSH 설정 내려받기]** 를 눌러 받은 내용을 `~/.ssh/config` 에 붙인다.
+**3) 같은 화면에서 [내 SSH 설정 내려받기]** 를 누른다.
+`ssh-config-lab{{ lab_id }}` 파일이 **다운로드 폴더**에 받아진다. 그 내용을 설정에 붙인다.
+
+```powershell
+New-Item -ItemType Directory -Force $HOME\.ssh | Out-Null
+Get-Content $HOME\Downloads\ssh-config-lab{{ lab_id }} | Add-Content $HOME\.ssh\config
+```
+
+<details><summary>macOS · Linux 를 쓴다면</summary>
 
 ```bash
-cat ssh-config-lab{{ lab_id }} >> ~/.ssh/config
+ssh-keygen -t ed25519 -C "내이름@내PC"      # 세 번 Enter
+cat ~/.ssh/id_ed25519.pub                   # 이 한 줄을 콘솔에 붙여넣는다
+
+mkdir -p ~/.ssh
+cat ~/Downloads/ssh-config-lab{{ lab_id }} >> ~/.ssh/config
 chmod 600 ~/.ssh/config
 ```
+
+</details>
 
 > 랩 노드는 사무실에서 **직접 보이지 않는다.** 이 설정이 하는 일은
 > "운영 서버를 거쳐 들어가라"를 `ssh` 에게 알려주는 것이다(ProxyJump).
@@ -182,6 +213,8 @@ ssh pc1
 | `Permission denied (publickey)` | 키가 아직 노드에 안 들어갔다 | [접속 키] 의 **[지금 랩에 반영]** 을 누르고 다시 |
 | `Could not resolve hostname pc1` | `~/.ssh/config` 가 안 붙었다 | 실습 1 의 3) 을 다시 |
 | 점프 호스트에서 막힌다 | 점프 계정이 아직 없다 | 교육 담당자에게 계정 발급 요청 |
+| `ssh : 용어가 인식되지 않습니다` | Windows 에 SSH 가 꺼져 있다 | 설정 → 선택적 기능 → `OpenSSH 클라이언트` 추가 |
+| `Bad owner or permissions` | 설정 파일 권한 (macOS·Linux) | `chmod 600 ~/.ssh/config` |
 
 노드에 들어간 뒤 `cat /etc/lab-authorized` 를 보면 **누가 이 노드에 들어올 수 있는지** 나온다.
 

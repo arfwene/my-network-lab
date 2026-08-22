@@ -49,12 +49,26 @@
       {% endif %}
 
       <h3>1. 키 만들기</h3>
-      <p>내 PC 에서 (이미 있으면 건너뛴다):</p>
+      <p><b>Windows</b> — 시작 메뉴에서 <code>PowerShell</code> 을 검색해 연다.
+         설치할 것은 없다(Windows 10 이상에 SSH 가 기본 포함).</p>
+      <pre><code>ssh-keygen -t ed25519 -C "{{ user.username }}@내PC"</code></pre>
+      <p>세 번 묻는다. <b>전부 그냥 Enter</b> (저장 위치 기본값, 암호 없음).
+         그다음 아래로 공개키를 꺼낸다.</p>
+      <pre><code>Get-Content $HOME\.ssh\id_ed25519.pub</code></pre>
+      <p><code>ssh-ed25519 AAAA...</code> 로 시작하는 <b>한 줄</b>이 나온다.
+         그 줄을 통째로 복사해 아래에 붙여넣는다.</p>
+      <p class="note">
+        같은 폴더에 이름이 비슷한 파일이 둘 있다.<br>
+        <code>id_ed25519.pub</code> = <b>공개키</b> — 남에게 줘도 되는 자물쇠<br>
+        <code>id_ed25519</code> (<code>.pub</code> 없음) = <b>개인키</b> — 누구에게도 주지 않는 열쇠<br>
+        둘을 바꿔 내는 것이 가장 흔한 사고다. 개인키를 붙여넣으면 이 화면이 거절한다.
+      </p>
+      <details><summary>macOS · Linux 를 쓴다면</summary>
       <pre><code>ssh-keygen -t ed25519 -C "{{ user.username }}@내PC"
 cat ~/.ssh/id_ed25519.pub</code></pre>
-      <p>붙여넣을 것은 <b><code>.pub</code> 로 끝나는 파일의 내용</b>이다.
-         확장자가 없는 쪽은 <b>개인키</b>이며 누구에게도 보여주면 안 된다 —
-         콘솔에 붙여넣어도 거절한다.</p>
+      </details>
+      <p><b>ssh 명령이 없다고 나오면</b> — Windows 설정 → 시스템 → 선택적 기능 →
+         기능 추가 → <code>OpenSSH 클라이언트</code>.</p>
 
       <h3>2. {{ '키 바꾸기' if current else '키 등록' }}</h3>
       <form method="post">
@@ -92,9 +106,16 @@ cat ~/.ssh/id_ed25519.pub</code></pre>
         <a class="btn primary" href="/sshkey/config">내 SSH 설정 내려받기</a>
         <span class="muted">ssh-config-lab{{ lab_id }}</span>
       </p>
-      <pre><code>cat ssh-config-lab{{ lab_id }} >> ~/.ssh/config
+      <p><b>Windows</b> — 받은 파일은 보통 <code>다운로드</code> 폴더에 있다.</p>
+      <pre><code>New-Item -ItemType Directory -Force $HOME\.ssh | Out-Null
+Get-Content $HOME\Downloads\ssh-config-lab{{ lab_id }} | Add-Content $HOME\.ssh\config
+ssh {{ example_node }}</code></pre>
+      <details><summary>macOS · Linux 를 쓴다면</summary>
+      <pre><code>mkdir -p ~/.ssh
+cat ~/Downloads/ssh-config-lab{{ lab_id }} >> ~/.ssh/config
 chmod 600 ~/.ssh/config
 ssh {{ example_node }}</code></pre>
+      </details>
       <p class="muted">이 설정은 <b>배정된 랩({{ lab_label }})</b> 기준이다.
          랩이 바뀌면 다시 받아야 한다.</p>
 
