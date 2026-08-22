@@ -97,7 +97,9 @@ need_qm   && { command -v qm   >/dev/null || {
 if need_qm && qm config "$VMID" >/dev/null 2>&1; then
   IS_TPL=$(qm config "$VMID" | awk -F': ' '/^template:/{print $2}')
   CUR_NAME=$(qm config "$VMID" | awk -F': ' '/^name:/{print $2}')
-  if [[ "$IS_TPL" != "1" || "$CUR_NAME" != "$NAME" ]]; then
+  # 이름이 우리 것이면 템플릿이 아니어도 우리가 만들다 만 것이다 —
+  # import 는 됐는데 마지막 단계에서 멈춘 경우가 정확히 이 상태다.
+  if [[ "$CUR_NAME" != "$NAME" ]]; then
     echo "중단: VMID $VMID 를 이미 다른 VM 이 쓰고 있다 (name=${CUR_NAME:-?}, template=${IS_TPL:-0})" >&2
     echo "      이 번호를 지우면 그 VM 이 사라진다. 다음 중 하나를 할 것:" >&2
     echo "        · 비어 있는 번호로:  --vmid <다른 번호>" >&2
@@ -106,8 +108,12 @@ if need_qm && qm config "$VMID" >/dev/null 2>&1; then
     exit 1
   fi
   if [[ "$FORCE" != "1" ]]; then
-    echo "==> VMID $VMID 에 우리 템플릿($NAME)이 이미 있다. 다시 만든다."
-    echo "    이 템플릿의 linked clone 으로 만들어진 랩 VM 이 있으면 함께 깨진다."
+    if [[ "$IS_TPL" == "1" ]]; then
+      echo "==> VMID $VMID 에 우리 템플릿($NAME)이 이미 있다. 다시 만든다."
+      echo "    이 템플릿의 linked clone 으로 만들어진 랩 VM 이 있으면 함께 깨진다."
+    else
+      echo "==> VMID $VMID 에 만들다 만 VM($NAME)이 있다. 지우고 다시 만든다."
+    fi
     read -r -p "    계속할까? [y/N] " a
     [[ "$a" == "y" || "$a" == "Y" ]] || { echo "중단."; exit 1; }
   fi
@@ -226,13 +232,23 @@ echo "==> Proxmox VM 생성 및 템플릿화 (VMID=$VMID)"
 qm create "$VMID" --name "$NAME" --memory 512 --cores 1 --net0 virtio,bridge=vmbr0 \
   --scsihw virtio-scsi-single --ostype l26 --agent enabled=1 \
   --serial0 socket --vga serial0
-# 볼륨 이름은 스토리지 종류마다 다르다 (local-lvm: vm-9000-disk-0, dir: vm-9000-disk-0.raw).
-# 이름을 짐작하지 말고 importdisk 가 알려주는 값을 쓴다.
-IMPORTED=$(qm importdisk "$VMID" "$BUILD" "$STORAGE" 2>&1 | tee /dev/stderr \
-           | sed -n "s/.*mported disk as '\([^']*\)'.*/\1/p" \
-           | sed "s/^unused[0-9]*://")
+# 볼륨 이름은 스토리지 종류마다 다르다 (local-lvm: vm-9000-disk-0,
+# dir: vm-9000-disk-0.raw, zfs: vm-9000-disk-0). 이름을 짐작하지 않는다.
+#
+# 화면 메시지를 파싱하지도 않는다 — PVE 버전마다 문구가 다르다.
+#   구:  Successfully imported disk as 'unused0:local-lvm:vm-9000-disk-0'
+#   신:  unused0: successfully imported disk 'local-zfs:vm-9000-disk-0'
+# 대신 import 뒤 **VM 설정에서 unused 슬롯을 읽는다.** 이건 형식이 고정돼 있다.
+qm importdisk "$VMID" "$BUILD" "$STORAGE"
+IMPORTED=$(qm config "$VMID" | sed -n 's/^unused[0-9]*: *//p' | head -1)
 if [[ -z "$IMPORTED" ]]; then
-  echo "중단: 디스크 가져오기 결과를 읽지 못했다. 위 출력을 확인할 것" >&2
+  echo "중단: 가져온 디스크를 VM 설정에서 찾지 못했다." >&2
+  echo "      확인:  qm config $VMID" >&2
+  echo "      unused0 이 보이면 그 값으로 직접 이어서 할 수 있다:" >&2
+  echo "        qm set $VMID --scsi0 <unused0 값>" >&2
+  echo "        qm set $VMID --ide2 $STORAGE:cloudinit" >&2
+  echo "        qm set $VMID --boot order=scsi0 && qm resize $VMID scsi0 8G" >&2
+  echo "        qm template $VMID" >&2
   exit 1
 fi
 echo "==> 가져온 디스크: $IMPORTED"
