@@ -228,7 +228,11 @@ def publish_guard():
 
     leaks = []
     for f in files:
-        if f in ("config/site.local.yml", "config/site.local.yml.example", "var/runtime.yml"):
+        # 원본 두 개만 제외한다 (둘 다 git 제외 대상이다).
+        #   .example 은 **제외하지 않는다** — 이 파일은 커밋되어 공개된다.
+        #   전에는 빼 뒀는데, 그 탓에 예시 파일에 실제 사내 주소가 들어간 채
+        #   공개 저장소로 나가도 아무도 잡지 못했다.
+        if f in ("config/site.local.yml", "var/runtime.yml"):
             continue
         p = L.ROOT / f
         try:

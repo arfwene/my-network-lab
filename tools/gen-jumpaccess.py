@@ -46,10 +46,20 @@ def students(lab_ids):
     return out
 
 
+RESERVED = {"root", "daemon", "bin", "sys", "sync", "games", "man", "lp", "mail",
+            "news", "uucp", "proxy", "www-data", "backup", "list", "irc", "nobody",
+            "sshd", "systemd-network", "ubuntu", "admin", "lab", "trainee"}
+
+
 def main(lab, outdir):
     lo, hi = L.IPAM["labs"]["id_range"]
     labs = [lab] if lab else list(range(lo, L.IPAM["labs"]["default_count"] + 1))
     rows = students(labs)
+    clash = [r["username"] for r in rows if r["username"].lower() in RESERVED]
+    if clash:
+        sys.exit(f"거부: 시스템 계정과 이름이 겹친다: {', '.join(clash)}\n"
+                 f"  이 이름으로 점프 계정을 만들면 그 시스템 계정을 망가뜨린다.\n"
+                 f"  콘솔에서 다른 이름으로 바꿀 것")
     per_lab = {n: [L.mgmt_ip(n, x["name"]) for x in L.TOPO["nodes"]] for n in labs}
     out = Path(outdir)
     out.mkdir(parents=True, exist_ok=True)
@@ -68,6 +78,21 @@ def main(lab, outdir):
           '[ "$(id -u)" -eq 0 ] || { echo "root 로 실행할 것" >&2; exit 1; }',
           "",
           'NOLOGIN=$(command -v nologin || echo /usr/sbin/nologin)',
+          'TAG="my-network-lab"          # 우리가 만든 계정 표시 (GECOS)',
+          "",
+          "# 같은 이름의 기존 계정을 가로채지 않는다.",
+          "#   운영 서버에는 관리자 계정도 있다. 콘솔 계정 이름이 우연히 겹치면",
+          "#   그 사람의 셸을 nologin 으로 바꿔 로그인을 막아 버린다. 되돌리기 전까지 못 들어온다.",
+          "guard() {",
+          '  local u="$1"',
+          '  id -u "$u" >/dev/null 2>&1 || return 0          # 없으면 새로 만들면 된다',
+          '  if getent passwd "$u" | cut -d: -f5 | grep -q "$TAG"; then return 0; fi',
+          '  echo "중단: 계정 $u 이(가) 이미 있고 이 랩이 만든 것이 아니다." >&2',
+          '  echo "       그대로 두면 그 계정의 로그인이 막힌다." >&2',
+          '  echo "       콘솔에서 교육생 계정 이름을 겹치지 않게 바꿀 것." >&2',
+          '  exit 1',
+          "}",
+          "",
           ""]
 
     if not rows:
@@ -78,10 +103,11 @@ def main(lab, outdir):
     for r in rows:
         u = r["username"]
         sh += [f'# ---- {u} (lab{r["lab_id"]}{" · " + r["name"] if r["name"] else ""}) ----',
+               f'guard {u}',
                f'if id -u {u} >/dev/null 2>&1; then',
-               f'  usermod -s "$NOLOGIN" {u}',
+               f'  usermod -s "$NOLOGIN" -c "$TAG lab{r["lab_id"]}" {u}',
                f'else',
-               f'  useradd -m -s "$NOLOGIN" -c "my-network-lab lab{r["lab_id"]}" {u}',
+               f'  useradd -m -s "$NOLOGIN" -c "$TAG lab{r["lab_id"]}" {u}',
                f'fi',
                f'install -d -m 700 -o {u} -g {u} /home/{u}/.ssh',
                f'cat > /home/{u}/.ssh/authorized_keys <<\'KEY\'',

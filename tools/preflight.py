@@ -304,6 +304,22 @@ def check_runtime():
                                         "" if m == 0o600 else
                                         "API 토큰이 들어 있다. chmod 600 var/console.db")
 
+    # CLI(make deploy/mgmt)도 토큰이 필요하다. 콘솔에만 있으면 CLI 가 멈춘다.
+    tok = bool(os.environ.get("PROXMOX_VE_API_TOKEN"))
+    if not tok and (L.ROOT / "var/console.db").exists():
+        try:
+            import pve                                 # noqa: PLC0415
+            tok = bool(pve.config().get("token_secret"))
+        except Exception:                              # noqa: BLE001
+            pass
+    if tok:
+        ok("CLI 자격 증명", "make deploy/mgmt 가 토큰을 찾을 수 있다")
+    else:
+        warn("CLI 자격 증명", "API 토큰을 찾지 못했다",
+             "콘솔 [관리자 → 연결 설정] 에 넣거나, 이 셸에서만 "
+             "export PROXMOX_VE_API_TOKEN='terraform@pve!lab=...' "
+             "— 없으면 terraform 이 credentials 오류로 멈춘다")
+
     port = int(os.environ.get("PORT", 8080))
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=1.0):

@@ -2,7 +2,10 @@
 """
 설계 -> 교육생용 ~/.ssh/config 생성 (ProxyJump 경유).
 
-usage:  python3 tools/gen-ssh-config.py --lab 1 > ssh-config-lab1
+usage:  python3 tools/gen-ssh-config.py --lab 1 [--user user01] > ssh-config-lab1
+
+--user 를 주면 점프 계정을 그 이름으로 쓴다 (tools/gen-jumpaccess.py 가 만드는 계정).
+생략하면 site.yml 의 access.jump_host.user 를 쓴다.
 교육생은 이 내용을 ~/.ssh/config 에 붙이면 `ssh pc1` 한 줄로 접속된다.
 """
 import sys
@@ -11,10 +14,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import labdesign as L
 
 
-def main(lab_id):
+def main(lab_id, user=None):
     A = L.IPAM["access"]
     jump = A["jump_host"]["office_ip"]
-    jump_user = A["jump_host"]["user"]
+    jump_user = user or A["jump_host"]["user"]
     lab_user = A["lab_user"]
     out = [
         f"# ============================================================",
@@ -52,4 +55,5 @@ def main(lab_id):
 
 if __name__ == "__main__":
     a = sys.argv
-    main(int(a[a.index("--lab") + 1]) if "--lab" in a else 1)
+    main(int(a[a.index("--lab") + 1]) if "--lab" in a else 1,
+         a[a.index("--user") + 1] if "--user" in a else None)

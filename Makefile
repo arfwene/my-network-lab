@@ -4,6 +4,9 @@ LABS ?= 9          # 관리망 VLAN 을 몇 개 랩만큼 준비할 것인가 (�
 VMID ?=            # 운영 서버 VM 의 VMID (dist/ops-server.md 의 qm 명령에 박힌다)
 OPSNET ?= 1        # 운영 서버의 관리망 트렁크 NIC 번호 (netN). 랩 수와 무관하게 1개다
 PY := python3
+# Terraform 은 API 토큰이 있어야 한다. 토큰은 var/console.db 에만 있으므로
+# CLI 타깃도 콘솔과 같은 경로로 주입한다 (파일로 내보내지 않는다).
+PVE := $(PY) $(CURDIR)/tools/with-pve-env.py --
 
 VENV := console/.venv
 # Ansible 은 venv 안에만 설치한다 (console/requirements.txt). 시스템에 깔지 않는다.
@@ -11,7 +14,7 @@ VENV := console/.venv
 APB := $(shell test -x $(VENV)/bin/ansible-playbook && echo $(CURDIR)/$(VENV)/bin/ansible-playbook || echo ansible-playbook)
 
 .PHONY: help doctor check gen docs modules appendix opsvm mgmt ipam deploy config verify \
-        reset break fix scenarios console console-setup service pack users clean
+        reset break fix scenarios console console-setup service pack users clean jumpaccess
 
 help:
 	@echo "make doctor         배포 사전 점검 (도구 · 설정 · Proxmox · 관리망)"
@@ -27,6 +30,7 @@ help:
 	@echo "make modules                 모듈 교재 렌더링 (dist/modules/)"
 	@echo "make appendix                부록 렌더링 (dist/appendix/)"
 	@echo "make opsvm VMID=9100         운영 서버 관리망 연결 절차 (dist/ops-server.md · 1회)"
+	@echo "make jumpaccess              교육생 점프 계정 생성 절차 (dist/jump-access.*)"
 	@echo "make scenarios               장애 주입 시나리오 목록"
 	@echo "make break LAB=1 SCENARIO=m01-01   장애 주입"
 	@echo "make fix   LAB=1 SCENARIO=m01-01   복구"
@@ -67,10 +71,15 @@ appendix:
 opsvm:
 	@$(PY) tools/render-opsvm.py --labs $(LABS) --vmid $(VMID) --net $(OPSNET)
 
+# 교육생 점프 계정 — 셸 없는 ProxyJump 전용. 콘솔에 등록된 키에서 만든다.
+jumpaccess:
+	@$(PY) tools/gen-jumpaccess.py $(if $(LAB),--lab $(LAB),)
+
 # 관리망 브리지 — **최초 1회**. 랩을 지워도 이 브리지는 남는다 (운영 서버 NIC 이 꽂혀 있다).
 mgmt:
 	@$(PY) tools/gen-mgmt.py --labs $(LABS)
-	cd infra/terraform/envs/mgmt && terraform init -input=false && terraform apply
+	cd infra/terraform/envs/mgmt && $(PVE) terraform init -input=false
+	cd infra/terraform/envs/mgmt && $(PVE) terraform apply
 
 scenarios:
 	@sed -n "/^| \`/p" scenarios/README.md
@@ -79,7 +88,8 @@ ipam:
 	@$(PY) tools/show-ipam.py --lab $(LAB)
 
 deploy:
-	cd infra/terraform/envs/lab$(LAB) && terraform init -input=false && terraform apply
+	cd infra/terraform/envs/lab$(LAB) && $(PVE) terraform init -input=false
+	cd infra/terraform/envs/lab$(LAB) && $(PVE) terraform apply
 
 config:
 	cd infra/ansible && $(APB) -i inventory/lab$(LAB) playbooks/site.yml -e lab_stage=$(STAGE)

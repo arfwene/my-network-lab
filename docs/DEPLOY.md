@@ -278,7 +278,11 @@ pveum user token add terraform@pve lab --privsep 0
 - `--privsep 0` 은 토큰이 사용자 권한을 그대로 물려받게 한다. 켜면(`1`) 토큰에도 따로 ACL 을 줘야 한다.
 
 토큰은 콘솔 **[관리자 → 연결 설정]** 에 넣는다. 파일에 쓰지 않는다.
-CLI 로만 쓸 거면 그 셸에서만:
+
+**`make mgmt` · `make deploy` 도 같은 토큰을 쓴다.** `tools/with-pve-env.py` 가
+`var/console.db` 에서 읽어 실행 순간에만 환경변수로 넘긴다 — 따로 export 하지 않아도 된다.
+
+콘솔에 넣기 전이거나 다른 토큰을 잠깐 쓰고 싶으면 그 셸에서만:
 
 ```bash
 export PROXMOX_VE_API_TOKEN='terraform@pve!lab=xxxxxxxx-....'
@@ -324,6 +328,51 @@ python3 tools/console-user.py add trainee01 --lab 1  # 교육생 계정
 ```bash
 make config LAB=1 STAGE=m2      # VM 은 그대로. 설정 범위만 넓어진다
 ```
+
+---
+
+## 5.5 교육생 접속 (교육생이 올 때)
+
+교육생은 콘솔만으로는 실습을 못 한다 — 이 과정의 실습은 전부 터미널이다.
+랩 노드는 사무실에서 직접 보이지 않으므로 **운영 서버를 ProxyJump 로 거친다.**
+
+```
+교육생 PC ──ssh──▶ 운영 서버 ──ssh──▶ 랩 노드 (pc1 · r1 · web …)
+```
+
+운영 서버는 콘솔·Terraform·Ansible 이 도는 장비다. 여기에 교육생 **셸**을 주면
+모듈 해설(`answers.md`)과 캡스톤 장애 대응표를 읽을 수 있고, 다른 랩 관리망으로도 나갈 수 있다.
+그래서 점프 계정은 **셸이 없고 자기 랩 노드로만 나간다.**
+
+```bash
+# ① 교육생이 콘솔 [접속 키] 에서 자기 공개키를 등록한다
+python3 tools/console-user.py keys --lab 1        # 등록 현황 확인
+
+# ② 그 키로 점프 계정 절차를 생성한다
+make jumpaccess                                    # → dist/jump-access.{sh,conf}
+
+# ③ 운영 서버에 적용 (root)
+sudo ./dist/jump-access.sh
+sudo cp dist/jump-access.conf /etc/ssh/sshd_config.d/60-lab-jump.conf
+sudo sshd -t && sudo systemctl reload ssh          # -t 로 먼저 검사할 것
+
+# ④ 교육생에게 나눠 줄 ssh 설정
+python3 tools/gen-ssh-config.py --lab 1 --user user01 > ssh-config-lab1
+```
+
+교육생은 그 파일을 `~/.ssh/config` 에 붙이면 `ssh pc1` 로 들어간다.
+
+| 제한 | 무엇 |
+|---|---|
+| `ForceCommand` + nologin 셸 | 대화형 접속 불가 → 운영 서버의 파일을 못 읽는다 |
+| `PermitOpen` = 자기 랩 13대:22 | 다른 랩 관리망으로 못 나간다 |
+| 비밀번호 잠금 | 키로만 들어온다 |
+
+> `Match all` 로 끝나는 것을 지우지 말 것. `sshd_config.d` 는 보통 `sshd_config` 앞부분에서
+> include 되므로, 닫지 않으면 **그 뒤의 전역 설정이 전부 마지막 Match 안에 갇힌다.**
+> 생성기가 이 줄을 자동으로 넣는다.
+
+교육생이 늘거나 키를 바꾸면 ②③ 을 다시 하면 된다.
 
 ---
 
@@ -408,6 +457,7 @@ provider_installation {
 | 증상 | 원인 | 확인 |
 |---|---|---|
 | `make doctor` — TCP 연결 실패 | 방화벽 / 주소 오타 | `nc -vz <proxmox> 8006` |
+| `must provide either username and password, an API token, or a ticket` | 토큰을 못 찾았다 | 콘솔 [연결 설정] 에 넣거나 `export PROXMOX_VE_API_TOKEN=...`. `make doctor` 의 "CLI 자격 증명" 항목 |
 | 토큰이 거부됨 (401/403) | privsep 켠 토큰에 ACL 없음 | `pveum user token list terraform@pve` |
 | 브리지 생성만 실패 | 역할에 `Sys.Modify` 없음 | 4절의 `pveum role add` 다시 |
 | VM 은 생겼는데 Ansible 이 전부 UNREACHABLE | 관리망 도달 불가 | 3절. `ip route get 172.30.1.11` |
