@@ -13,6 +13,7 @@ my-network-lab 웹 콘솔 (v1)
 """
 import asyncio
 import html
+import subprocess
 import json
 import re
 import sys
@@ -20,7 +21,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
+from fastapi.responses import (HTMLResponse, JSONResponse, PlainTextResponse,
+                               RedirectResponse, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -264,6 +266,34 @@ async def sshkey_save(request: Request, key: str = Form(""), remove: str = Form(
         request, "sshkey.html",
         _sshkey_ctx(request, user, saved=f"저장했다 ({fp}). "
                                          f"[지금 랩에 반영] 을 누르거나 다음 [설정 적용] 때 들어간다."))
+
+
+@app.get("/sshkey/config")
+async def sshkey_config(request: Request):
+    """이 교육생의 ~/.ssh/config 조각을 내려준다.
+
+    전에는 관리자가 `gen-ssh-config.py` 로 만들어 파일로 나눠 줘야 했다.
+    교재는 "배포받은 설정" 을 전제하는데 받을 방법이 없었다 —
+    교육생이 스스로 받아 가게 한다. 생성기는 CLI 와 같은 것을 쓴다.
+    """
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    lab_id = pick_lab(user)
+    if not lab_id:
+        return HTMLResponse("배정된 랩이 없다.", status_code=403)
+    # 점프 계정 이름 = 콘솔 계정 이름 (tools/gen-jumpaccess.py 가 그렇게 만든다)
+    proc = await asyncio.to_thread(
+        subprocess.run,
+        [sys.executable, str(HERE.parent / "tools/gen-ssh-config.py"),
+         "--lab", str(lab_id), "--user", user["username"]],
+        capture_output=True, text=True)
+    if proc.returncode:
+        return HTMLResponse(f"설정을 만들지 못했다: {proc.stderr[:300]}", status_code=500)
+    return PlainTextResponse(
+        proc.stdout,
+        headers={"Content-Disposition":
+                 f'attachment; filename="ssh-config-lab{lab_id}"'})
 
 
 @app.post("/sshkey/apply")

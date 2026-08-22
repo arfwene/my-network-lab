@@ -82,12 +82,21 @@ cat ~/.ssh/id_ed25519.pub</code></pre>
       </form>
       <p>노드에 들어간 뒤 <code>cat /etc/lab-authorized</code> 로 누가 접속할 수 있는지 볼 수 있다.</p>
 
-      <h3>4. 접속</h3>
-      <p>랩 노드는 사무실에서 직접 보이지 않는다. 운영 서버를 거친다.</p>
+      <h3>4. 접속 설정 받기</h3>
+      <p>랩 노드는 사무실에서 직접 보이지 않는다. 운영 서버를 거쳐야 한다.
+         매번 이렇게 칠 수는 없다:</p>
       <pre><code>ssh -J {{ jump_user }}@{{ jump_ip }} {{ lab_user }}@{{ example_ip }}   # {{ example_node }}</code></pre>
-      <p><code>~/.ssh/config</code> 에 넣을 전체 설정은 관리자가 나눠 주는
-         <code>ssh-config-lab{{ lab_id }}</code> 파일에 있다. 그걸 쓰면
-         <code>ssh {{ example_node }}</code> 로 끝난다.</p>
+      <p>아래에서 내 설정을 받아 <code>~/.ssh/config</code> 에 붙이면
+         <code>ssh {{ example_node }}</code> 한 줄로 끝난다.</p>
+      <p>
+        <a class="btn primary" href="/sshkey/config">내 SSH 설정 내려받기</a>
+        <span class="muted">ssh-config-lab{{ lab_id }}</span>
+      </p>
+      <pre><code>cat ssh-config-lab{{ lab_id }} >> ~/.ssh/config
+chmod 600 ~/.ssh/config
+ssh {{ example_node }}</code></pre>
+      <p class="muted">이 설정은 <b>배정된 랩({{ lab_label }})</b> 기준이다.
+         랩이 바뀌면 다시 받아야 한다.</p>
     </article>
   </section>
 </main>
