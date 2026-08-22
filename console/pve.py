@@ -16,6 +16,7 @@ Proxmox 연결 설정 · 상태 점검.
 언제든 다시 만들어지고 여러 곳으로 복사된다. 비밀은 실행 시 환경변수로만 넘긴다.
 """
 import json
+import os
 import socket
 import ssl
 import sys
@@ -63,8 +64,31 @@ def _split_endpoint(url):
         return "", 0
 
 
+def _env_token():
+    """셸에 export 해 둔 토큰. `사용자@영역!이름=비밀값` 형식이다.
+
+    이 환경변수는 원래 **내보내는** 경로였다 (Terraform 에게 넘기는 값).
+    그런데 콘솔을 띄우기 전에 CLI 만으로 배포하는 경우가 있고, 그때 관리자는
+    당연히 export 로 해결된다고 본다. 실제로 Terraform 은 되는데 상태 점검만
+    "토큰 없음" 이라고 하면 원인을 찾을 수 없다. 그래서 읽는 경로로도 인정한다.
+    """
+    raw = (os.environ.get("PROXMOX_VE_API_TOKEN") or "").strip()
+    if "=" not in raw:
+        return "", ""
+    tid, secret = raw.split("=", 1)
+    tid, secret = tid.strip(), secret.strip()
+    # 형식이 아니면 조용히 무시한다 — 엉뚱한 값으로 401 을 맞는 것보다 낫다.
+    if "@" not in tid or "!" not in tid.split("@", 1)[1] or not secret:
+        return "", ""
+    return tid, secret
+
+
 def config():
-    """DB 에 저장된 값. 없으면 site.yml 기본값(= localhost)."""
+    """Proxmox 접속 값.
+
+    우선순위: DB(콘솔에서 저장) → 환경변수 → site.yml 기본값.
+    비밀값은 어느 쪽이든 파일로 나가지 않는다.
+    """
     d = _site_defaults()
     out = {}
     for k, v in d.items():
@@ -77,6 +101,11 @@ def config():
             out[k] = int(raw or v)
         else:
             out[k] = raw
+    if not (out["token_id"] and out["token_secret"]):
+        tid, secret = _env_token()
+        if tid:
+            out["token_id"], out["token_secret"] = tid, secret
+            out["token_from_env"] = True
     return out
 
 
@@ -93,6 +122,7 @@ def public(cfg=None):
     c["confirmed_at"] = db.get_setting(PREFIX + "confirmed_at") or ""
     c["confirmed_by"] = db.get_setting(PREFIX + "confirmed_by") or ""
     c["is_local"] = c["host"] in ("127.0.0.1", "localhost", "::1")
+    c["token_from_env"] = bool(c.pop("token_from_env", False))
     return c
 
 
@@ -265,10 +295,13 @@ def check(cfg=None):
         return _wrap(cfg, cs, t0)
     if missing_token:
         c_cfg.set("error", f"{endpoint(cfg)} · 노드 {cfg['node']} · API 토큰 없음",
-                  "Proxmox 에서 API 토큰을 만들어 [관리자 → 연결 설정] 에 넣을 것. "
-                  "토큰이 없으면 Terraform 이 VM 을 만들 수 없다")
+                  "Proxmox 에서 API 토큰을 만들어 [관리자 → 연결 설정] 에 넣을 것 "
+                  "(./infra/proxmox-setup.sh 가 만들어 준다). "
+                  "이 셸에서만 쓰려면 export PROXMOX_VE_API_TOKEN='사용자@pve!이름=비밀값' "
+                  "— 형식이 어긋나면 무시되니 작은따옴표로 감싸고 = 앞뒤를 확인할 것")
     else:
-        c_cfg.set("ok", f"{endpoint(cfg)} · 노드 {cfg['node']} · 스토리지 {cfg['datastore']}")
+        src = " · 토큰: 환경변수" if cfg.get("token_from_env") else ""
+        c_cfg.set("ok", f"{endpoint(cfg)} · 노드 {cfg['node']} · 스토리지 {cfg['datastore']}{src}")
 
     # --- TCP ---------------------------------------------------------
     c_tcp = Check("tcp", "TCP 연결")

@@ -200,7 +200,7 @@ def check_config(lab_id_for_keys=1):
 
 
 # ===================================================== 3. Proxmox
-def check_proxmox():
+def check_proxmox(lab_id_for_pre=1):
     section("Proxmox 연결")
     if not (L.ROOT / "var/console.db").exists():
         warn("연결 설정", "아직 없다 (var/console.db 미생성)",
@@ -216,12 +216,25 @@ def check_proxmox():
         add({"ok": "ok", "warn": "warn", "error": "error"}.get(c["status"], "skip"),
             f"Proxmox · {c['title']}", c.get("detail", ""), c.get("hint", ""))
 
+    if res.get("level") == "error":
+        return
+
     # 권한은 연결이 되어도 따로 막힌다 — 403 은 terraform 한복판에서 터진다.
-    # 여기서 미리 묻는다.
-    if res.get("level") != "error":
-        c = pve.check_privileges().as_dict()
+    c = pve.check_privileges().as_dict()
+    add({"ok": "ok", "warn": "warn", "error": "error"}.get(c["status"], "skip"),
+        f"Proxmox · {c['title']}", c.get("detail", ""), c.get("hint", ""))
+
+    # 배포 전 검사 — 콘솔이 [랩 생성] 때 보는 것과 **같은 검사**를 여기서도 본다.
+    #   VMID 충돌 · 템플릿이 정말 템플릿인지 · 관리망 브리지 존재와 vlan_aware ·
+    #   호스트 대역 겹침. 파일이 아니라 Proxmox 에 물어본 결과다.
+    try:
+        pre = pve.preflight(lab_id_for_pre)
+    except Exception as e:                            # noqa: BLE001
+        warn("배포 전 검사", f"확인하지 못했다: {type(e).__name__}: {e}")
+        return
+    for c in pre.get("checks", []):
         add({"ok": "ok", "warn": "warn", "error": "error"}.get(c["status"], "skip"),
-            f"Proxmox · {c['title']}", c.get("detail", ""), c.get("hint", ""))
+            f"배포 전 · {c['title']}", c.get("detail", ""), c.get("hint", ""))
 
 
 # ===================================================== 4. 랩 관리망
@@ -233,13 +246,14 @@ def check_mgmt(lab_id):
     m = next(x for x in L.mgmt_labs(lab_id) if x["lab_id"] == lab_id)
     ops, vlan, ifname = m["ops_ip"], m["vlan"], m["iface"]
 
-    # 관리망 브리지는 랩이 아니라 envs/mgmt 가 한 번만 만든다. 그게 됐는지부터 본다.
+    # 관리망 브리지가 **실제로 있는지**는 위 "배포 전 · 관리망 브리지" 가 Proxmox 에
+    # 물어서 판정한다. 여기서는 apply 를 시도한 적이 있는지만 본다 —
+    # tfstate 는 실패한 apply 도 만들기 때문에 존재만으로는 아무것도 보장하지 않는다.
     if not (L.ROOT / "infra/terraform/envs/mgmt/terraform.tfstate").exists():
-        warn("관리망 브리지", f"{br} 를 만든 기록이 없다",
-             "`make mgmt LABS=9` 를 먼저 실행할 것 (최초 1회). "
-             "브리지가 없으면 랩 VM 이 기동하지 못한다 — 절차: dist/ops-server.md")
+        warn("관리망 생성 시도", f"{br} 를 만든 기록이 없다",
+             "`make mgmt LABS=9` 를 먼저 실행할 것 (최초 1회)")
     else:
-        ok("관리망 브리지", f"{br} (전 랩 공용) · 이 랩 = VLAN {vlan}")
+        skip("관리망 생성 시도", f"기록 있음 — 실제 존재 여부는 위 '배포 전' 항목을 볼 것")
 
     # 이 서버가 그 VLAN 에 발을 걸치고 있는가 = 서브인터페이스에 주소가 있는가
     good, out = run_full(["ip", "-o", "-4", "addr", "show"], timeout=5)
@@ -379,7 +393,7 @@ def main():
         section("Proxmox 연결")
         skip("전체", "--skip-proxmox")
     else:
-        check_proxmox()
+        check_proxmox(a.lab)
         check_mgmt(a.lab)
     check_runtime()
     return report()
