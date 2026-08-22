@@ -381,10 +381,23 @@ pveum user token modify terraform@pve lab --privsep 0                # 한 줄�
 랩 노드는 인터넷에 못 나간다. 필요한 패키지(FRR·nftables·bind9·tcpdump…)를 템플릿에 미리 넣는다.
 
 ```bash
-# Proxmox 호스트에서
-apt install -y libguestfs-tools
+# Proxmox 호스트에서 root 로
+apt update && apt install -y libguestfs-tools
 ./infra/template/build-golden-template.sh --storage local-lvm
 ```
+
+`Unable to locate package libguestfs-tools` 가 나오면 **패키지 목록이 없는 것**이다.
+`apt update` 를 먼저 돌린다. 그것도 실패하면 구독이 없는 설치라 enterprise 저장소가
+401 을 뱉는 경우다:
+
+```bash
+sed -i 's/^deb/#deb/' /etc/apt/sources.list.d/pve-enterprise.list
+echo "deb http://download.proxmox.com/debian/pve $(. /etc/os-release; echo $VERSION_CODENAME) pve-no-subscription" \
+  > /etc/apt/sources.list.d/pve-no-subscription.list
+apt update && apt install -y libguestfs-tools
+```
+
+빌드 스크립트가 이 도구가 없으면 시작 전에 멈추고 위 명령을 알려준다.
 
 `config/site.yml` 의 `labs.template_vmid` (기본 9000)와 번호가 맞아야 한다.
 `make doctor` 가 이 VMID 의 존재를 확인해 준다.

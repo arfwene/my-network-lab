@@ -26,6 +26,36 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# --- 필요한 도구가 있는가 ---------------------------------------------------
+#  virt-customize 로 cloud 이미지 안에 패키지를 미리 넣는다. 랩 노드는 인터넷에
+#  못 나가므로 이 단계를 건너뛸 수 없다.
+#  "Unable to locate package" 는 대개 apt 목록이 없어서다 — 먼저 apt update.
+if ! command -v virt-customize >/dev/null; then
+  CODENAME=$(. /etc/os-release 2>/dev/null && echo "${VERSION_CODENAME:-bookworm}")
+  echo "중단: virt-customize 가 없다 (libguestfs-tools)" >&2
+  echo >&2
+  echo "  apt update && apt install -y libguestfs-tools" >&2
+  echo >&2
+  echo "  'Unable to locate package' 가 나오면 패키지 목록이 없는 것이다." >&2
+  echo "  apt update 가 실패하는지 먼저 볼 것 — Proxmox 는 구독이 없으면" >&2
+  echo "  enterprise 저장소가 401 을 뱉는다. 그 경우:" >&2
+  echo >&2
+  echo "    # 구독 없는 설치라면 enterprise 를 끄고 no-subscription 을 켠다" >&2
+  echo "    sed -i 's/^deb/#deb/' /etc/apt/sources.list.d/pve-enterprise.list 2>/dev/null" >&2
+  echo "    sed -i 's/^deb/#deb/' /etc/apt/sources.list.d/ceph.list 2>/dev/null" >&2
+  echo "    echo 'deb http://download.proxmox.com/debian/pve $CODENAME pve-no-subscription' \\" >&2
+  echo "      > /etc/apt/sources.list.d/pve-no-subscription.list" >&2
+  echo "    apt update && apt install -y libguestfs-tools" >&2
+  echo >&2
+  echo "  Debian 기본 저장소(main)가 비어 있지 않은지도 확인할 것:" >&2
+  echo "    grep -rh '^deb ' /etc/apt/sources.list /etc/apt/sources.list.d/ | grep -v proxmox" >&2
+  exit 1
+fi
+
+for c in wget qm; do
+  command -v "$c" >/dev/null || { echo "중단: $c 가 없다" >&2; exit 1; }
+done
+
 # --- 남의 VM 을 지우지 않는다 -------------------------------------------------
 #  이 스크립트는 회사 Proxmox 에서 돈다. $VMID 에 운영 VM 이 있는데 그냥 지우면
 #  되돌릴 수 없다. 우리가 만든 템플릿일 때만 다시 만든다.
