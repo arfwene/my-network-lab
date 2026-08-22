@@ -109,6 +109,13 @@
         out.textContent += JSON.parse(e.data) + '\n';
         out.scrollTop = out.scrollHeight;
       };
+      es.addEventListener('tick', e => {
+        // 조용한 구간에도 살아 있다는 것을 보여 준다 (마지막 줄을 갈아 끼운다).
+        const d = JSON.parse(e.data);
+        const t = out.textContent.replace(/\n?⏳[^\n]*$/, '');
+        out.textContent = t + `\n⏳ 진행 중 · ${Math.round(d.elapsed)}초 경과`;
+        out.scrollTop = out.scrollHeight;
+      });
       es.addEventListener('done', e => { es.close(); res(JSON.parse(e.data)); });
       es.onerror = () => { es.close(); res(null); };
     });

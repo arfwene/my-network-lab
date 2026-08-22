@@ -58,6 +58,16 @@ FRESH_CHECK = {"deploy", "destroy"}
 PREFLIGHT = {"deploy"}
 
 
+# 시작하자마자 한참 조용한 작업들. 무엇을 기다리는 중인지 미리 적어 둔다 —
+# 이유를 모르는 침묵은 사용자에게 "멈췄다" 와 같은 뜻이다.
+QUIET_FIRST = {
+    "destroy": "   terraform 이 먼저 Proxmox 에 자원 27개의 현재 상태를 확인한다(refresh).\n"
+               "   그동안 출력이 없다 — 멈춘 것이 아니다. 아래 경과 시간이 계속 올라가면 정상이다.",
+    "deploy":  "   terraform 이 먼저 상태를 확인하고 실행 계획을 세운다.\n"
+               "   그동안 출력이 없다 — 멈춘 것이 아니다.",
+}
+
+
 class Locked(RuntimeError):
     """시험이 진행 중이거나 마감되어 실행을 거부했다."""
 
@@ -179,14 +189,24 @@ class Job:
         self.steps = steps
         self.lines: list[str] = []
         self.status = "queued"          # queued | running | ok | failed
+        # 마지막으로 한 줄이라도 나온 시각. 조용한 구간이 얼마나 길어졌는지 재려고 둔다 —
+        # terraform 은 refresh 하는 동안 아무것도 찍지 않아서, 화면만 보면 멈춘 것과 같다.
+        self.last_out = None
         self.rc = None
         self.started = self.finished = None
         self.event = asyncio.Event()
 
     def emit(self, line):
+        self.last_out = time.time()
         self.lines.append(line.rstrip("\n"))
         self.event.set()
         self.event = asyncio.Event()
+
+    def quiet(self):
+        """(전체 경과, 마지막 출력 이후 경과) — 둘 다 초."""
+        now = time.time()
+        return (round(now - (self.started or now), 1),
+                round(now - (self.last_out or self.started or now), 1))
 
     def as_dict(self, reveal=True):
         return {"id": self.id, "lab_id": self.lab_id, "action": self.action,
@@ -243,6 +263,8 @@ class Runner:
             job.emit(f"$ [lab{job.lab_id}] {job.action}"
                      + (f" {job.scenario}" if job.scenario and not job.secret else "")
                      + (f" (단계 {job.stage})" if job.stage else ""))
+            if job.action in QUIET_FIRST:
+                job.emit(QUIET_FIRST[job.action])
             rc = 0
             for cwd, argv in job.steps:
                 job.emit(f"$ {shlex.join(argv)}")

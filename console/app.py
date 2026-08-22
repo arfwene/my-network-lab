@@ -621,7 +621,16 @@ async def job_stream(request: Request, job_id: str):
                       else "!! 준비 실패 — 관리자에게 알릴 것")
         else:
             async for line in runner.stream(job_id):
-                yield sse(line)
+                if line == "":
+                    # keep-alive. 전에는 빈 줄을 그대로 보냈고 화면은 그것을 버렸다 —
+                    # 조용한 구간에 아무것도 안 보여서 멈춘 것처럼 읽혔다.
+                    # 이제 "살아 있다 + 얼마나 조용했다" 를 같이 보낸다.
+                    el, q = job.quiet()
+                    yield ("event: tick\ndata: "
+                           + json.dumps({"elapsed": el, "quiet": q}, ensure_ascii=False)
+                           + "\n\n")
+                else:
+                    yield sse(line)
         d = json.dumps(job.as_dict(reveal=reveal), ensure_ascii=False)
         yield f"event: done\ndata: {d}\n\n"
 

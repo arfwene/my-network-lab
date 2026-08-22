@@ -15,7 +15,7 @@ APB := $(shell test -x $(VENV)/bin/ansible-playbook && echo $(CURDIR)/$(VENV)/bi
 
 .PHONY: help doctor check gen docs modules appendix opsvm mgmt ipam deploy config verify \
         reset break fix scenarios console console-setup service pack users clean jumpaccess \
-        mgmt-net mgmt-net-dry consoleaccess policy
+        mgmt-net mgmt-net-dry consoleaccess policy uninstall uninstall-check
 
 help:
 	@echo "▸ 보통은 make 를 칠 일이 없다 — 웹 콘솔 [관리자 → 설치] 화면이 같은 일을 한다."
@@ -46,6 +46,8 @@ help:
 	@echo "make service                 systemd 서비스로 등록 (부팅 시 자동 기동)"
 	@echo "make pack                    다른 서버로 옮길 tarball 생성"
 	@echo "make users                   콘솔 계정 목록"
+	@echo "make uninstall-check         무엇을 지울지 보기만 한다 (안전)"
+	@echo "make uninstall               이 서버에서 랩을 걷어낸다 (확인을 받는다)"
 
 doctor:
 	@$(PY) tools/preflight.py --lab $(LAB)
@@ -142,6 +144,14 @@ console-setup:
 
 users:
 	@$(PY) tools/console-user.py list
+
+# 걷어내기. 순서가 중요하다 — 랩 VM 파괴 → 관리망 → 서버 설정 → 저장소.
+# 저장소를 먼저 지우면 tfstate 와 토큰이 사라져 VM 이 Proxmox 에 고아로 남는다.
+uninstall-check:
+	@./tools/uninstall.sh --dry-run
+
+uninstall:
+	@./tools/uninstall.sh
 
 service:
 	@./install.sh --service --no-apt

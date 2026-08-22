@@ -135,11 +135,24 @@
     log.scrollTop = log.scrollHeight;
   }
 
+  // 초 -> "1분 20초". 로그 옆에 계속 붙는 값이라 짧게 읽혀야 한다.
+  function fmt(sec) {
+    sec = Math.round(sec);
+    return sec < 60 ? `${sec}초` : `${Math.floor(sec / 60)}분 ${sec % 60}초`;
+  }
+
   function stream(jobId) {
     return new Promise(resolve => {
       if (es) es.close();
       es = new EventSource(`/jobs/${jobId}/stream`);
       es.onmessage = ev => { const l = JSON.parse(ev.data); if (l !== '') paint(l); };
+      // 조용한 구간을 보이게 한다. terraform 은 refresh 하는 동안 아무것도 찍지 않아서,
+      // 이게 없으면 "멈췄다" 와 화면상 구분이 되지 않는다.
+      es.addEventListener('tick', ev => {
+        const d = JSON.parse(ev.data);
+        jobinfo.textContent = `진행 중 · ${fmt(d.elapsed)} 경과`
+          + (d.quiet > 20 ? ` · 마지막 출력 ${fmt(d.quiet)} 전` : '');
+      });
       es.addEventListener('done', ev => {
         const d = JSON.parse(ev.data);
         jobinfo.textContent = `${d.action} · ${d.status} · ${d.elapsed}초`;
