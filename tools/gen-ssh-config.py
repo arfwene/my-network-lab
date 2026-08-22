@@ -12,7 +12,10 @@ import labdesign as L
 
 
 def main(lab_id):
-    jump = L.IPAM["access"]["jump_host"]["office_ip"]
+    A = L.IPAM["access"]
+    jump = A["jump_host"]["office_ip"]
+    jump_user = A["jump_host"]["user"]
+    lab_user = A["lab_user"]
     out = [
         f"# ============================================================",
         f"#  my-network-lab  ·  lab{lab_id}  접속 설정",
@@ -22,11 +25,11 @@ def main(lab_id):
         "",
         f"Host lab{lab_id}-jump",
         f"    HostName {jump}",
-        f"    User trainee",
+        f"    User {jump_user}",
         "",
         f"# 랩 노드 공통 설정 — 점프 호스트 경유",
         f"Host " + " ".join(n["name"] for n in L.TOPO["nodes"]),
-        f"    User lab",
+        f"    User {lab_user}",
         f"    ProxyJump lab{lab_id}-jump",
         f"    # 랩은 자주 재생성되므로 호스트 키 검증을 끈다 (교육 환경 전용)",
         f"    StrictHostKeyChecking no",

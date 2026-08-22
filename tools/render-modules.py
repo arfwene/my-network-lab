@@ -20,6 +20,18 @@ SRC = L.ROOT / "modules"
 OUT = L.ROOT / "dist/modules"
 
 
+# 해설·평가 정의는 **정답지**다. 운영 서버를 점프 호스트로도 쓰면 교육생이 같은 장비에
+# 붙으므로, 파일 권한만으로 한 겹 막아 둔다 (콘솔은 같은 계정으로 돌아 읽을 수 있다).
+SECRET = {"answers.md", "assessment.yml"}
+
+
+def _protect(path):
+    try:
+        path.chmod(0o600 if path.name in SECRET else 0o644)
+    except OSError:
+        pass
+
+
 def module_dirs():
     return sorted(d for d in SRC.iterdir() if d.is_dir() and (d / "meta.yml").exists())
 
@@ -39,9 +51,12 @@ def render(lab_id=1, only=None):
         dst.mkdir(parents=True, exist_ok=True)
         for f in sorted(d.iterdir()):
             if f.suffix == ".j2":
-                (dst / f.stem).write_text(env.get_template(f.name).render(**ctx), encoding="utf-8")
+                out = dst / f.stem
+                out.write_text(env.get_template(f.name).render(**ctx), encoding="utf-8")
+                _protect(out)
             elif f.name != "meta.yml":
                 shutil.copy2(f, dst / f.name)
+                _protect(dst / f.name)
                 if f.suffix == ".sh":
                     (dst / f.name).chmod(0o755)
         shutil.copy2(d / "meta.yml", dst / "meta.yml")

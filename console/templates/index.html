@@ -20,6 +20,7 @@
   <a class="ghost" href="/admin/settings">연결 설정</a>
   <a class="ghost" href="/admin/reviews">검토 큐{% if pending %} <b class="pill">{{ pending }}</b>{% endif %}</a>
   <a class="ghost" href="/admin/exams">시험</a>{% endif %}
+  <a class="ghost" href="/sshkey">접속 키{% if not has_ssh_key %} <b class="pill">!</b>{% endif %}</a>
   <a class="ghost" href="/password">비밀번호</a>
   <a class="ghost" href="/logout">나가기</a>
 </header>

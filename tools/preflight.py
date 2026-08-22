@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "console"))
 import labdesign as L      # noqa: E402
+import sshkeys            # noqa: E402
 
 VENV = ROOT / "console/.venv"
 G, Y, R, B, N = "\033[32m", "\033[33m", "\033[31m", "\033[34m", "\033[0m"
@@ -143,7 +144,7 @@ def check_tools():
 
 
 # ===================================================== 2. 설정
-def check_config():
+def check_config(lab_id_for_keys=1):
     section("설정")
 
     local = ROOT / "config/site.local.yml"
@@ -159,17 +160,34 @@ def check_config():
     else:
         err("site 검사", "오류가 있다", "`make check` 를 실행해 내용을 확인할 것")
 
-    keys = L.IPAM["access"].get("ssh_public_keys") or []
-    sample = [k for k in keys if "AAAA..." in k]
-    if not keys:
-        err("교육생 SSH 공개키", "비어 있다",
-            "이 값이 비면 cloud-init 이 로그인 수단 없는 VM 을 만든다. "
-            "site.local.yml 의 access.ssh_public_keys 를 채울 것")
-    elif sample:
-        err("교육생 SSH 공개키", f"{len(sample)}개가 예시값(AAAA...) 그대로다",
-            "실제 공개키로 바꿀 것 — 예시값으로는 어느 노드에도 로그인할 수 없다")
+    raw = L.IPAM["access"].get("ssh_public_keys") or []
+    good, bad = [], []
+    for k in raw:
+        try:
+            sshkeys.normalize(k)
+            good.append(k)
+        except Exception:                              # noqa: BLE001
+            bad.append(k)
+    if not good:
+        err("운영 서버 SSH 공개키", f"쓸 수 있는 키가 없다 (등록 {len(raw)}개)",
+            "site.local.yml 의 access.ssh_public_keys 에 이 서버의 공개키를 넣을 것 "
+            f"({Path.home()}/.ssh/id_ed25519.pub). 없으면 Ansible 이 노드에 접속하지 못하고, "
+            "설정 적용이 잠금 사고 방지를 위해 중단된다")
+    elif bad:
+        warn("운영 서버 SSH 공개키", f"{len(good)}개 사용 · {len(bad)}개는 형식이 아니라 제외된다",
+             "예시값이 남아 있는지 확인할 것")
     else:
-        ok("교육생 SSH 공개키", f"{len(keys)}개")
+        ok("운영 서버 SSH 공개키", f"{len(good)}개")
+
+    # 교육생 키는 여기가 아니라 콘솔 DB 에 있다. 랩별로 몇 개인지만 알려준다.
+    if (L.ROOT / "var/console.db").exists():
+        try:
+            import db                                  # noqa: PLC0415
+            n = len(db.lab_keys(lab_id_for_keys))
+            ok(f"랩 {lab_id_for_keys} 교육생 등록 키", f"{n}개"
+               + ("" if n else " — 교육생이 콘솔 [접속 키] 에서 등록하면 늘어난다"))
+        except Exception:                              # noqa: BLE001
+            pass
 
     priv = [p for p in ("id_ed25519", "id_rsa", "id_ecdsa")
             if (Path.home() / ".ssh" / p).exists()]
@@ -328,7 +346,7 @@ def main():
     a = ap.parse_args()
 
     check_tools()
-    check_config()
+    check_config(a.lab)
     if a.skip_proxmox:
         section("Proxmox 연결")
         skip("전체", "--skip-proxmox")

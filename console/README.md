@@ -286,6 +286,18 @@ root 로 돌면 생성물(`dist/` · `inventory/` · `var/`)이 전부 root 소�
 접근은 **사무실 LAN 에서만** 허용할 것. 이 콘솔은 ansible-playbook 을 실행하므로 권한이 크다.
 서버 준비부터 첫 랩까지의 전체 절차는 `docs/DEPLOY.md`.
 
+## 접속 키
+
+교육생이 `/sshkey` 에서 자기 공개키를 등록한다. 입력값은 `console/sshkeys.py` 가 파싱해서
+검증한다 — 개인키 오붙여넣기, `command=` 같은 authorized_keys 옵션 주입, 줄바꿈으로
+여러 키를 밀어넣는 것을 거절한다. 저장되는 건 정규화된 한 줄뿐이다.
+
+키는 `var/console.db` 의 `users.ssh_key` 에 있고, `gen-inventory` 가 **배정된 랩의**
+group_vars 에만 실어 보낸다. 배포는 `roles/common` 이 `authorized_keys` (exclusive) 로 한다.
+
+**관리자 키가 하나도 없으면 설정 적용이 중단된다.** exclusive 로 덮는 순간 운영 서버
+자신의 키까지 지워져 모든 노드에서 영구히 잠기기 때문이다. 이 랩은 SSH 로만 관리한다.
+
 ## 화면
 
 | 영역 | 내용 |

@@ -31,7 +31,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "tools"))
 
 import labdesign as L          # noqa: E402
-import assess, auth, db, docs, exam, jobs, passwords, pve, state, topology_svg  # noqa: E402
+import assess, auth, db, docs, exam, jobs, passwords, pve, sshkeys, state, topology_svg  # noqa: E402
 
 db.init()   # 스키마 생성 + (있다면) 예전 YAML 계정 이관
 pve.sync()  # DB 에 저장된 Proxmox 접속 정보를 var/runtime.yml 로 다시 내보낸다
@@ -141,6 +141,8 @@ def base_ctx(request, user, lab_id):
         "health": pve.last(),          # 마지막 점검 결과. 화면은 즉시 뜨고 JS 가 갱신한다
         "pve": pve.public(),
         "pending": db.count_pending() if is_admin else 0,
+        # 키를 안 넣으면 노드에 SSH 로 못 들어간다. 헤더에서 눈에 띄게 한다.
+        "has_ssh_key": bool((db.get_user(user["username"]) or {}).get("ssh_key")),
         # 시험 상태. 진행 중에는 시나리오가 실려 나가지 않는다 (exam.view 가 걸러낸다).
         "exam": exam.view(lab_id, user),
         "capstone": exam.module_id(),
@@ -199,6 +201,85 @@ async def password_change(request: Request, current: str = Form(""),
                                      "forced": u["must_change_password"],
                                      "policy": passwords.policy_text(),
                                      "site_name": L.SITE["site"]["name"]}, status_code=400)
+    return RedirectResponse("/", status_code=303)
+
+
+# ============================================================ SSH 접속 키
+#  교육생이 직접 등록한다. site.yml 에 두면 전 랩 전 노드에 박히고, 바꾸려면
+#  VM 을 다시 만들어야 한다. 여기 두면 **배정된 랩에만** 들어가고 즉시 반영된다.
+def _sshkey_ctx(request, user, errors=(), saved=""):
+    lab_id = pick_lab(user)
+    raw = (db.get_user(user["username"]) or {}).get("ssh_key") or ""
+    node = L.TOPO["nodes"][0]["name"]
+    A = L.IPAM["access"]
+    return {"request": request, "user": user, "site_name": L.SITE["site"]["name"],
+            "health": pve.last(), "pve": pve.public(),
+            "lab_id": lab_id,
+            "lab_label": f"lab {lab_id}" if lab_id else "미배정",
+            "current": sshkeys.describe(raw) if raw else None,
+            "key_at": (db.get_user(user["username"]) or {}).get("ssh_key_at"),
+            "errors": list(errors), "saved": saved,
+            "busy": runner.busy(lab_id) if lab_id else True,
+            "jump_user": A["jump_host"]["user"], "jump_ip": A["jump_host"]["office_ip"],
+            "lab_user": A["lab_user"],
+            "example_node": node, "example_ip": L.mgmt_ip(lab_id or 1, node)}
+
+
+@app.get("/sshkey", response_class=HTMLResponse)
+async def sshkey_form(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user.get("must_change_password"):
+        return RedirectResponse("/password", status_code=303)
+    return tpl.TemplateResponse(request, "sshkey.html", _sshkey_ctx(request, user))
+
+
+@app.post("/sshkey", response_class=HTMLResponse)
+async def sshkey_save(request: Request, key: str = Form(""), remove: str = Form("")):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user.get("must_change_password"):
+        return RedirectResponse("/password", status_code=303)
+    if remove:
+        db.set_ssh_key(user["username"], "")
+        return tpl.TemplateResponse(
+            request, "sshkey.html",
+            _sshkey_ctx(request, user, saved="키를 지웠다. 다음 설정 적용 때 노드에서도 사라진다."))
+    try:
+        normalized = sshkeys.normalize(key)
+    except sshkeys.Invalid as e:
+        return tpl.TemplateResponse(request, "sshkey.html",
+                                    _sshkey_ctx(request, user, errors=[str(e)]),
+                                    status_code=400)
+    db.set_ssh_key(user["username"], normalized)
+    fp = sshkeys.fingerprint(normalized)
+    return tpl.TemplateResponse(
+        request, "sshkey.html",
+        _sshkey_ctx(request, user, saved=f"저장했다 ({fp}). "
+                                         f"[지금 랩에 반영] 을 누르거나 다음 [설정 적용] 때 들어간다."))
+
+
+@app.post("/sshkey/apply")
+async def sshkey_apply(request: Request):
+    """지금 단계 그대로 설정만 다시 올린다 — 키 배포는 common 역할에 들어 있다."""
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    lab_id = pick_lab(user)
+    if not lab_id or lab_id not in auth.allowed_labs(user):
+        return RedirectResponse("/sshkey", status_code=303)
+    stage = state.load(lab_id).get("stage") or L.STAGES[0]
+    try:
+        await runner.submit(lab_id, "apply", stage, None, user.get("username"),
+                            on_done=lambda j: state.record(
+                                j.lab_id, j.action, j.stage, j.status == "ok", j.scenario, j.id))
+    except (jobs.Locked, jobs.NotReady, RuntimeError, ValueError) as e:
+        msg = getattr(e, "message", None) or str(e)
+        return tpl.TemplateResponse(request, "sshkey.html",
+                                    _sshkey_ctx(request, user, errors=[msg]), status_code=409)
+    # 진행 상황은 메인 화면의 실행 로그에서 본다 — 로그 창을 두 곳에 두지 않는다.
     return RedirectResponse("/", status_code=303)
 
 

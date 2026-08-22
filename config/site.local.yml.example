@@ -16,12 +16,15 @@ access:
     node_name:    pve01
     datastore:    local-lvm
   jump_host:
+    # 랩 운영 서버(= 점프 호스트)의 사무실 LAN 주소. 교육생 PC 에서 닿는 주소다.
+    # 고정 IP 로 줄 것 — 바뀌면 배포해 둔 교육생 ssh 설정이 전부 죽는다.
     office_ip: 192.0.2.11
     # 이 서버가 랩 관리망(172.30.0.0/16) 브리지에 물려 있지 않다면 켠다.
     # proxy_via_proxmox: true
+  # 운영 서버(Ansible)의 공개키만. install.sh 가 찍어 준 값을 넣는다.
+  # 교육생 키는 여기가 아니라 콘솔 [접속 키] 에서 본인이 등록한다.
   ssh_public_keys:
-    - "ssh-ed25519 AAAA... trainee01@office"
-    - "ssh-ed25519 AAAA... admin@ops"
+    - "ssh-ed25519 AAAA... my-network-lab@labsrv"
 
 # 사내에서 이미 사용 중인 대역을 여기에 등록한다.
 # 랩 대역이 이것과 겹치면 validate-site.py 가 배포를 막는다.

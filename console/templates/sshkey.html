@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}접속 키 · {{ site_name }}{% endblock %}
+{% block body %}
+<header class="top">
+  <div class="brand">{{ site_name }}</div>
+  <a class="ghost" href="/">← 랩으로</a>
+  <div class="spacer"></div>
+  {% include "_health.html" %}
+  <div class="who">{{ user.name | default(user.username) }}<span class="role">{{ user.role_label }}</span></div>
+  <a class="ghost" href="/logout">나가기</a>
+</header>
+
+<main class="layout">
+  <aside class="modules">
+    <h3>접속 키</h3>
+    <p class="legend">
+      등록한 공개키는 <b>배정된 랩({{ lab_label }})의 노드에만</b> 들어간다.
+      다른 랩에는 들어가지 않는다.
+    </p>
+    <p class="legend"><a href="/">← 모듈로 돌아가기</a></p>
+    <p class="legend"><a href="/appendix">부록 →</a></p>
+  </aside>
+
+  <section class="content">
+    <div class="module-head">
+      <div>
+        <span class="mid">계정</span>
+        <h2>SSH 접속 키</h2>
+        <p class="meta">랩 노드에 터미널로 들어가려면 공개키를 등록해야 한다.</p>
+      </div>
+    </div>
+
+    {% for e in errors %}<div class="err">{{ e }}</div>{% endfor %}
+    {% if saved %}<p class="note">{{ saved }}</p>{% endif %}
+
+    <article class="doc">
+      {% if current %}
+      <table>
+        <tr><th>등록된 키</th><td><code>{{ current.type }}</code>
+            {% if current.comment %} <span class="muted">{{ current.comment }}</span>{% endif %}</td></tr>
+        <tr><th>지문</th><td><code>{{ current.fingerprint }}</code></td></tr>
+        <tr><th>등록 시각</th><td>{{ key_at or '-' }}</td></tr>
+      </table>
+      <p>내 PC 에서 <code>ssh-keygen -lf ~/.ssh/id_ed25519.pub</code> 로 나오는 지문과
+         같은지 확인할 것.</p>
+      {% else %}
+      <p class="note"><b>아직 등록된 키가 없다.</b>
+         등록하기 전에는 랩 노드에 SSH 로 들어갈 수 없다.</p>
+      {% endif %}
+
+      <h3>1. 키 만들기</h3>
+      <p>내 PC 에서 (이미 있으면 건너뛴다):</p>
+      <pre><code>ssh-keygen -t ed25519 -C "{{ user.username }}@내PC"
+cat ~/.ssh/id_ed25519.pub</code></pre>
+      <p>붙여넣을 것은 <b><code>.pub</code> 로 끝나는 파일의 내용</b>이다.
+         확장자가 없는 쪽은 <b>개인키</b>이며 누구에게도 보여주면 안 된다 —
+         콘솔에 붙여넣어도 거절한다.</p>
+
+      <h3>2. {{ '키 바꾸기' if current else '키 등록' }}</h3>
+      <form method="post">
+        <textarea name="key" rows="4" spellcheck="false" autocapitalize="off"
+                  style="width:100%;font-family:var(--mono,monospace);font-size:12.5px"
+                  placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... {{ user.username }}@내PC"></textarea>
+        <p>
+          <button class="btn primary" type="submit">저장</button>
+          {% if current %}
+          <button class="btn" type="submit" name="remove" value="1"
+                  onclick="return confirm('등록된 키를 지운다. 랩 노드에 SSH 로 들어갈 수 없게 된다. 계속할까?')">
+            키 지우기</button>
+          {% endif %}
+        </p>
+      </form>
+
+      <h3>3. 언제 반영되나</h3>
+      <p>저장하면 <b>다음 [설정 적용] 때</b> 랩 노드에 들어간다.
+         지금 랩이 놀고 있으면 아래 버튼으로 바로 반영할 수 있다.</p>
+      <form method="post" action="/sshkey/apply">
+        <button class="btn" type="submit" {{ 'disabled' if busy or not current }}>
+          지금 랩에 반영</button>
+        {% if busy %}<span class="muted">다른 작업이 실행 중이다</span>{% endif %}
+        {% if not current %}<span class="muted">키를 먼저 등록할 것</span>{% endif %}
+      </form>
+      <p>노드에 들어간 뒤 <code>cat /etc/lab-authorized</code> 로 누가 접속할 수 있는지 볼 수 있다.</p>
+
+      <h3>4. 접속</h3>
+      <p>랩 노드는 사무실에서 직접 보이지 않는다. 운영 서버를 거친다.</p>
+      <pre><code>ssh -J {{ jump_user }}@{{ jump_ip }} {{ lab_user }}@{{ example_ip }}   # {{ example_node }}</code></pre>
+      <p><code>~/.ssh/config</code> 에 넣을 전체 설정은 관리자가 나눠 주는
+         <code>ssh-config-lab{{ lab_id }}</code> 파일에 있다. 그걸 쓰면
+         <code>ssh {{ example_node }}</code> 로 끝난다.</p>
+    </article>
+  </section>
+</main>
+{% endblock %}

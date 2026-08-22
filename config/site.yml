@@ -67,10 +67,17 @@ access:
     datastore:    local-lvm
     insecure_tls: true              # 사설 인증서 사용 시
 
+  # 랩 운영 서버 = 점프 호스트. 같은 장비다.
+  #   · 교육생 브라우저 → 이 주소:8080 (웹 콘솔)
+  #   · 교육생 ssh      → 이 주소를 ProxyJump 로 거쳐 랩 노드로 (tools/gen-ssh-config.py)
+  #   · Terraform · Ansible 도 여기서 돈다
   jump_host:
-    office_ip: 192.0.2.11           # 사무실 LAN 쪽 주소
+    # 사무실 LAN 쪽 주소. **교육생 PC 에서 닿는 주소**를 쓴다.
+    # 관리망 주소(172.30.N.9)가 아니다 — 그쪽은 host_octet 으로 자동 계산된다.
+    # DHCP 로 받지 말 것. 이 주소가 바뀌면 배포해 둔 교육생 ssh 설정이 전부 죽는다.
+    office_ip: 192.0.2.11
     host_octet: 9                   # 각 랩 관리망에서의 마지막 옥텟 (172.30.N.9)
-    user: trainee
+    user: trainee                   # 교육생이 이 서버에 ssh 할 때 쓰는 계정
 
     # Ansible 이 랩 관리망에 **직접 닿지 못할 때** Proxmox 호스트를 SSH 로 경유한다.
     #   랩 운영 서버를 관리망 브리지(labs.naming.mgmt_bridge)의 트렁크에 물릴 수 있으면
@@ -82,7 +89,16 @@ access:
     proxmox_ssh_user: root
 
   lab_user: lab                     # 랩 노드 로그인 계정
-  ssh_public_keys: []               # 교육생/관리자 공개키. site.local.yml 에서 채운다.
+
+  # **운영 서버(Ansible)의 공개키만** 넣는다. 교육생 키를 여기 넣지 말 것.
+  #   여기 넣은 키는 cloud-init 으로 **전 랩 전 노드**에 박힌다. 그래서
+  #     · 교육생 A 가 교육생 B 의 랩 노드에 로그인할 수 있게 되고
+  #     · 명단이 바뀔 때마다 VM 을 다시 만들어야 한다 (cloud-init 은 최초 부팅 때만 돈다)
+  #   교육생 키는 콘솔 [접속 키] 에서 본인이 등록한다 → var/console.db →
+  #   배정된 랩의 인벤토리에만 실려 Ansible 이 authorized_keys 를 쓴다. (근거: PLAN 7.9.2)
+  #
+  #   install.sh 가 운영 서버 키를 만들고 화면에 찍어 준다. 그 한 줄을 여기 넣으면 된다.
+  ssh_public_keys: []
 
 # -----------------------------------------------------------------------------
 # 3. 랩 인스턴스 (1인 1랩)

@@ -36,6 +36,45 @@
     mode: "0600"
   notify: netplan apply
 
+# --- 접속 키 -----------------------------------------------------------------
+#  cloud-init 은 VM 을 만들 때 한 번만 키를 넣는다. 교육생이 바뀔 때마다 VM 을 다시
+#  만들 수는 없으므로, 여기서 매 설정 적용마다 다시 쓴다.
+#  exclusive: 손으로 넣은 키는 지운다 — "랩 초기화"의 의미를 접속 경로까지 넓힌다.
+# exclusive 로 쓰기 때문에, 관리자 키가 비어 있으면 **운영 서버 자신의 키까지 지운다.**
+# 그러면 이 노드에는 두 번 다시 들어갈 수 없다 (SSH 로만 관리하므로 복구 수단이 없다).
+# 여기서 멈추는 편이 낫다.
+- name: 관리자 공개키가 있는지 확인 (없으면 잠금 사고가 난다)
+  ansible.builtin.assert:
+    that: admin_ssh_keys | length > 0
+    fail_msg: >-
+      배포할 관리자 공개키가 없다. 이대로 authorized_keys 를 덮으면 이 노드에
+      다시 접속할 수 없다. config/site.local.yml 의 access.ssh_public_keys 에
+      운영 서버 공개키(~/.ssh/id_ed25519.pub)를 넣고 다시 실행할 것.
+    quiet: true
+
+- name: 랩 계정 authorized_keys (운영 서버 + 이 랩 교육생)
+  ansible.posix.authorized_key:
+    user: "{{ ansible_user }}"
+    key: "{{ (admin_ssh_keys + (trainee_ssh_keys | map(attribute='key') | list))
+             | join('\n') }}"
+    exclusive: true
+    state: present
+
+- name: 배포된 접속 키 확인용 목록
+  ansible.builtin.copy:
+    dest: /etc/lab-authorized
+    mode: "0644"
+    content: |
+      # 자동 생성 (roles/common). 이 노드에 접속할 수 있는 사람.
+      # 고쳐도 다음 설정 적용 때 되돌아온다.
+      운영 서버(Ansible)  : {{ admin_ssh_keys | length }} 개
+      {% for t in trainee_ssh_keys %}
+      {{ "%-18s"|format(t.username) }} : {{ t.name or "-" }}
+      {% endfor %}
+      {% if not trainee_ssh_keys %}
+      교육생             : 없음 (콘솔에서 공개키를 등록하면 여기 나타난다)
+      {% endif %}
+
 - name: IP 포워딩 (라우터·경계 장비만)
   ansible.posix.sysctl:
     name: "{{ item.k }}"

@@ -195,6 +195,19 @@ make console                                          # http://<운영서버>:80
 
 사용자 계정에는 **랩 생성·실행·삭제 권한만** 준다.
 
+### 접속 키
+
+교육생은 콘솔 **[접속 키]** 에서 자기 SSH 공개키를 직접 등록한다.
+등록한 키는 **배정된 랩의 노드에만** 들어간다 (`var/console.db` → 인벤토리 → Ansible).
+
+`config/site.yml` 의 `access.ssh_public_keys` 에는 **운영 서버 키만** 넣는다.
+거기 넣은 키는 cloud-init 으로 전 랩 전 노드에 박히고, 바꾸려면 VM 을 다시 만들어야 한다.
+
+```bash
+python3 tools/console-user.py key user01 --file ~/.ssh/id_ed25519.pub   # 관리자가 대신 등록
+python3 tools/console-user.py keys --lab 1                              # 그 랩에 배포될 키
+```
+
 최초 기동 시 관리자 계정 `admin / admin` 이 만들어지고, **첫 로그인에서 비밀번호 변경을 강제**한다.
 비밀번호는 8자 이상 + 특수문자 1개 이상, 로그인 5회 실패 시 5분 잠금 (`config/site.yml` 에서 조정).
 

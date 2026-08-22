@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import labdesign as L
 
 DB_PATH = L.ROOT / "var/console.db"
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -34,6 +34,10 @@ CREATE TABLE IF NOT EXISTS users (
     created_at           TEXT NOT NULL DEFAULT (datetime('now')),
     password_changed_at  TEXT,
     last_login           TEXT,
+    -- 교육생이 직접 넣는 SSH 공개키. 이 값은 **배정된 랩의 노드에만** 배포된다.
+    -- 여기 두는 이유: site.yml 에 두면 전 랩에 박히고, 바꾸려면 VM 을 다시 만들어야 한다.
+    ssh_key              TEXT NOT NULL DEFAULT '',
+    ssh_key_at           TEXT,
     -- 사용자 계정은 반드시 랩이 배정되어야 한다. 스키마에서 강제한다.
     CHECK (role <> 'user' OR lab_id IS NOT NULL)
 );
@@ -167,6 +171,7 @@ def init():
     with connect() as con:
         v = con.execute("PRAGMA user_version").fetchone()[0]
         _upgrade_v1_to_v2(con, v)
+        _upgrade_v5_to_v6(con, v)
         con.executescript(SCHEMA)
         if v < SCHEMA_VERSION:
             con.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
@@ -197,6 +202,42 @@ def _upgrade_v1_to_v2(con, version):
     con.execute("UPDATE users SET role='admin' WHERE role='instructor'")
     con.execute("UPDATE users SET role='user'  WHERE role='trainee'")
     print("[db] 스키마 v1 -> v2 (역할: instructor->admin, trainee->user)", file=sys.stderr)
+
+
+def _upgrade_v5_to_v6(con, version):
+    """v5 -> v6: 사용자별 SSH 공개키. 기존 DB 에 컬럼만 더한다."""
+    have = {r["name"] for r in con.execute("PRAGMA table_info(users)")}
+    if not have or version >= 6:
+        return
+    for col, ddl in [("ssh_key", "TEXT NOT NULL DEFAULT ''"), ("ssh_key_at", "TEXT")]:
+        if col not in have:
+            con.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
+    print("[db] 스키마 v5 -> v6 (사용자별 SSH 공개키)", file=sys.stderr)
+
+
+# ============================================================ SSH 공개키
+def set_ssh_key(username, key):
+    """공개키 저장(빈 문자열이면 제거). 검증은 부르는 쪽에서 한다."""
+    with connect() as con:
+        cur = con.execute(
+            "UPDATE users SET ssh_key=?, ssh_key_at=CASE WHEN ?='' THEN NULL "
+            "ELSE datetime('now') END WHERE username=? COLLATE NOCASE",
+            (key, key, username))
+        return cur.rowcount > 0
+
+
+def lab_keys(lab_id):
+    """이 랩에 배포할 공개키 목록.
+
+    **비활성 계정은 뺀다.** 그래야 퇴소 처리가 다음 설정 적용에서 그대로 반영된다.
+    관리자 계정의 키는 넣지 않는다 — 관리자는 운영 서버 키로 이미 들어간다.
+    """
+    with connect() as con:
+        rows = con.execute(
+            "SELECT username, name, ssh_key FROM users "
+            " WHERE lab_id=? AND role='user' AND disabled=0 AND ssh_key<>'' "
+            " ORDER BY username", (lab_id,)).fetchall()
+    return [{"username": r["username"], "name": r["name"], "key": r["ssh_key"]} for r in rows]
 
 
 def ensure_bootstrap_admin():

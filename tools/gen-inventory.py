@@ -9,10 +9,64 @@ usage:  python3 tools/gen-inventory.py --lab 1 [--stage m10]
 import sys, yaml
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "console"))
 import labdesign as L
+import sshkeys
 
 GROUP_OF = {"router": "routers", "switch": "switches", "host": "hosts_pc",
             "server": "servers", "edge": "edges"}
+
+
+def _valid_admin_keys():
+    """site.yml 의 공개키 중 **실제로 쓸 수 있는 것**만.
+
+    예시값(AAAA...)이 그대로 남아 있는 경우가 흔하다. 그대로 배포하면
+    authorized_keys 에 쓰레기 줄이 남고, 진짜 문제(키가 없다)는 가려진다.
+    """
+    raw = L.IPAM["access"].get("ssh_public_keys") or []
+    good, bad = [], []
+    for k in raw:
+        try:
+            good.append(sshkeys.normalize(k))
+        except Exception as e:                          # noqa: BLE001
+            bad.append(f"{str(k)[:30]}... ({e})")
+    if bad:
+        print(f"경고: site.yml 의 ssh_public_keys 중 {len(bad)}개가 유효하지 않아 뺐다:",
+              file=sys.stderr)
+        for b in bad:
+            print(f"  - {b}", file=sys.stderr)
+    if not good:
+        print("경고: 배포할 관리자 공개키가 하나도 없다. "
+              "Ansible 이 노드에 접속하지 못한다 — site.local.yml 의 "
+              "access.ssh_public_keys 를 채울 것", file=sys.stderr)
+    return good
+
+
+def _lab_keys(lab_id):
+    """이 랩에 배포할 교육생 공개키.
+
+    콘솔 DB 에서 읽는다 — site.yml 에 두면 **전 랩 전 노드**에 박히고, 명단이 바뀔 때마다
+    VM 을 다시 만들어야 한다. 여기서 읽으면 배정된 랩에만 들어가고 즉시 반영된다.
+
+    DB 가 없으면(설치 직후·CI) 빈 목록이다. 운영 서버 키는 어차피 cloud-init 으로
+    들어가 있으므로 Ansible 접속에는 지장이 없다.
+    """
+    if not (L.ROOT / "var/console.db").exists():
+        return []
+    try:
+        import db                                      # noqa: PLC0415
+        out = []
+        for k in db.lab_keys(lab_id):
+            try:
+                out.append({"username": k["username"], "name": k["name"],
+                            "key": sshkeys.normalize(k["key"])})
+            except Exception as e:                     # noqa: BLE001
+                print(f"경고: {k['username']} 의 공개키를 뺐다 ({e})", file=sys.stderr)
+        return out
+    except Exception as e:                             # noqa: BLE001
+        print(f"경고: 교육생 키를 읽지 못했다 ({type(e).__name__}: {e}). "
+              f"관리자 키만 배포된다", file=sys.stderr)
+        return []
 
 
 def _proxy_args():
@@ -60,6 +114,9 @@ def main(lab_id, stage):
         "stages": L.STAGES,
         "ansible_user": "lab",
         "ansible_python_interpreter": "/usr/bin/python3",
+        # 랩 노드 authorized_keys = 운영/관리자 키(site.yml) + 이 랩 교육생 키(콘솔 DB)
+        "admin_ssh_keys": _valid_admin_keys(),
+        "trainee_ssh_keys": _lab_keys(lab_id),
         **_proxy_args(),
         "mgmt": {
             "cidr": L.mgmt_cidr(lab_id),

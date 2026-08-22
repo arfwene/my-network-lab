@@ -123,6 +123,51 @@ for k in ("public_transit", "public_service", "external_net"):
 # =============================================================================
 # 5. 공개 안전성 — 사내 값이 저장소로 새어 나가는가
 # =============================================================================
+def access_hosts():
+    """접속 주소가 말이 되는가.
+
+    office_ip 는 교육생이 랩에 들어오는 유일한 문이다(gen-ssh-config 의 ProxyJump 대상).
+    사무실 대역 밖이거나 랩 대역과 겹치면 아무도 접속하지 못하는데,
+    그 사실은 교육생이 처음 ssh 를 칠 때에야 드러난다. 여기서 잡는다.
+    """
+    A = L.SITE["access"]
+    office = A.get("office_lan")
+    pairs = [("access.jump_host.office_ip", (A.get("jump_host") or {}).get("office_ip"),
+              "랩 운영 서버(점프 호스트)의 사무실 LAN 주소"),
+             ("access.proxmox.host_ip", (A.get("proxmox") or {}).get("host_ip"),
+              "Proxmox 호스트 주소")]
+    try:
+        onet = ipaddress.ip_network(office, strict=False) if office else None
+    except ValueError:
+        err(f"access.office_lan 이 대역이 아니다: {office}")
+        return
+    clean = True
+    for key, val, what in pairs:
+        if not val:
+            err(f"{key} 가 비어 있다 — {what}")
+            clean = False
+            continue
+        try:
+            addr = ipaddress.ip_address(str(val))
+        except ValueError:
+            err(f"{key} 가 IP 주소가 아니다: {val} (호스트명·URL 이 아니라 주소를 쓸 것)")
+            clean = False
+            continue
+        if onet and addr not in onet:
+            warn(f"{key} ({val}) 가 access.office_lan ({office}) 밖이다 — {what}. "
+                 f"교육생 PC 에서 여기로 닿을 수 있는지 확인할 것")
+            clean = False
+        for name in ("management", "lab_block"):
+            block = L.SITE["networks"].get(name)
+            if block and addr in ipaddress.ip_network(block):
+                err(f"{key} ({val}) 가 networks.{name} ({block}) 안에 있다. "
+                    f"랩이 쓸 대역이라 충돌한다")
+                clean = False
+    if clean:
+        ok(f"접속 주소 확인 (점프 {(A.get('jump_host') or {}).get('office_ip')} · "
+           f"Proxmox {(A.get('proxmox') or {}).get('host_ip')})")
+
+
 def publish_guard():
     import yaml as _y
 
@@ -206,6 +251,9 @@ def publish_guard():
     if not gi.exists() or "config/site.local.yml" not in gi.read_text(encoding="utf-8"):
         err(".gitignore 에 config/site.local.yml 이 없다 — 사내 값이 커밋될 수 있다")
 
+
+# 접속 주소는 --publish 여부와 무관하게 늘 본다 — 틀리면 아무도 랩에 못 들어온다.
+access_hosts()
 
 if "--publish" in sys.argv:
     publish_guard()

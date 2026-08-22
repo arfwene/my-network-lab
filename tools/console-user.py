@@ -5,6 +5,9 @@
   python3 tools/console-user.py add user01 --lab 1 --name "교육생01"
   python3 tools/console-user.py add admin2 --role admin --name "관리자2"
   python3 tools/console-user.py passwd user01
+  python3 tools/console-user.py key user01 --file ~/.ssh/id_ed25519.pub   # 공개키 등록
+  python3 tools/console-user.py key user01 --clear                        # 등록 해제
+  python3 tools/console-user.py keys --lab 1                              # 그 랩에 배포될 키
   python3 tools/console-user.py lab user01 --lab 3       # 랩 재배정 (즉시 반영)
   python3 tools/console-user.py disable user01          # 즉시 차단
   python3 tools/console-user.py enable  user01
@@ -28,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "console"))
 import labdesign as L
 import auth
 import db
+import sshkeys
 import passwords
 
 
@@ -74,6 +78,12 @@ def main():
     lb.add_argument("username")
     lb.add_argument("--lab", type=int, required=True)
     sub.add_parser("list", help="목록")
+    k = sub.add_parser("key", help="SSH 공개키 등록/해제")
+    k.add_argument("username")
+    k.add_argument("--file", help="공개키 파일 (.pub). 없으면 표준입력에서 읽는다")
+    k.add_argument("--clear", action="store_true", help="등록 해제")
+    ks = sub.add_parser("keys", help="한 랩에 배포될 키 목록")
+    ks.add_argument("--lab", type=int, required=True)
     args = ap.parse_args()
 
     db.init()
@@ -94,6 +104,35 @@ def main():
             print(f"  {u['username']:14s} {auth.ROLE_LABEL[u['role']]:8s} {labtxt:10s} "
                   f"{state:16s} {u['last_login'] or '-':20s} {u['name']}")
         print(f"\n  DB: {db.DB_PATH}")
+        return
+
+    if args.cmd == "keys":
+        rows = db.lab_keys(args.lab)
+        print(f"  lab {args.lab} 노드에 배포될 교육생 키 ({len(rows)}개)")
+        for r in rows:
+            d = sshkeys.describe(r["key"]) or {}
+            print(f"    {r['username']:14s} {d.get('type',''):14s} {d.get('fingerprint','?')}"
+                  f"  {r['name']}")
+        if not rows:
+            print("    (없음 — 교육생이 콘솔 [접속 키] 에서 등록하면 여기 나온다)")
+        print("\n  관리자/운영 서버 키는 config/site.yml 의 access.ssh_public_keys 에 있다.")
+        return
+
+    if args.cmd == "key":
+        if not db.get_user(args.username):
+            sys.exit(f"없는 계정: {args.username}")
+        if args.clear:
+            db.set_ssh_key(args.username, "")
+            print(f"{args.username} 의 공개키를 지웠다. 다음 설정 적용 때 노드에서도 사라진다.")
+            return
+        raw = Path(args.file).read_text() if args.file else sys.stdin.read()
+        try:
+            norm = sshkeys.normalize(raw)
+        except sshkeys.Invalid as e:
+            sys.exit(f"거절: {e}")
+        db.set_ssh_key(args.username, norm)
+        print(f"{args.username} 공개키 등록: {sshkeys.fingerprint(norm)}")
+        print("  배정된 랩에만 배포된다. 반영: 콘솔 [설정 적용] 또는 make config LAB=<N>")
         return
 
     if args.cmd == "add":
