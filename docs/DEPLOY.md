@@ -257,36 +257,61 @@ SSH 경로에 끌어들인다. **VM 으로 올릴 수 있으면 그쪽이 낫다
 
 ## 4. Proxmox 쪽 준비
 
-### API 토큰
+### API 토큰 — 스크립트로 만든다
 
-Proxmox 호스트에서 (한 번만):
+**손으로 `pveum` 을 치지 말 것.** 권한을 하나 빠뜨려도 티가 안 나고, `terraform apply` 가
+브리지를 만들다 HTTP 403 으로 멈춘다. 그때 Proxmox 는 **무엇이 없는지 알려주지 않는다.**
 
 ```bash
-pveum role add LabProvision -privs \
-  "VM.Allocate,VM.Clone,VM.Config.CPU,VM.Config.Disk,VM.Config.Memory,\
-VM.Config.Network,VM.Config.Options,VM.Config.Cloudinit,VM.Monitor,\
-VM.PowerMgmt,VM.Audit,Datastore.Allocate,Datastore.AllocateSpace,\
-Datastore.Audit,Sys.Audit,Sys.Console,Sys.Modify,SDN.Use"
-
-pveum user add terraform@pve
-pveum aclmod / -user terraform@pve -role LabProvision
-pveum user token add terraform@pve lab --privsep 0
-#  → 화면에 딱 한 번 나오는 value 를 복사한다. 다시 볼 수 없다.
+# Proxmox 호스트에서 root 로, 한 번만
+./infra/proxmox-setup.sh
 ```
 
-- `Sys.Modify` 는 **리눅스 브리지 생성**에 필요하다. 없으면 VM 은 만들어도 랜선이 안 생긴다.
-- `--privsep 0` 은 토큰이 사용자 권한을 그대로 물려받게 한다. 켜면(`1`) 토큰에도 따로 ACL 을 줘야 한다.
+이 스크립트가 하는 일:
+
+1. 역할 `LabProvision` 생성(있으면 권한 목록을 최신으로 맞춤)
+2. 사용자 `terraform@pve` 생성 + `/` 에 역할 부여
+3. API 토큰 발급 — **`--privsep 0`**
+4. **토큰이 실제로 무엇을 할 수 있는지 확인**하고, 모자라면 이름을 대고 멈춤
+5. 통과하면 토큰 비밀값을 한 번 출력 (다시 볼 수 없다)
+
+```bash
+./infra/proxmox-setup.sh --show        # 아무것도 바꾸지 않고 상태만 점검
+./infra/proxmox-setup.sh --new-token   # 비밀값을 잃었을 때 다시 발급
+```
 
 토큰은 콘솔 **[관리자 → 연결 설정]** 에 넣는다. 파일에 쓰지 않는다.
 
 **`make mgmt` · `make deploy` 도 같은 토큰을 쓴다.** `tools/with-pve-env.py` 가
 `var/console.db` 에서 읽어 실행 순간에만 환경변수로 넘긴다 — 따로 export 하지 않아도 된다.
 
-콘솔에 넣기 전이거나 다른 토큰을 잠깐 쓰고 싶으면 그 셸에서만:
+#### 가장 흔한 실패: 권한 분리
+
+```
+Error: Could not create Linux Bridge ... HTTP 403 (/nodes/pve01, Sys.Modify)
+```
+
+**웹 UI 로 토큰을 만들면 "Privilege Separation" 이 기본으로 켜진다.** 그러면 사용자에게 준
+역할을 토큰이 물려받지 않아, 역할을 아무리 손봐도 계속 403 이다.
 
 ```bash
-export PROXMOX_VE_API_TOKEN='terraform@pve!lab=xxxxxxxx-....'
+pveum user token permissions terraform@pve lab --path /nodes/pve01   # 비어 있으면 이것이다
+pveum user token modify terraform@pve lab --privsep 0                # 한 줄로 끝
 ```
+
+`./infra/proxmox-setup.sh` 는 이 상태를 감지해서 꺼 준다.
+
+#### 무엇 때문에 어떤 권한이 필요한가
+
+| 권한 | 없으면 |
+|---|---|
+| `Sys.Modify` (`/nodes/<node>`) | **브리지가 안 생긴다.** VM 은 만들어져도 랜선이 없다 |
+| `VM.Clone` | 골든 템플릿을 복제하지 못한다 |
+| `VM.Config.Cloudinit` | 관리망 주소·SSH 키가 안 들어가 노드에 접속할 수 없다 |
+| `Datastore.AllocateSpace` | 디스크·cloud-init 드라이브를 만들지 못한다 |
+
+`make doctor` 와 콘솔의 배포 전 검사가 **이 목록을 Proxmox 에 직접 물어본다.**
+모자라면 `terraform apply` 전에 이름을 대고 막는다.
 
 ### 골든 템플릿
 

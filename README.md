@@ -112,6 +112,9 @@ config/site.yml        design/ipam.yml           tools/labdesign.py
 ## 최초 구축 (관리자, 1회)
 
 ```bash
+# 0. Proxmox 호스트에서 API 토큰 준비 (권한 확인까지 해 준다)
+./infra/proxmox-setup.sh
+
 # 1. Proxmox 호스트에서 골든 템플릿 생성
 #    (랩 노드는 인터넷에 못 나가므로 필요한 패키지를 전부 여기 넣는다)
 apt install -y libguestfs-tools

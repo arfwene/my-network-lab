@@ -216,6 +216,13 @@ def check_proxmox():
         add({"ok": "ok", "warn": "warn", "error": "error"}.get(c["status"], "skip"),
             f"Proxmox · {c['title']}", c.get("detail", ""), c.get("hint", ""))
 
+    # 권한은 연결이 되어도 따로 막힌다 — 403 은 terraform 한복판에서 터진다.
+    # 여기서 미리 묻는다.
+    if res.get("level") != "error":
+        c = pve.check_privileges().as_dict()
+        add({"ok": "ok", "warn": "warn", "error": "error"}.get(c["status"], "skip"),
+            f"Proxmox · {c['title']}", c.get("detail", ""), c.get("hint", ""))
+
 
 # ===================================================== 4. 랩 관리망
 def check_mgmt(lab_id):
@@ -343,7 +350,12 @@ def report():
         n[status] += 1
         print(f"  {mark[status]} {title}" + (f"  —  {detail}" if detail else ""))
         if hint and status in ("warn", "error"):
-            print(f"      → {hint}")
+            # 안내가 여러 줄일 수 있다 (권한 검사처럼 명령을 그대로 주는 경우).
+            # 이어지는 줄도 같은 자리에서 시작해야 읽힌다.
+            first, *rest = hint.splitlines()
+            print(f"      → {first}")
+            for line in rest:
+                print(f"        {line}")
     print("-" * 74)
     print(f"  통과 {n['ok']} · 경고 {n['warn']} · 오류 {n['error']} · 건너뜀 {n['skip']}")
     if n["error"]:

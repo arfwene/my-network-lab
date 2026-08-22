@@ -512,6 +512,70 @@ def _owned(vm):
     return OWNER_TAG in [t.strip() for t in tags]
 
 
+# 이 랩이 실제로 쓰는 권한. 경로별로 무엇이 왜 필요한지 적어 둔다 —
+# 403 은 "권한 없음"만 알려주고 무엇이 없는지는 알려주지 않기 때문이다.
+REQUIRED_PRIVS = [
+    ("/nodes/{node}", "Sys.Modify",              "리눅스 브리지 생성 (랩 배선)"),
+    ("/nodes/{node}", "Sys.Audit",               "노드 상태·네트워크 조회"),
+    ("/storage/{ds}", "Datastore.AllocateSpace", "VM 디스크·cloud-init 드라이브 생성"),
+    ("/storage/{ds}", "Datastore.Audit",         "스토리지 용량 확인"),
+    ("/vms",          "VM.Allocate",             "VM 생성"),
+    ("/vms",          "VM.Clone",                "골든 템플릿 복제"),
+    ("/vms",          "VM.Config.Network",       "NIC·VLAN 태그 설정"),
+    ("/vms",          "VM.Config.Cloudinit",     "관리망 주소·SSH 키 주입"),
+    ("/vms",          "VM.PowerMgmt",            "VM 기동·정지"),
+    ("/vms",          "VM.Audit",                "VM 상태 조회"),
+]
+
+
+def _priv_lookup(perms, path, priv):
+    """/access/permissions 응답에서 이 경로에 이 권한이 있는가.
+
+    응답은 실제로 권한이 있는 경로만 담고 상위 경로에서 전파된 것도 펼쳐서 준다.
+    다만 '/' 에 준 경우 하위 경로가 안 나올 수 있어 조상 경로도 함께 본다.
+    """
+    parts = [p for p in path.split("/") if p]
+    candidates = ["/"] + ["/" + "/".join(parts[:i + 1]) for i in range(len(parts))]
+    for c in candidates:
+        if perms.get(c, {}).get(priv):
+            return True
+    return False
+
+
+def check_privileges(cfg=None):
+    """토큰이 실제로 무엇을 할 수 있는지 Proxmox 에 직접 묻는다.
+
+    지금까지는 `terraform apply` 한복판에서 403 으로 드러났다 — 브리지는 만들다 말고,
+    무엇이 없는지도 알려주지 않는다. 여기서 이름을 대고 미리 막는다.
+    """
+    cfg = cfg or config()
+    c = Check("privs", "API 토큰 권한")
+    if not (cfg["token_id"] and cfg["token_secret"]):
+        return c.set("skip", "토큰이 없어 건너뛴다")
+    try:
+        perms = _api(cfg, "/api2/json/access/permissions") or {}
+    except Exception as e:                             # noqa: BLE001
+        return c.set("warn", f"권한 목록을 읽지 못했다: {type(e).__name__}: {e}",
+                     "토큰에 최소한 Sys.Audit 이 필요하다")
+    missing = [(path.format(node=cfg["node"], ds=cfg["datastore"]), priv, why)
+               for path, priv, why in REQUIRED_PRIVS
+               if not _priv_lookup(perms, path.format(node=cfg["node"], ds=cfg["datastore"]), priv)]
+    if not missing:
+        return c.set("ok", f"필요한 권한 {len(REQUIRED_PRIVS)}개 모두 있다")
+
+    lines = "; ".join(f"{p} 의 {v} ({w})" for p, v, w in missing[:4])
+    more = f" 외 {len(missing) - 4}개" if len(missing) > 4 else ""
+    hint = ("Proxmox 호스트에서 다음을 확인할 것:\n"
+            f"  pveum user token permissions {cfg['token_id'].split('!')[0]} "
+            f"{cfg['token_id'].split('!')[-1]} --path /nodes/{cfg['node']}\n"
+            "  권한이 비어 있으면 대개 토큰의 '권한 분리(privilege separation)' 탓이다 "
+            "— 웹 UI 로 만들면 기본으로 켜지고, 그러면 사용자 역할을 물려받지 않는다:\n"
+            f"  pveum user token modify {cfg['token_id'].split('!')[0]} "
+            f"{cfg['token_id'].split('!')[-1]} --privsep 0\n"
+            "  역할 자체가 부족하면: infra/proxmox-setup.sh 를 호스트에서 실행")
+    return c.set("error", f"모자란 권한: {lines}{more}", hint)
+
+
 def preflight(lab_id, cfg=None):
     """랩을 만들기 전에 남의 자원과 부딪히지 않는지 확인한다.
 
@@ -564,6 +628,10 @@ def preflight(lab_id, cfg=None):
             c_t.set("warn", f"HTTP {e.code} {e.reason}")
     except Exception as e:                       # noqa: BLE001
         c_t.set("warn", f"확인하지 못했다: {type(e).__name__}: {e}")
+
+    # --- 권한 -----------------------------------------------------------
+    #  브리지·VM 을 만들기 전에 "만들 수 있는가"를 먼저 묻는다.
+    cs.append(check_privileges(cfg))
 
     # --- 브리지 이름 · 대역 ---------------------------------------------
     c_mg = Check("mgmt-bridge", f"관리망 브리지 {L.mgmt_bridge_name()}")
