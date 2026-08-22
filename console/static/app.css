@@ -334,7 +334,8 @@ li.ok .mark{color:var(--ok)} li.bad .mark{color:var(--danger)}
 .pve-checks li.warn .m{color:var(--warn)}
 .pve-checks li.error .m{color:var(--danger)}
 .pve-checks .d{color:var(--muted);font-size:12.5px;margin-top:2px;word-break:break-word}
-.pve-checks .h{color:var(--accent);font-size:12.5px;margin-top:5px;line-height:1.65}
+/* 안내에 명령이 여러 줄로 들어간다. 줄바꿈을 살려야 그대로 복사할 수 있다. */
+.pve-checks .h{color:var(--accent);font-size:12.5px;margin-top:5px;line-height:1.65;white-space:pre-wrap;font-variant-ligatures:none}
 
 /* ---------- 연결 설정 화면 ---------- */
 .pveform .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;margin-bottom:14px}

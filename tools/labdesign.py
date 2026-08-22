@@ -503,6 +503,16 @@ def all_bridges(lab_id, stage="m10"):
             for b in TOPO["bridges"] if stage_le(b["stage"], stage)]
 
 
+def ops_trunk_mac():
+    """운영 서버 트렁크 NIC 의 MAC.
+
+    노드는 52:54:00:<노드ID>:00:00 을 쓰고 노드 ID 는 11~51 이다.
+    ff 를 써서 어떤 랩 노드와도 겹치지 않게 한다 — 겹치면 같은 브리지에서
+    MAC 충돌이 나고, 그 증상은 "가끔 안 된다" 라 원인을 찾기 어렵다.
+    """
+    return "52:54:00:ff:00:09"
+
+
 def mgmt_labs(labs=None):
     """랩 1..N 의 관리망 정보 (VLAN · 대역 · 운영 서버 주소)."""
     n = int(labs or IPAM["labs"]["default_count"])

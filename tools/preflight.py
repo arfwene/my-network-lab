@@ -282,8 +282,9 @@ def check_mgmt(lab_id):
                  "dist/ops-server.md 의 netplan 을 그대로 쓰면 이름이 랩 번호와 맞는다")
     else:
         warn("이 서버의 관리망 주소", f"{ops} ({ifname}, VLAN {vlan}) 가 없다",
-             f"운영 서버에 {br} 트렁크 NIC 을 붙이고 VLAN 서브인터페이스를 만들 것 (1회). "
-             "명령은 dist/ops-server.md 에 그대로 들어 있다")
+             "한 명령으로 끝난다 (1회):  make mgmt-net\n"
+             "  이 서버가 어느 VM 인지 찾아 트렁크 NIC 을 붙이고 VLAN 까지 설정한다.\n"
+             "  먼저 볼 것:  make mgmt-net-dry   (무엇을 할지만 보여준다)")
 
     # 이 서버에서 관리망으로 나가는 경로가 있는가. 없으면 Ansible 은 한 대도 못 만진다.
     good, line = run(["ip", "route", "get", gw], timeout=5)
@@ -298,7 +299,7 @@ def check_mgmt(lab_id):
         if via:
             warn("경로", detail,
                  f"직결이 아니다. 중간 장비가 포워딩해 줘야 한다 — "
-                 f"이 서버를 {br} 트렁크에 물리고 VLAN {vlan} 서브인터페이스를 두는 편이 확실하다")
+                 f"`make mgmt-net` 으로 {br} 트렁크에 물리는 편이 확실하다")
         else:
             ok("경로", detail)
 

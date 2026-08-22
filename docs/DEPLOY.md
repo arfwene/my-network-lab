@@ -202,6 +202,37 @@ vmbr1101 … vmbr1402   랩1 링크 브리지 13개 + VM 13대    ← 수시로 
 ### 절차 (권장 — 운영 서버가 Proxmox 위의 VM 일 때)
 
 ```bash
+make mgmt LABS=9        # ① 관리망 브리지 (Proxmox 에)
+make mgmt-net           # ② 이 서버를 거기 연결 (1회)
+```
+
+②가 하는 일 — 손으로 할 일이 없다:
+
+1. 이 서버가 Proxmox 위의 어느 VM 인지 찾는다 (내 NIC 의 MAC ↔ VM 설정 대조)
+2. 관리망 브리지에 트렁크 NIC 을 붙인다 — **API 로, 핫플러그, 재부팅 없음**
+3. 게스트에 나타난 그 인터페이스 위에 랩별 VLAN 서브인터페이스를 만든다
+4. 주소가 실제로 붙었는지 확인한다
+
+```bash
+make mgmt-net-dry       # 무엇을 할지만 보여준다 (아무것도 안 바꾼다)
+make mgmt-net VMID=9100 # 자동 탐지가 실패하면 직접 지정
+```
+
+**root 로 돌리지 않는다.** `netplan` 을 쓰는 부분에서만 `sudo` 를 쓴다 —
+root 로 돌면 `var/` 안의 파일이 root 소유가 되어 콘솔이 자기 DB 를 못 고친다.
+
+되돌리려면:
+
+```bash
+sudo rm /etc/netplan/60-lab-mgmt.yaml && sudo netplan apply
+```
+
+> 물리 서버라 Proxmox VM 이 아니면 이 명령을 쓸 수 없다. 아래 "경유" 방식을 볼 것.
+
+<details><summary>손으로 할 때 (참고)</summary>
+
+
+```bash
 make mgmt LABS=9                      # ① 관리망 브리지 1개 생성 (VLAN 1~9 준비, 1회)
 make opsvm VMID=<운영서버 VMID> LABS=9  # ② 붙일 명령·netplan 생성 → dist/ops-server.md
 ```
@@ -235,6 +266,8 @@ network:
 make doctor          # "관리망 브리지" · "이 서버의 관리망 주소" · "경로" 가 초록인지 본다
                      # vlan_aware 가 꺼져 있으면 오류로 잡는다 — 켜지 않으면 전 랩 관리망이 한 L2 로 합쳐진다
 ```
+
+</details>
 
 ### Proxmox 호스트에도 주소를 줄 것인가 (선택)
 

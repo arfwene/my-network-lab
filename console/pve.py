@@ -437,8 +437,9 @@ def check(cfg=None):
     except urllib.error.HTTPError as e:
         if e.code in (400, 404, 500):
             c_tpl.set("warn", f"VMID {tid} 를 찾을 수 없다",
-                      "랩을 만들기 전에 템플릿을 준비해야 한다 — docs 의 템플릿 생성 절차 참고. "
-                      "(연결 자체에는 문제가 없다)")
+                      "랩을 만들기 전에 Proxmox 호스트에서 골든 템플릿을 만들 것: "
+                      "./infra/template/build-golden-template.sh "
+                      f"--storage {cfg['datastore']}  (연결 자체에는 문제가 없다)")
         else:
             c_tpl.set("warn", f"HTTP {e.code} {e.reason}")
     except Exception as e:                       # noqa: BLE001
@@ -668,7 +669,11 @@ def preflight(lab_id, cfg=None):
     except urllib.error.HTTPError as e:
         if e.code in (400, 404, 500):
             c_t.set("error", f"VMID {tid} 가 없다",
-                    "골든 템플릿을 먼저 만들 것 (dist/access.md 의 템플릿 준비 절차)")
+                    "골든 템플릿을 먼저 만들 것. Proxmox 호스트에서 root 로:\n"
+                    "  apt install -y libguestfs-tools\n"
+                    "  ./infra/template/build-golden-template.sh --storage "
+                    f"{cfg['datastore']}\n"
+                    "  (10분쯤 걸린다 — 이미지 다운로드 + 패키지 설치)")
         else:
             c_t.set("warn", f"HTTP {e.code} {e.reason}")
     except Exception as e:                       # noqa: BLE001
@@ -696,7 +701,7 @@ def preflight(lab_id, cfg=None):
         if not i:
             c_mg.set("error", f"{mgb} 가 없다",
                      "관리망은 전 랩 공용 브리지 하나를 VLAN 으로 나눠 쓴다. "
-                     "`make mgmt LABS=<랩 수>` 를 먼저 실행할 것 (최초 1회). "
+                     "운영 서버에서 `make mgmt LABS=9` 를 먼저 실행할 것 (최초 1회). "
                      "없으면 VM 이 만들어져도 기동하지 못한다")
         elif not (OWNER_TAG in (i.get("comments") or "")) and (
                 i.get("bridge_ports") or i.get("cidr")):
