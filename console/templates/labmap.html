@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}랩 지도 · {{ site_name }}{% endblock %}
+{% block body %}
+<header class="top">
+  <div class="brand">{{ site_name }}</div>
+  <a class="ghost" href="/">← 랩으로</a>
+  <div class="spacer"></div>
+  {% include "_health.html" %}
+  <div class="who">{{ user.name | default(user.username) }}<span class="role">{{ user.role_label }}</span></div>
+  <a class="ghost" href="/logout">나가기</a>
+</header>
+
+<main class="layout">
+  <aside class="modules">
+    <h3>랩 지도</h3>
+    <p class="legend">
+      노드·링크·주소가 전부 여기 있다. 실습 중에 계속 열어 두고 본다.
+    </p>
+    <p class="legend"><a href="/">← 모듈로 돌아가기</a></p>
+    <p class="legend"><a href="/appendix">부록 →</a></p>
+  </aside>
+
+  <section class="content">
+    <article class="doc">{{ doc_html }}</article>
+  </section>
+</main>
+{% endblock %}

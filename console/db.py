@@ -123,6 +123,18 @@ CREATE TABLE IF NOT EXISTS exams (
 CREATE INDEX IF NOT EXISTS exams_lab_idx  ON exams(lab_id, id DESC);
 CREATE INDEX IF NOT EXISTS exams_user_idx ON exams(username, module_id, id DESC);
 
+-- 모듈 안에서 어디까지 열어 봤는가. 교재 -> 과제 -> 퀴즈 순서를 지키게 한다.
+--   순서를 강제하는 이유: 교재만 읽고 과제가 있는 줄 모른 채 다음 모듈로
+--   넘어가는 일이 실제로 일어난다. 과제는 '읽었다'로 끝나지만, 읽지 않고
+--   퀴즈로 건너뛰지는 못하게 한다.
+CREATE TABLE IF NOT EXISTS tab_seen (
+    username  TEXT NOT NULL COLLATE NOCASE,
+    module_id TEXT NOT NULL,
+    kind      TEXT NOT NULL,
+    seen_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (username, module_id, kind)
+);
+
 -- 모듈 통과 현황. 다음 모듈로 넘어갈 수 있는지 판단에 쓴다.
 CREATE TABLE IF NOT EXISTS progress (
     username     TEXT    NOT NULL COLLATE NOCASE,
@@ -213,6 +225,40 @@ def _upgrade_v5_to_v6(con, version):
         if col not in have:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
     print("[db] 스키마 v5 -> v6 (사용자별 SSH 공개키)", file=sys.stderr)
+
+
+# ============================================================ 탭 열람 순서
+TAB_ORDER = ["README", "tasks", "quiz"]
+
+
+def mark_tab_seen(username, module_id, kind):
+    if kind not in TAB_ORDER:
+        return
+    with connect() as con:
+        con.execute("INSERT OR IGNORE INTO tab_seen (username, module_id, kind) "
+                    "VALUES (?,?,?)", (username, module_id, kind))
+
+
+def tabs_seen(username, module_id):
+    with connect() as con:
+        rows = con.execute("SELECT kind FROM tab_seen WHERE username=? COLLATE NOCASE "
+                           "AND module_id=?", (username, module_id)).fetchall()
+    return {r["kind"] for r in rows}
+
+
+def tab_allowed(username, module_id, kind, is_admin=False):
+    """이 탭을 열 수 있는가. 앞 탭을 봐야 다음 탭이 열린다.
+
+    관리자는 제한하지 않는다 — 교재를 만들고 검토하는 사람이다.
+    'answers' 는 별도 권한으로 이미 막혀 있으므로 여기서는 다루지 않는다.
+    """
+    if is_admin or kind not in TAB_ORDER:
+        return True
+    idx = TAB_ORDER.index(kind)
+    if idx == 0:
+        return True
+    seen = tabs_seen(username, module_id)
+    return all(k in seen for k in TAB_ORDER[:idx])
 
 
 # ============================================================ 랩 콘솔 비밀번호

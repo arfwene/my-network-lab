@@ -93,6 +93,8 @@ a.mod{text-decoration:none;color:var(--ink)}
   position:sticky;top:0;z-index:5;background:var(--panel);
   padding-top:4px;margin-top:0}
 /* 미완료 표시. 통과 표시(✔)만 있으면 '아직 안 했다' 가 눈에 띄지 않는다. */
+.tab:disabled{opacity:.45;cursor:not-allowed}
+.tab .lockmark{font-size:10px;vertical-align:middle}
 .tab .todo{color:var(--warn);font-size:10px;vertical-align:middle;margin-left:2px}
 .tab{background:none;border:0;padding:9px 14px;cursor:pointer;color:var(--muted);
   font-size:13px;border-bottom:2px solid transparent}

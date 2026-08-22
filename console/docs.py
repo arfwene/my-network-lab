@@ -62,6 +62,19 @@ def render_appendix(doc_id, lab_id):
     return env.get_template(src.name).render(**L.doc_context(lab_id, "m10"), meta=d)
 
 
+def lab_map():
+    """랩 지도 — 교육생이 상시 참조하는 문서.
+
+    `make gen`(tools/render-labmap.py)이 만든 dist/lab-map.md 를 그대로 읽는다.
+    교재가 "지도를 보라" 고 하는데 볼 곳이 없으면 안 된다 —
+    교육생은 파일 시스템에 접근할 수 없다.
+    """
+    f = L.ROOT / "dist/lab-map.md"
+    if not f.exists():
+        return None
+    return f.read_text(encoding="utf-8")
+
+
 def render_markdown(module, lab_id, kind="README"):
     d = SRC / module["dir"]
     src = d / f"{kind}.md.j2"

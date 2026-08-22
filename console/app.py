@@ -365,11 +365,14 @@ async def index(request: Request, lab: int | None = None, m: str | None = None):
         opened = [x for x in mods if ctx["unlocked"].get(x["id"])]
         module = opened[-1] if opened else (mods[0] if mods else None)
     ctx["module"] = module
+    if module:
+        db.mark_tab_seen(user["username"], module["id"], "README")
     ctx["module_html"] = _module_html(module, lab_id, user) if module else ""
     ctx["topology_svg"] = topology_svg.render(module["stage"]) if module else ""
     ctx["kind"] = "README"
     if module:
         ctx.update(_assess_ctx(user, lab_id, module))
+        ctx.update(_tab_ctx(user, module))
     return tpl.TemplateResponse(request, "index.html", ctx)
 
 
@@ -393,6 +396,15 @@ async def module_view(request: Request, module_id: str, lab: int | None = None,
     if kind == "answers" and not auth.can_see_answers(user):
         return HTMLResponse('<div class="notice">해설은 관리자만 볼 수 있다.</div>',
                             status_code=403)
+    is_admin = auth.can(user, "lab.all")
+    # 교재 → 과제 → 퀴즈. 화면에서 막는 것만으로는 부족하다(URL 로 건너뛸 수 있다).
+    if not db.tab_allowed(user["username"], module_id, kind, is_admin):
+        need = "교재" if kind == "tasks" else "과제"
+        return HTMLResponse(
+            f'<div class="notice"><b>{need}</b> 를 먼저 볼 것. '
+            f'왼쪽에서 순서대로 진행한다 — 교재 → 과제 → 퀴즈·검증.</div>',
+            status_code=403)
+    db.mark_tab_seen(user["username"], module_id, kind)
     ctx = base_ctx(request, user, lab_id)
     if not ctx["unlocked"].get(module_id, False):
         return HTMLResponse(
@@ -402,7 +414,15 @@ async def module_view(request: Request, module_id: str, lab: int | None = None,
     ctx["kind"] = kind
     ctx["module_html"] = "" if kind == "quiz" else _module_html(module, lab_id, user, kind)
     ctx.update(_assess_ctx(user, lab_id, module))
+    ctx.update(_tab_ctx(user, module))
     return tpl.TemplateResponse(request, "_module.html", ctx)
+
+
+def _tab_ctx(user, module):
+    """탭 잠금 상태. 화면이 왜 잠겼는지 말해 줄 수 있어야 한다."""
+    is_admin = auth.can(user, "lab.all")
+    return {"tab_allowed": {k: db.tab_allowed(user["username"], module["id"], k, is_admin)
+                            for k in db.TAB_ORDER}}
 
 
 def _assess_ctx(user, lab_id, module):
@@ -486,6 +506,7 @@ async def result(request: Request, module_id: str):
     ctx = base_ctx(request, user, lab_id)
     ctx["module"] = module
     ctx.update(_assess_ctx(user, lab_id, module))
+    ctx.update(_tab_ctx(user, module))
     ctx["checks_result"] = assess.read_checks_result(lab_id, module_id)
     return tpl.TemplateResponse(request, "_result.html", ctx)
 
@@ -600,6 +621,25 @@ async def job_stream(request: Request, job_id: str):
 
 
 # ------------------------------------------------------------------ 부록
+@app.get("/labmap", response_class=HTMLResponse)
+async def labmap(request: Request):
+    """랩 지도. 교재·과제가 상시 참조하라고 하는 문서다."""
+    user, redir = require(request)
+    if redir:
+        return redir
+    md = docs.lab_map()
+    if md is None:
+        return HTMLResponse(
+            '<div class="notice">랩 지도가 아직 생성되지 않았다. '
+            '관리자가 <code>make gen</code> 을 실행해야 한다.</div>', status_code=404)
+    return tpl.TemplateResponse(request, "labmap.html", {
+        "request": request, "user": user, "site_name": L.SITE["site"]["name"],
+        "health": pve.last(), "pve": pve.public(),
+        "lab_id": pick_lab(user),
+        "doc_html": Markup(docs.to_html(md)),
+    })
+
+
 @app.get("/appendix", response_class=HTMLResponse)
 async def appendix(request: Request, doc: str = "", lab: int | None = None):
     """치트시트 · 플로우차트 · 용어집 · 벤더 CLI 매핑.

@@ -10,12 +10,22 @@
   </div>
 </div>
 
+{# 실제 차단은 서버가 한다(/m/{id} 가 403). 여기 표시는 안내일 뿐이므로,
+   값이 없어도 화면이 죽지 않게 기본값을 둔다 — 잠금이 안 보이는 것이
+   교육생 화면이 500 으로 죽는 것보다 낫다. #}
+{% set ta = tab_allowed | default({'README': true, 'tasks': true, 'quiz': true}, true) %}
 <nav class="tabs" data-module="{{ module.id }}" data-stage="{{ module.stage }}">
   <button class="tab {{ 'on' if kind|default('README') == 'README' }}" data-kind="README">교재</button>
-  <button class="tab {{ 'on' if kind|default('') == 'tasks' }}" data-kind="tasks">과제</button>
+  <button class="tab {{ 'on' if kind|default('') == 'tasks' }}" data-kind="tasks"
+          {{ 'disabled' if not ta.tasks }}
+          title="{{ '교재를 먼저 볼 것' if not ta.tasks else '실습 과제와 확인 문제' }}">
+    과제{% if not ta.tasks %} <span class="lockmark">🔒</span>{% endif %}</button>
   {% if quiz or has_checks or written %}
-  <button class="tab {{ 'on' if kind|default('') == 'quiz' }}" data-kind="quiz">
+  <button class="tab {{ 'on' if kind|default('') == 'quiz' }}" data-kind="quiz"
+          {{ 'disabled' if not ta.quiz }}
+          title="{{ '과제를 먼저 볼 것' if not ta.quiz else '퀴즈 · 랩 상태 검사' }}">
     퀴즈 · 검증{% if written %} · 서술{% endif %}
+    {% if not ta.quiz %}<span class="lockmark">🔒</span>{% endif %}
     {% if mstate.complete %}<span class="tick">✔</span>
     {% else %}<span class="todo" title="아직 통과하지 못했다">●</span>{% endif %}
   </button>

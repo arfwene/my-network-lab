@@ -14,6 +14,7 @@
   {% include "_health.html" %}
   <div class="who">{{ user.name | default(user.username) }}
     <span class="role">{{ user.role_label }}</span></div>
+  <a class="ghost" href="/labmap">랩 지도</a>
   <a class="ghost" href="/appendix">부록</a>
   <a class="ghost" href="/history">이력</a>
   {% if user.role == 'admin' %}<a class="ghost" href="/admin">계정 관리</a>
@@ -47,6 +48,7 @@
       <span class="dot pending"></span>미적용 &nbsp; 🔒 잠김
     </p>
     <p class="legend"><a href="/history">내 제출 이력 →</a></p>
+    <p class="legend"><a href="/labmap">랩 지도 — 노드 · 링크 · 주소 →</a></p>
     <p class="legend"><a href="/appendix">부록 — 치트시트 · 플로우차트 · 용어집 →</a></p>
   </aside>
 
