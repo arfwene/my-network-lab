@@ -15,7 +15,7 @@ APB := $(shell test -x $(VENV)/bin/ansible-playbook && echo $(CURDIR)/$(VENV)/bi
 
 .PHONY: help doctor check gen docs modules appendix opsvm mgmt ipam deploy config verify \
         reset break fix scenarios console console-setup service pack users clean jumpaccess \
-        mgmt-net mgmt-net-dry
+        mgmt-net mgmt-net-dry consoleaccess
 
 help:
 	@echo "make doctor         배포 사전 점검 (도구 · 설정 · Proxmox · 관리망)"
@@ -33,6 +33,7 @@ help:
 	@echo "make mgmt-net                운영 서버를 관리망에 연결 (1회. NIC 부착 + VLAN 설정)"
 	@echo "make opsvm VMID=9100         위를 손으로 할 때의 절차 문서 (dist/ops-server.md)"
 	@echo "make jumpaccess              교육생 점프 계정 생성 절차 (dist/jump-access.*)"
+	@echo "make consoleaccess           교육생 Proxmox 콘솔 계정 절차 (dist/console-access.sh)"
 	@echo "make scenarios               장애 주입 시나리오 목록"
 	@echo "make break LAB=1 SCENARIO=m01-01   장애 주입"
 	@echo "make fix   LAB=1 SCENARIO=m01-01   복구"
@@ -84,6 +85,11 @@ mgmt-net-dry:
 # 교육생 점프 계정 — 셸 없는 ProxyJump 전용. 콘솔에 등록된 키에서 만든다.
 jumpaccess:
 	@$(PY) tools/gen-jumpaccess.py $(if $(LAB),--lab $(LAB),)
+
+# 교육생 Proxmox 콘솔 계정 — 자기 랩 VM 화면만 열 수 있다.
+# SSH 가 죽었을 때의 최후 경로(M0 실습 5)를 성립시킨다.
+consoleaccess:
+	@$(PY) tools/gen-console-access.py $(if $(LAB),--lab $(LAB),)
 
 # 관리망 브리지 — **최초 1회**. 랩을 지워도 이 브리지는 남는다 (운영 서버 NIC 이 꽂혀 있다).
 mgmt:

@@ -229,7 +229,12 @@ def _sshkey_ctx(request, user, errors=(), saved=""):
             "busy": runner.busy(lab_id) if lab_id else True,
             "jump_user": A["jump_host"]["user"], "jump_ip": A["jump_host"]["office_ip"],
             "lab_user": A["lab_user"],
-            "example_node": node, "example_ip": L.mgmt_ip(lab_id or 1, node)}
+            "example_node": node, "example_ip": L.mgmt_ip(lab_id or 1, node),
+            # 콘솔(화면) 접속용. SSH 는 키로만 받지만 콘솔은 키를 못 쓴다.
+            # 만들어져 있을 때만 보여준다 — 아직 배포 전이면 굳이 만들지 않는다.
+            "console_pw": db.lab_console_password(create=False),
+            "pve_url": L.IPAM["access"]["proxmox"]["api_endpoint"],
+            "vm_name": L.vm_name(lab_id or 1, node)}
 
 
 @app.get("/sshkey", response_class=HTMLResponse)

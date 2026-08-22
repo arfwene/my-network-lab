@@ -215,12 +215,15 @@ def sync():
 
 
 def env():
-    """작업 실행 시 넘길 환경변수. 토큰은 여기로만 흐른다."""
+    """작업 실행 시 넘길 환경변수. 비밀은 전부 여기로만 흐른다 (파일로 안 나간다)."""
     c = config()
     e = {"PROXMOX_VE_ENDPOINT": endpoint(c),
          "PROXMOX_VE_INSECURE": "true" if c["insecure_tls"] else "false"}
     if c["token_id"] and c["token_secret"]:
         e["PROXMOX_VE_API_TOKEN"] = f"{c['token_id']}={c['token_secret']}"
+    # 랩 노드 콘솔 비밀번호. cloud-init 이 VM 을 만들 때 넣는다.
+    # 없으면 만들어 둔다 — 없는 채로 배포되면 콘솔로 들어갈 방법이 사라진다.
+    e["TF_VAR_lab_password"] = db.lab_console_password()
     return e
 
 

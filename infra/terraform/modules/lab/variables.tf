@@ -52,6 +52,13 @@ variable "nodes" {
 }
 
 # ---- 환경 의존 값 (envs/*/terraform.tfvars 에서 지정) ----
+# 콘솔 접속용 비밀번호. 파일에 두지 않는다 — 실행 시 TF_VAR_lab_password 로 들어온다.
+variable "lab_password" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
 variable "pve_node"     { type = string }
 variable "datastore_id" {
   type    = string

@@ -43,6 +43,16 @@ variable "pve_node"      { type = string }
 variable "datastore_id"  { type = string }
 variable "ssh_public_keys" { type = list(string) }
 
+# 랩 노드 콘솔 접속용 비밀번호.
+#   tfvars 에 넣지 않는다 (생성물은 재생성·복사된다).
+#   실행 시 환경변수로만 들어온다:  TF_VAR_lab_password
+#   콘솔과 make 타깃이 var/console.db 에서 읽어 주입한다.
+variable "lab_password" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
 # --- gen-tfvars.py 가 채우는 값 ---
 variable "lab_id"        { type = number }
 variable "lab_stage"     { type = string }
@@ -76,6 +86,7 @@ module "lab" {
   datastore_id    = var.datastore_id
   ssh_public_keys = var.ssh_public_keys
   lab_user        = var.lab_user
+  lab_password    = var.lab_password
 }
 
 output "nodes"      { value = module.lab.nodes }

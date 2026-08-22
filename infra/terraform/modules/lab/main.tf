@@ -64,6 +64,9 @@ resource "proxmox_virtual_environment_vm" "node" {
     user_account {
       username = var.lab_user
       keys     = var.ssh_public_keys
+      # 콘솔(화면) 접속용. SSH 는 키로만 받는다 — sshd 설정이 비밀번호를 막는다.
+      # 비어 있으면 비밀번호 없이 만들어져 콘솔로 들어갈 수 없다.
+      password = var.lab_password
     }
   }
 

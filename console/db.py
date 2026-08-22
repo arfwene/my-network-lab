@@ -215,6 +215,35 @@ def _upgrade_v5_to_v6(con, version):
     print("[db] 스키마 v5 -> v6 (사용자별 SSH 공개키)", file=sys.stderr)
 
 
+# ============================================================ 랩 콘솔 비밀번호
+#  랩 노드의 `lab` 계정 비밀번호. SSH 는 키로만 들어가지만, **콘솔은 키를 쓸 수 없다.**
+#  화면에 붙는 경로라 비밀번호 말고는 방법이 없다 (M0 실습 5 — 자기가 관리 링크를
+#  내렸을 때 되돌리는 유일한 길).
+#
+#  전 랩 공용이다. 랩을 나누는 것은 Proxmox 쪽 ACL 이 한다 —
+#  교육생은 자기 랩 VM 의 콘솔만 열 수 있다(tools/gen-console-access.py).
+#
+#  파일로 내보내지 않는다. tfvars 는 생성물이라 재생성·복사된다.
+#  Terraform 에는 실행 시 TF_VAR_lab_password 로만 넘긴다.
+def lab_console_password(create=True):
+    """없으면 만들어서 돌려준다. 있으면 그대로."""
+    v = get_setting("lab.console_password")
+    if v:
+        return v
+    if not create:
+        return ""
+    import passwords                                   # noqa: PLC0415
+    v = passwords.generate(14)
+    set_setting("lab.console_password", v)
+    print("[db] 랩 콘솔 비밀번호를 새로 만들었다 (var/console.db 에만 있다)",
+          file=sys.stderr)
+    return v
+
+
+def set_lab_console_password(value):
+    set_setting("lab.console_password", value or "")
+
+
 # ============================================================ SSH 공개키
 def set_ssh_key(username, key):
     """공개키 저장(빈 문자열이면 제거). 검증은 부르는 쪽에서 한다."""

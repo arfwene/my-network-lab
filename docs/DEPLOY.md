@@ -503,7 +503,29 @@ sudo sshd -t && sudo systemctl reload ssh          # -t 로 먼저 검사할 것
 python3 tools/gen-ssh-config.py --lab 1 --user user01 > ssh-config-lab1
 ```
 
-교육생은 그 파일을 `~/.ssh/config` 에 붙이면 `ssh pc1` 로 들어간다.
+교육생은 콘솔 **[접속 키]** 에서 공개키를 등록하고 **[내 SSH 설정 내려받기]** 로
+`~/.ssh/config` 조각을 직접 받는다. 관리자가 파일을 나눠 줄 필요가 없다.
+
+### 콘솔 접속 (M0 실습 5 가 요구한다)
+
+SSH 는 키로 들어가지만, 교육생이 **자기 관리 링크를 내리면 SSH 자체가 죽는다.**
+그때 되돌릴 유일한 길이 화면에 직접 붙는 콘솔이다. 콘솔은 키를 못 쓰므로 둘이 필요하다.
+
+```bash
+make consoleaccess                      # → dist/console-access.sh
+scp dist/console-access.sh root@<proxmox>:/tmp/
+# Proxmox 호스트에서
+/tmp/console-access.sh                  # 계정 생성 + 비밀번호 1회 출력
+```
+
+| 무엇 | 어디에 |
+|---|---|
+| Proxmox 로그인 계정 | 위 스크립트가 만든다. **자기 랩 VM 13대의 콘솔만** 열린다 (`VM.Console`+`VM.Audit`) |
+| 노드 `lab` 계정 비밀번호 | `var/console.db` 에만. 교육생 콘솔 **[접속 키] → 5. 콘솔** 에 표시된다 |
+
+노드 비밀번호는 Terraform 이 VM 을 만들 때 cloud-init 으로 넣는다 —
+`TF_VAR_lab_password` 로 **실행 시에만** 전달되고 tfvars 에는 들어가지 않는다.
+SSH 는 이 비밀번호로 들어갈 수 없다(노드 sshd 가 비밀번호 로그인을 받지 않는다).
 
 | 제한 | 무엇 |
 |---|---|
