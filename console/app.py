@@ -196,11 +196,16 @@ async def password_change(request: Request, current: str = Form(""),
         errors = auth.change_password(u["username"], new1, current,
                                       require_current=not u["must_change_password"])
     if errors:
+        # 거절되면 같은 화면이 다시 뜬다. 사용자가 오류 문구를 못 보고
+        # "안 넘어간다" 고 느끼는 일이 있어, 서버 로그에도 이유를 남긴다.
+        print(f"[auth] {u['username']} 비밀번호 변경 거절: {' / '.join(errors)}",
+              file=sys.stderr)
         return tpl.TemplateResponse(request, "password.html",
                                     {"user": u, "errors": errors,
                                      "forced": u["must_change_password"],
                                      "policy": passwords.policy_text(),
                                      "site_name": L.SITE["site"]["name"]}, status_code=400)
+    print(f"[auth] {u['username']} 비밀번호 변경 완료", file=sys.stderr)
     return RedirectResponse("/", status_code=303)
 
 
