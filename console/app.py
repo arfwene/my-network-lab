@@ -214,6 +214,21 @@ async def password_change(request: Request, current: str = Form(""),
 # ============================================================ SSH 접속 키
 #  교육생이 직접 등록한다. site.yml 에 두면 전 랩 전 노드에 박히고, 바꾸려면
 #  VM 을 다시 만들어야 한다. 여기 두면 **배정된 랩에만** 들어가고 즉시 반영된다.
+def _jump_account_exists(username):
+    """운영 서버에 이 교육생의 점프 계정이 있는가.
+
+    tools/gen-jumpaccess.py 가 만드는 계정이다. 관리자가 아직 안 돌렸으면 없다.
+    그 상태로 `ssh pc1` 을 하면 sshd 가 계정 열거를 막으려고 비밀번호를 묻는다 —
+    있지도 않은 비밀번호를. 무엇이 빠졌는지 여기서 먼저 말해 준다.
+    """
+    try:
+        import pwd                                     # noqa: PLC0415
+        pwd.getpwnam(username)
+        return True
+    except (KeyError, ImportError):
+        return False
+
+
 def _sshkey_ctx(request, user, errors=(), saved=""):
     lab_id = pick_lab(user)
     raw = (db.get_user(user["username"]) or {}).get("ssh_key") or ""
@@ -233,6 +248,9 @@ def _sshkey_ctx(request, user, errors=(), saved=""):
             # 콘솔(화면) 접속용. SSH 는 키로만 받지만 콘솔은 키를 못 쓴다.
             # 만들어져 있을 때만 보여준다 — 아직 배포 전이면 굳이 만들지 않는다.
             "console_pw": db.lab_console_password(create=False),
+            # 점프 계정이 없으면 ssh 가 조용히 비밀번호를 묻는다(= 영원히 못 들어간다).
+            # 콘솔은 운영 서버에서 돌고 있으니 여기서 바로 확인해 알려준다.
+            "jump_ready": _jump_account_exists(user["username"]),
             "pve_url": L.IPAM["access"]["proxmox"]["api_endpoint"],
             "vm_name": L.vm_name(lab_id or 1, node)}
 

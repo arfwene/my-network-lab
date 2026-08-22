@@ -37,11 +37,18 @@ def main(lab_id, user=None):
         f"Host lab{lab_id}-jump",
         f"    HostName {jump}",
         f"    User {jump_user}",
+        # 이 랩은 어디서도 비밀번호로 로그인하지 않는다. 끄지 않으면 키가 실패했을 때
+        # 조용히 비밀번호를 묻고, 교육생은 "무슨 비밀번호?" 에서 막힌다.
+        # 꺼 두면 이유가 그대로 나온다: Permission denied (publickey).
+        "    PasswordAuthentication no",
+        "    PreferredAuthentications publickey",
         "",
         f"# 랩 노드 공통 설정 — 점프 호스트 경유",
         f"Host " + " ".join(n["name"] for n in L.TOPO["nodes"]),
         f"    User {lab_user}",
         f"    ProxyJump lab{lab_id}-jump",
+        "    PasswordAuthentication no",
+        "    PreferredAuthentications publickey",
         f"    # 랩은 자주 재생성되므로 호스트 키 검증을 끈다 (교육 환경 전용)",
         f"    StrictHostKeyChecking no",
         f"    UserKnownHostsFile /dev/null",

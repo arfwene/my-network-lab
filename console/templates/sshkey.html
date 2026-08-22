@@ -97,6 +97,14 @@ cat ~/.ssh/id_ed25519.pub</code></pre>
       <p>노드에 들어간 뒤 <code>cat /etc/lab-authorized</code> 로 누가 접속할 수 있는지 볼 수 있다.</p>
 
       <h3>4. 접속 설정 받기</h3>
+      {% if not jump_ready %}
+      <p class="note"><b>아직 준비되지 않았다.</b>
+         운영 서버에 <code>{{ user.username }}</code> 점프 계정이 없다.
+         이 상태로 <code>ssh {{ example_node }}</code> 를 하면 <b>비밀번호를 묻는데,
+         그 비밀번호는 존재하지 않는다.</b><br>
+         교육 담당자에게 <b>점프 계정 발급</b>을 요청할 것
+         (관리자: <code>make jumpaccess</code>).</p>
+      {% endif %}
       <p>랩 노드는 사무실에서 직접 보이지 않는다. 운영 서버를 거쳐야 한다.
          매번 이렇게 칠 수는 없다:</p>
       <pre><code>ssh -J {{ jump_user }}@{{ jump_ip }} {{ lab_user }}@{{ example_ip }}   # {{ example_node }}</code></pre>
