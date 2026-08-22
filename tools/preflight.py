@@ -154,6 +154,19 @@ def check_config(lab_id_for_keys=1):
         warn("site.local.yml", "없다 — site.yml 의 공개용 기본값(문서 전용 대역)으로 돈다",
              "cp config/site.local.yml.example config/site.local.yml 후 사내 값을 채울 것")
 
+    # 접속 값은 세 곳에서 올 수 있고 뒤가 이긴다. 어디를 고쳐야 하는지 헷갈리기 쉽다 —
+    # 콘솔에서 한 번 저장하면 runtime.yml 이 생기고, 그 뒤로는 파일을 고쳐도 덮인다.
+    pxm = L.IPAM["access"]["proxmox"]
+    if L.RUNTIME.exists():
+        warn("접속 값 출처", f"var/runtime.yml 이 이긴다 · 노드 {pxm['node_name']} · "
+                             f"{pxm['api_endpoint']}",
+             "콘솔 [연결 설정] 이 저장한 값이다. 여기를 고쳐야 반영된다 — "
+             "config/site.local.yml 을 고쳐도 이 파일이 덮는다. "
+             "파일 쪽으로 되돌리려면 var/runtime.yml 을 지울 것")
+    else:
+        ok("접속 값 출처", f"config/site.local.yml · 노드 {pxm['node_name']} · "
+                           f"{pxm['api_endpoint']}")
+
     good, _ = run([sys.executable, str(ROOT / "tools/validate-site.py")], timeout=60)
     if good:
         ok("site 검사", "오류 없음 (`make check` 로 전체 결과를 볼 수 있다)")

@@ -376,8 +376,20 @@ def check(cfg=None):
         names = [n.get("node") for n in nodes]
         me = next((n for n in nodes if n.get("node") == cfg["node"]), None)
         if not me:
-            c_node.set("error", f"'{cfg['node']}' 노드가 없다. 이 Proxmox 의 노드: {', '.join(names) or '없음'}",
-                       "연결 설정의 노드 이름을 위 목록 중 하나로 고칠 것")
+            only = names[0] if len(names) == 1 else None
+            where = (f"var/runtime.yml (콘솔 [연결 설정] 이 저장한 값 — 이게 "
+                     f"site.local.yml 을 덮는다)" if L.RUNTIME.exists()
+                     else "config/site.local.yml 의 access.proxmox.node_name")
+            fix = (f"'{only}' 로 고칠 것. " if only else "위 목록 중 하나로 고칠 것. ")
+            c_node.set("error",
+                       f"'{cfg['node']}' 노드가 없다. 이 Proxmox 의 노드: "
+                       f"{', '.join(names) or '없음'}",
+                       fix + f"지금 이 값을 정하는 곳: {where}. "
+                       + ("콘솔 [관리자 → 연결 설정] 에서 바꾸는 것이 확실하다 "
+                          "(파일을 고쳐도 runtime.yml 이 덮는다)."
+                          if L.RUNTIME.exists() else
+                          "고친 뒤 `make gen` 으로 생성물을 다시 만들 것.")
+                       + " 노드 이름은 Proxmox 호스트에서 `hostname -s` 로 확인한다")
         elif me.get("status") != "online":
             c_node.set("error", f"'{cfg['node']}' 상태: {me.get('status')}")
         else:

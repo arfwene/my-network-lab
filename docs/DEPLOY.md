@@ -134,6 +134,36 @@ make check      # 대역 충돌 · 용량 · 공개 안전성
 make ipam       # 계산된 주소 계획 — 사내 대역과 겹치는 게 없는지 눈으로 확인
 ```
 
+### 노드 이름을 틀리면
+
+`node_name` 은 Proxmox 노드의 호스트명이다. 기본값 `pve` 를 그대로 두는 경우가 많은데,
+설치할 때 다른 이름을 줬다면 안 맞는다. 증상은 401/403 이 아니라 **"노드가 없다"** 다.
+
+```bash
+hostname -s                        # Proxmox 호스트에서 — 이 값이 정답이다
+./infra/proxmox-setup.sh --show    # 노드 이름도 같이 보여 준다
+```
+
+`make doctor` 가 이 Proxmox 의 노드 목록을 대고, 노드가 하나뿐이면 그 이름을 짚어 준다.
+
+### 접속 값이 세 곳에서 온다 — 뒤가 이긴다
+
+```
+config/site.yml  →  config/site.local.yml  →  var/runtime.yml
+                                                (콘솔 [연결 설정] 이 저장)
+```
+
+**콘솔에서 한 번이라도 저장했으면 `var/runtime.yml` 이 생기고, 그 뒤로는
+`site.local.yml` 을 고쳐도 덮인다.** 노드 이름·주소가 안 바뀐다면 대개 이것이다.
+
+| 상황 | 고칠 곳 |
+|---|---|
+| `var/runtime.yml` 이 없다 | `config/site.local.yml` → `make gen` |
+| `var/runtime.yml` 이 있다 | 콘솔 **[관리자 → 연결 설정]** |
+| 파일 쪽으로 되돌리고 싶다 | `rm var/runtime.yml` |
+
+`make doctor` 의 **"접속 값 출처"** 항목이 지금 어느 쪽이 이기고 있는지 알려준다.
+
 ### Proxmox 접속 정보는 웹에서 넣어도 된다
 
 `site.local.yml` 대신 콘솔 **[관리자 → 연결 설정]** 에서 주소·노드·데이터스토어를 넣으면
