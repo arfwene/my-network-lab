@@ -406,6 +406,26 @@ scp /tmp/lab.img root@<proxmox>:/var/lib/vz/template/lab/
 호스트에 저장소도 도구도 추가하지 않는다. 스크립트가 어느 모드에 무엇이 필요한지
 확인하고, 없으면 시작 전에 멈춘다.
 
+#### `supermin exited with error status 1`
+
+`virt-customize` 는 커널로 작은 VM(어플라이언스)을 띄워 이미지를 편집한다.
+그래서 두 가지가 필요하고 **둘 다 이 한 줄짜리 오류로만 나타난다.**
+
+| 원인 | 확인 | 해결 |
+|---|---|---|
+| 커널을 못 읽는다 | `ls -l /boot/vmlinuz-*` 가 `-rw-------` | `sudo chmod 0644 /boot/vmlinuz-*` |
+| 하드웨어 가상화 없음 | `ls /dev/kvm` 이 없다 (VM 안이면 흔하다) | `export LIBGUESTFS_BACKEND_SETTINGS=force_tcg` |
+
+데비안·우분투는 `/boot/vmlinuz-*` 를 root 전용으로 깐다. 일반 계정으로 돌리면
+`supermin` 이 죽는다. **커널을 새로 설치하면 다시 0600 이 되니 그때 한 번 더 해야 한다.**
+
+스크립트가 둘 다 **다운로드 전에** 확인한다. 커널 권한은 물어보고 고쳐 주고,
+`/dev/kvm` 이 없으면 TCG 로 자동 전환한다(느리다 — 10~25분).
+
+```bash
+libguestfs-test-tool 2>&1 | tail -30    # 그래도 안 되면 이걸로 진단
+```
+
 #### 그래도 호스트에 깔겠다면
 
 `Unable to locate package libguestfs-tools` 가 나오면 **패키지 목록이 없는 것**이다.

@@ -145,6 +145,45 @@ else
   echo "==> 작업 디렉토리 준비: $WORK"
   mkdir -p "$WORK"
 
+  # --- libguestfs 가 돌 수 있는 상태인가 -------------------------------------
+  #  virt-customize 는 커널로 작은 VM(어플라이언스)을 띄워 이미지를 편집한다.
+  #  그래서 두 가지가 필요하고, 둘 다 조용히 실패한다:
+  #    · 커널 이미지 읽기 권한 — 데비안/우분투는 /boot/vmlinuz-* 를 0600 으로 깐다.
+  #      일반 계정으로 돌리면 supermin 이 "exited with error status 1" 만 남기고 죽는다.
+  #    · 하드웨어 가상화 — 없으면 TCG(소프트웨어 에뮬레이션)로 떨어뜨려야 한다.
+  UNREADABLE=0
+  for k in /boot/vmlinuz-*; do
+    [[ -e "$k" ]] || continue
+    [[ -r "$k" ]] || UNREADABLE=$((UNREADABLE + 1))
+  done
+  if [[ "$UNREADABLE" -gt 0 ]]; then
+    echo
+    echo "==> libguestfs 가 커널 이미지를 읽지 못한다 ($UNREADABLE 개)"
+    echo "    데비안/우분투는 /boot/vmlinuz-* 를 root 전용(0600)으로 둔다."
+    echo "    이 상태로는 supermin 이 'error status 1' 만 남기고 죽는다."
+    echo "    고치는 방법 (libguestfs 문서가 안내하는 표준 해법):"
+    echo "        sudo chmod 0644 /boot/vmlinuz-*"
+    if [[ -t 0 ]]; then
+      read -r -p "    지금 실행할까? [y/N] " a
+      if [[ "$a" == "y" || "$a" == "Y" ]]; then
+        sudo chmod 0644 /boot/vmlinuz-* || { echo "중단: chmod 실패" >&2; exit 1; }
+        echo "    적용했다. (커널을 새로 설치하면 다시 0600 이 되니 그때 한 번 더 해야 한다)"
+      else
+        echo "중단. 위 명령을 실행한 뒤 다시 시작할 것." >&2; exit 1
+      fi
+    else
+      echo "중단: 대화형이 아니라 물어볼 수 없다. 위 명령을 실행할 것." >&2; exit 1
+    fi
+  fi
+
+  if [[ ! -e /dev/kvm ]]; then
+    # VM 안에서 빌드하면 대개 /dev/kvm 이 없다 (중첩 가상화 꺼짐).
+    # TCG 로 떨어뜨리면 동작은 한다 — 다만 느리다.
+    export LIBGUESTFS_BACKEND_SETTINGS=force_tcg
+    echo "==> /dev/kvm 이 없다 — 소프트웨어 에뮬레이션(TCG)으로 돈다."
+    echo "    동작은 하지만 느리다. 10~25분쯤 걸린다고 보면 된다."
+  fi
+
   echo "==> Ubuntu 24.04 cloud image 다운로드"
   BASE="$WORK/noble.img"
   [[ -f "$BASE" ]] || wget -O "$BASE" "$IMG_URL"
@@ -159,7 +198,18 @@ else
     --run-command 'echo "lab ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-lab && chmod 440 /etc/sudoers.d/90-lab' \
     --run-command 'mkdir -p /etc/netplan && rm -f /etc/netplan/*.yaml' \
     --run-command 'printf "net.ipv4.ip_forward=0\n" > /etc/sysctl.d/99-lab-default.conf' \
-    --truncate /etc/machine-id
+    --truncate /etc/machine-id || {
+      echo >&2
+      echo "중단: virt-customize 가 실패했다." >&2
+      echo "  진단:" >&2
+      echo "    libguestfs-test-tool 2>&1 | tail -30" >&2
+      echo "  자주 걸리는 것:" >&2
+      echo "    · /boot/vmlinuz-* 읽기 권한   → sudo chmod 0644 /boot/vmlinuz-*" >&2
+      echo "    · /dev/kvm 없음               → export LIBGUESTFS_BACKEND_SETTINGS=force_tcg" >&2
+      echo "    · 디스크 여유 부족(약 3GB)     → df -h $(dirname "$BUILD")" >&2
+      rm -f "$BUILD"
+      exit 1
+    }
 fi
 
 if [[ "$MODE" == "image-only" ]]; then
