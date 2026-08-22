@@ -218,8 +218,21 @@ def main(a):
     # --- ③ 트렁크 NIC --------------------------------------------------
     step("트렁크 NIC")
     slot, mac = existing_trunk(conf, bridge)
+    # 손으로 붙일 때 GUI 에서 VLAN Tag 를 채우기 쉽다. 태그가 있으면 그 포트는
+    # 그 VLAN 전용이라 다른 랩의 관리망이 들어오지 않는다 — 트렁크가 아니다.
+    tagged = [k for k, v in conf.items()
+              if re.fullmatch(r"net\d+", k) and f"bridge={bridge}" in str(v)
+              and re.search(r"\btag=\d+", str(v))]
+    if tagged and slot is None:
+        die(f"{bridge} 에 붙은 NIC({', '.join(tagged)})에 VLAN 태그가 있다",
+            "태그가 있으면 그 VLAN 하나만 들어온다 — 트렁크가 아니다.\n"
+            "  Proxmox 에서 그 NIC 의 'VLAN Tag' 를 **비우고** 다시 실행할 것.\n"
+            "  (태그 없는 포트가 곧 트렁크이고, 그래야 랩 1~9 가 모두 들어온다)")
     if slot is not None:
         ok(f"net{slot} 이 이미 {bridge} 에 붙어 있다 (MAC {mac})")
+        if not mac:
+            die(f"net{slot} 의 MAC 을 읽지 못했다",
+                "Proxmox 에서 그 NIC 을 지우고 다시 실행하면 스크립트가 붙여 준다")
     else:
         slot = free_net_slot(conf)
         mac = L.ops_trunk_mac()
