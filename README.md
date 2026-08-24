@@ -145,9 +145,12 @@ apt update && apt install -y libguestfs-tools     # 호스트에서 다 할 경�
 ./install.sh --service
 
 # 4. 관리망 브리지 + 운영 서버 트렁크 NIC — 여기까지가 1회 작업이다
-make mgmt  LABS=9
+#    브리지는 웹에서 만든다: [연결 설정] 에서 랩 개수를 정하고 [확인하고 저장] →
+#    점검이 "vmbr9 가 없다" 를 잡으면 그 자리의 [지금 만들기] 버튼.
 make opsvm VMID=<운영서버 VMID> LABS=9   # → dist/ops-server.md 의 명령을 그대로 실행
 ```
+
+> 셸에서 하고 싶다면 `make mgmt LABS=9` 도 그대로 된다. 같은 일을 한다.
 
 **4번을 한 번 해 두면 그 뒤로는 랩을 몇 번 만들고 지우든 Proxmox 호스트도
 운영 서버의 VM 설정도 건드리지 않는다.** 관리망은 브리지 하나를 랩별 VLAN 으로 나눈 것이라,

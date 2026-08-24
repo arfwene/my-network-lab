@@ -264,7 +264,8 @@ def check_mgmt(lab_id):
     # tfstate 는 실패한 apply 도 만들기 때문에 존재만으로는 아무것도 보장하지 않는다.
     if not (L.ROOT / "infra/terraform/envs/mgmt/terraform.tfstate").exists():
         warn("관리망 생성 시도", f"{br} 를 만든 기록이 없다",
-             "`make mgmt LABS=9` 를 먼저 실행할 것 (최초 1회)")
+             "아래 [관리망 브리지 만들기] 버튼 한 번이면 된다 (최초 1회). "
+             "랩 개수는 [연결 설정] 에서 정한다")
     else:
         skip("관리망 생성 시도", f"기록 있음 — 실제 존재 여부는 위 '배포 전' 항목을 볼 것")
 

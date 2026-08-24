@@ -192,10 +192,12 @@ def main(a):
     br = next((i for i in ifaces if i.get("iface") == bridge), None)
     if not br:
         die(f"{bridge} 가 Proxmox 에 없다",
-            "먼저 만들 것:  make mgmt LABS=9")
+            "콘솔 [관리자 → 설치] 의 [관리망 브리지 만들기] 를 먼저 누를 것 "
+            "(셸에서라면  make mgmt)")
     if not br.get("bridge_vlan_aware"):
         die(f"{bridge} 가 VLAN-aware 가 아니다",
-            "이 상태로는 랩별 VLAN 이 갈리지 않는다. make mgmt 를 다시 실행할 것")
+            "이 상태로는 랩별 VLAN 이 갈리지 않는다. "
+            "콘솔 [설치] 에서 [관리망 브리지 만들기] 를 다시 누를 것")
     ok(f"{bridge} 있음 (VLAN-aware)")
 
     # --- ② 내 VM 찾기 --------------------------------------------------

@@ -51,6 +51,8 @@ def _site_defaults():
         "insecure_tls": bool(p.get("insecure_tls", True)),
         "token_id": "",
         "token_secret": "",
+        # 이 서버가 준비할 랩 개수. 관리망 VLAN 개수와 랩 목록이 여기서 나온다.
+        "lab_count": int((L.SITE.get("labs") or {}).get("default_count") or 1),
     }
 
 
@@ -147,6 +149,15 @@ def validate(v):
     tid = (v.get("token_id") or "").strip()
     if tid and not ("@" in tid and "!" in tid.split("@", 1)[1]):
         errs.append("토큰 ID 형식은 사용자@영역!토큰이름 이다 (예: terraform@pve!lab)")
+    if "lab_count" in v:
+        lo, hi = L.SITE["labs"]["id_range"]
+        try:
+            n = int(v.get("lab_count"))
+        except (TypeError, ValueError):
+            n = -1
+        if not lo <= n <= hi:
+            errs.append(f"랩 개수는 {lo}~{hi} 사이의 숫자여야 한다 "
+                        f"(주소 설계가 그 범위까지만 겹치지 않게 잡혀 있다)")
     return errs
 
 
@@ -161,6 +172,8 @@ def save(values, username):
         for k in ("host", "node", "datastore", "token_id"):
             db.set_setting(PREFIX + k, str(values.get(k, "")).strip(), con=con)
         db.set_setting(PREFIX + "port", str(int(values.get("port") or 8006)), con=con)
+        if "lab_count" in values:
+            db.set_setting(PREFIX + "lab_count", str(int(values["lab_count"])), con=con)
         db.set_setting(PREFIX + "insecure_tls", "1" if values.get("insecure_tls") else "0", con=con)
         # 비워서 제출하면 기존 토큰을 유지한다 (화면에 다시 뿌리지 않으므로)
         secret = values.get("token_secret")
@@ -192,6 +205,8 @@ def export():
         f"    node_name:    {c['node']}\n"
         f"    datastore:    {c['datastore']}\n"
         f"    insecure_tls: {'true' if c['insecure_tls'] else 'false'}\n"
+        "labs:\n"
+        f"  default_count: {int(c['lab_count'])}\n"
     )
     L.RUNTIME.parent.mkdir(parents=True, exist_ok=True)
     L.RUNTIME.write_text(body, encoding="utf-8")
@@ -245,17 +260,38 @@ def _now():
 
 # ============================================================ 상태 점검
 class Check:
+    """점검 한 항목.
+
+    fix 는 '이 문제는 콘솔이 스스로 고칠 수 있다' 는 표시다.
+    {"action": 작업이름, "label": 버튼글씨, "confirm": 누르기 전 물어볼 말}
+    화면은 이걸 보고 버튼을 만든다 — 관리자가 무엇을 실행할지 문서에서
+    찾아내지 않아도 되게 하려는 것이다.
+    """
+
     def __init__(self, cid, title):
         self.id, self.title = cid, title
         self.status, self.detail, self.hint = "skip", "", ""
+        self.fix = None
 
-    def set(self, status, detail="", hint=""):
+    def set(self, status, detail="", hint="", fix=None):
         self.status, self.detail, self.hint = status, detail, hint
+        self.fix = fix
         return self
 
     def as_dict(self):
-        return {"id": self.id, "title": self.title, "status": self.status,
-                "detail": self.detail, "hint": self.hint}
+        d = {"id": self.id, "title": self.title, "status": self.status,
+             "detail": self.detail, "hint": self.hint}
+        if self.fix:
+            d["fix"] = self.fix
+        return d
+
+
+def _fix_mgmt(labs):
+    return {"action": "setup-mgmt", "label": "지금 만들기",
+            "confirm": f"Proxmox 에 관리망 브리지 {L.mgmt_bridge_name()} 를 만든다 "
+                       f"(랩 {labs}개 · VLAN {L.mgmt_vlan(1)}~{L.mgmt_vlan(labs)}).\n"
+                       f"전 랩 공용이라 최초 1회면 된다. 기존 랩 VM 은 건드리지 않는다.\n\n"
+                       f"진행할까?"}
 
 
 def _ctx(cfg):
@@ -704,8 +740,9 @@ def preflight(lab_id, cfg=None):
         if not i:
             c_mg.set("error", f"{mgb} 가 없다",
                      "관리망은 전 랩 공용 브리지 하나를 VLAN 으로 나눠 쓴다. "
-                     "운영 서버에서 `make mgmt LABS=9` 를 먼저 실행할 것 (최초 1회). "
-                     "없으면 VM 이 만들어져도 기동하지 못한다")
+                     "최초 1회만 만들면 된다 — 아래 버튼으로 지금 만들 수 있다. "
+                     "없으면 VM 이 만들어져도 기동하지 못한다",
+                     fix=_fix_mgmt(cfg.get("lab_count") or 1))
         elif not (OWNER_TAG in (i.get("comments") or "")) and (
                 i.get("bridge_ports") or i.get("cidr")):
             # 우리가 만든 표시가 없는데 포트나 주소가 있다 = 남이 쓰고 있는 브리지다.
@@ -715,15 +752,15 @@ def preflight(lab_id, cfg=None):
                      + (f" (포트: {i['bridge_ports']})" if i.get("bridge_ports") else "")
                      + (f" ({i['cidr']})" if i.get("cidr") else ""),
                      "이 브리지를 랩 관리망으로 쓰면 사내 트래픽과 한 L2 가 된다. "
-                     "config/site.yml 의 labs.naming.mgmt_bridge 를 비어 있는 이름으로 바꾸고 "
-                     "`make mgmt` 를 다시 실행할 것")
+                     "config/site.yml 의 labs.naming.mgmt_bridge 를 비어 있는 이름으로 "
+                     "바꾼 뒤 [설치] 화면에서 다시 만들 것 — 이건 콘솔이 대신 정할 수 없다")
         elif not i.get("bridge_vlan_aware"):
             # 태그를 브리지가 무시하면 **모든 랩의 관리망이 한 L2 로 합쳐진다.**
             # 통신은 되므로 눈치채기 어렵고, 랩 간 격리만 조용히 사라진다.
             c_mg.set("error", f"{mgb} 가 VLAN-aware 가 아니다",
                      "이 상태로는 랩별 VLAN 태그가 무시되어 전 랩 관리망이 한 L2 로 합쳐진다. "
-                     "`make mgmt` 를 다시 실행하거나 Proxmox 에서 해당 브리지의 "
-                     "'VLAN aware' 를 켤 것")
+                     "아래 버튼으로 다시 만들면 켜진다",
+                     fix=_fix_mgmt(cfg.get("lab_count") or 1))
         else:
             c_mg.set("ok", f"{mgb} (VLAN-aware) · 이 랩 = VLAN {vlan}")
 

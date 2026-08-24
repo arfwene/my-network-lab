@@ -1088,6 +1088,7 @@ async def settings_form(request: Request, setup: int = 0, msg: str = "", err: st
         "confirmed": pve.confirmed(), "errors": [], "msg": msg, "err": err,
         "template_vmid": L.SITE["labs"]["template_vmid"],
         "site_name": L.SITE["site"]["name"],
+        "lab_range": L.SITE["labs"]["id_range"],
     })
 
 
@@ -1096,6 +1097,7 @@ async def settings_save(request: Request, host: str = Form(...), port: str = For
                         node: str = Form(...), datastore: str = Form(...),
                         token_id: str = Form(""), token_secret: str = Form(""),
                         insecure_tls: str = Form(""), clear_token: str = Form(""),
+                        lab_count: str = Form(""),
                         confirm: str = Form(""), force_confirm: str = Form("")):
     user, redir = require(request, "user.manage", skip_setup=True)
     if redir:
@@ -1104,6 +1106,8 @@ async def settings_save(request: Request, host: str = Form(...), port: str = For
               "node": node.strip(), "datastore": datastore.strip(),
               "token_id": token_id.strip(), "token_secret": token_secret.strip(),
               "insecure_tls": bool(insecure_tls), "clear_token": bool(clear_token)}
+    if lab_count.strip():
+        values["lab_count"] = lab_count.strip()
     errors = pve.save(values, user["username"])
     health = None
     if not errors:
@@ -1124,11 +1128,13 @@ async def settings_save(request: Request, host: str = Form(...), port: str = For
                       "[점검 실패해도 확인 처리] 를 체크하고 다시 저장할 것"]
     return tpl.TemplateResponse(request, "settings.html", {
         "user": user, "pve": {**pve.public(), **{k: v for k, v in values.items()
-                                                 if k in ("host", "node", "datastore", "token_id")}},
+                                                 if k in ("host", "node", "datastore",
+                                                          "token_id", "lab_count")}},
         "health": health, "setup": not pve.confirmed(),
         "confirmed": pve.confirmed(), "errors": errors, "msg": "", "err": "",
         "template_vmid": L.SITE["labs"]["template_vmid"],
         "site_name": L.SITE["site"]["name"],
+        "lab_range": L.SITE["labs"]["id_range"],
     }, status_code=400 if errors else 200)
 
 
@@ -1146,7 +1152,10 @@ async def settings_test(request: Request):
              "node": (form.get("node") or cfg["node"]).strip(),
              "datastore": (form.get("datastore") or cfg["datastore"]).strip(),
              "token_id": (form.get("token_id") or cfg["token_id"]).strip(),
-             "insecure_tls": bool(form.get("insecure_tls"))}
+             "insecure_tls": bool(form.get("insecure_tls")),
+             # 저장 전 값으로 점검하므로 랩 개수도 지금 화면의 값을 쓴다 —
+             # 그래야 [지금 만들기] 확인창의 VLAN 범위가 화면과 어긋나지 않는다.
+             "lab_count": int((form.get("lab_count") or cfg["lab_count"]) or 1)}
     if (form.get("token_secret") or "").strip():
         probe["token_secret"] = form["token_secret"].strip()
     return JSONResponse(await asyncio.to_thread(pve.check, probe))

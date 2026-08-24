@@ -55,7 +55,17 @@
           <input name="token_secret" type="password" autocomplete="new-password"
                  placeholder="{{ '저장돼 있다 — 바꿀 때만 입력' if pve.token_secret_set else '토큰 생성 시 한 번만 보이는 값' }}">
         </label>
+        <label>랩 개수 <small>이 서버가 준비할 랩 수 ({{ lab_range[0] }}~{{ lab_range[1] }})</small>
+          <input name="lab_count" value="{{ pve.lab_count }}" required
+                 pattern="[0-9]+" style="max-width:8rem">
+        </label>
       </div>
+      <p class="note">
+        랩 개수는 <b>관리망 VLAN 을 몇 개까지 뚫어 둘지</b>를 정한다. 실제 VM 은 랩마다 따로 배포한다.
+        넉넉히 잡아도 비용이 없다 — VLAN 만 준비되고 아무것도 만들어지지 않는다.<br>
+        <b>줄이면</b> 그 번호의 랩이 목록·지도에서 사라진다. 이미 만든 VM 은 남으므로,
+        줄이기 전에 그 랩을 먼저 삭제할 것.
+      </p>
       <label class="chk"><input type="checkbox" name="insecure_tls" {{ 'checked' if pve.insecure_tls }}>
         인증서 검증 건너뛰기 <small>Proxmox 기본(자체 서명) 인증서를 쓰면 켜 둔다</small></label>
       {% if pve.token_secret_set %}
@@ -70,6 +80,7 @@
       <label class="chk"><input type="checkbox" name="force_confirm">
         점검 실패해도 확인 처리 <small>Proxmox 를 아직 켜지 않았을 때만</small></label>
 
+      <div class="joblog" id="fixlog" hidden><pre id="fixout"></pre></div>
       <div id="pveresult" class="pve-result">
         {% if health %}
         <div class="pve-sum {{ health.level }}">{{ health.summary }}</div>
@@ -80,6 +91,8 @@
             <div><b>{{ c.title }}</b>
               <div class="d">{{ c.detail }}</div>
               {% if c.hint %}<div class="h">→ {{ c.hint }}</div>{% endif %}
+              {% if c.fix %}<button type="button" class="btn small" data-fix="{{ c.fix.action }}"
+                 data-confirm="{{ c.fix.confirm }}">{{ c.fix.label }}</button>{% endif %}
             </div>
           </li>
           {% endfor %}
@@ -127,22 +140,72 @@
 </main>
 
 <script>
+(function () {
+  const esc = s => String(s || '').replace(/[&<>"]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const M = { ok: '✔', warn: '!', error: '✕' };
+  const box = document.getElementById('pveresult');
+  const log = document.getElementById('fixlog');
+  const out = document.getElementById('fixout');
+
   // 저장하지 않고 지금 입력값으로만 점검한다 — 잘못된 값을 저장부터 하지 않게.
-  document.getElementById('pvetest').onclick = async () => {
-    const box = document.getElementById('pveresult');
+  async function test() {
     box.innerHTML = '<div class="pve-sum">점검 중…</div>';
     const r = await fetch('/admin/settings/test',
       { method: 'POST', body: new FormData(document.getElementById('pveform')) });
     const h = await r.json();
-    const esc = s => String(s || '').replace(/[&<>"]/g, c =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    const M = { ok: '✔', warn: '!', error: '✕' };
     box.innerHTML = `<div class="pve-sum ${h.level}">${esc(h.summary)}</div><ul class="pve-checks">`
       + h.checks.map(c => `<li class="${c.status}"><span class="m">${M[c.status] || '·'}</span>
           <div><b>${esc(c.title)}</b><div class="d">${esc(c.detail)}</div>
-          ${c.hint ? `<div class="h">→ ${esc(c.hint)}</div>` : ''}</div></li>`).join('')
+          ${c.hint ? `<div class="h">→ ${esc(c.hint)}</div>` : ''}
+          ${c.fix ? `<button type="button" class="btn small" data-fix="${esc(c.fix.action)}"
+             data-confirm="${esc(c.fix.confirm)}">${esc(c.fix.label)}</button>` : ''}
+          </div></li>`).join('')
       + '</ul>';
     if (window.pveHealth) window.pveHealth.refresh(true);
-  };
+    return h;
+  }
+  document.getElementById('pvetest').onclick = test;
+
+  function stream(id) {
+    return new Promise(res => {
+      const es = new EventSource(`/jobs/${id}/stream`);
+      es.onmessage = e => {
+        out.textContent += JSON.parse(e.data) + '\n';
+        out.scrollTop = out.scrollHeight;
+      };
+      es.addEventListener('tick', e => {
+        const d = JSON.parse(e.data);
+        out.textContent = out.textContent.replace(/\n?⏳[^\n]*$/, '')
+          + `\n⏳ 진행 중 · ${Math.round(d.elapsed)}초 경과`;
+        out.scrollTop = out.scrollHeight;
+      });
+      es.addEventListener('done', e => { es.close(); res(JSON.parse(e.data)); });
+      es.onerror = () => { es.close(); res(null); };
+    });
+  }
+
+  // 점검이 "이건 콘솔이 고칠 수 있다"고 표시한 항목의 버튼.
+  // 묻고 → 만들고 → 다시 점검한다. 관리자가 셸로 나갈 일이 없게.
+  document.addEventListener('click', async e => {
+    const b = e.target.closest('[data-fix]');
+    if (!b) return;
+    if (!confirm(b.dataset.confirm)) return;
+    document.querySelectorAll('[data-fix]').forEach(x => x.disabled = true);
+    log.hidden = false;
+    out.textContent = '';
+    const r = await fetch('/admin/setup/' + b.dataset.fix, { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok) {
+      out.textContent = '실행하지 못했다: ' + (j.error || r.status);
+    } else {
+      const d = await stream(j.job_id);
+      out.textContent += (d && d.status === 'ok')
+        ? '\n완료. 다시 점검한다…\n' : '\n실패했다. 위 로그를 볼 것.\n';
+      if (d && d.status === 'ok') await test();
+    }
+    document.querySelectorAll('[data-fix]').forEach(x => x.disabled = false);
+  });
+})();
 </script>
 {% endblock %}
