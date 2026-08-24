@@ -463,6 +463,20 @@ def check_students():
     else:
         ok("교육생 SSH 키", f"{len(rows)}명 모두 등록")
 
+    # 계정이 있는 것과 **지금 키가 거기 들어 있는 것**은 다르다.
+    # 키를 바꾼 뒤 [지금 랩에 반영] 만 누르면 랩 노드에는 들어가지만 점프 호스트는
+    # 옛 키 그대로다. 그러면 ssh 가 첫 홉에서 막히는데 아무도 이유를 모른다.
+    stale = [u["username"] for u in db.jump_stale_users()]
+    if stale:
+        warn("점프 계정 키 반영", f"{len(stale)}명이 밀려 있다: "
+             + ", ".join(stale[:6]) + ("…" if len(stale) > 6 else ""),
+             "이 사람들의 키가 운영 서버 점프 계정에 아직 안 들어갔다 — "
+             "ssh 가 **첫 홉에서** 막힌다.\n"
+             "  콘솔 [관리자 → 설치] 의 [점프 계정 적용] 을 누를 것 "
+             "(키를 바꿀 때마다 필요하다)")
+    elif db.jump_applied_at():
+        ok("점프 계정 키 반영", f"마지막 적용 {db.jump_applied_at()} UTC — 밀린 사람 없다")
+
 
 # ===================================================== 출력
 def report():

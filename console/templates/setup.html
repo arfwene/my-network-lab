@@ -67,6 +67,16 @@
       하나만, 인자 없이 실행할 수 있게 한다.</span>
     </p>
     {% endif %}
+    {% if jump_stale %}
+    <p class="flash warn">
+      <b>교육생 {{ jump_stale|length }}명의 키가 점프 계정에 아직 반영되지 않았다.</b>
+      {% for u in jump_stale %}<code>{{ u.username }}</code>{% if not loop.last %} {% endif %}{% endfor %}<br>
+      이 사람들이 <code>ssh</code> 를 하면 <b>첫 홉에서</b> 막힌다.
+      아래 <b>[점프 계정 적용]</b> 을 누르면 해결된다.
+      {% if not jump_ready %}<br><span class="muted">버튼이 없으면 위의
+      <code>./install.sh --jump-apply --no-apt</code> 를 먼저 한 번 실행할 것.</span>{% endif %}
+    </p>
+    {% endif %}
     <div class="setup-acts">
       {% for b in buttons %}
       <div class="act">

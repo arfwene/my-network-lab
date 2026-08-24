@@ -98,6 +98,14 @@ cat ~/.ssh/id_ed25519.pub</code></pre>
       <p>노드에 들어간 뒤 <code>cat /etc/lab-authorized</code> 로 누가 접속할 수 있는지 볼 수 있다.</p>
 
       <h3>4. 접속 설정 받기</h3>
+      {% if jump_ready and jump_stale %}
+      <p class="note"><b>키가 점프 호스트에 아직 안 들어갔다.</b>
+         등록한 키는 <b>두 곳</b>에 들어가야 하는데 가는 길이 다르다.<br>
+         · 랩 노드 — [지금 랩에 반영] (위 3번). <b>이건 본인이 할 수 있다.</b><br>
+         · 점프 호스트(운영 서버) — <b>관리자가</b> [설치] 화면에서 [점프 계정 적용]<br>
+         지금 <code>ssh {{ example_node }}</code> 를 하면 <b>첫 홉에서</b>
+         <code>Permission denied</code> 가 난다. 교육 담당자에게 알릴 것.</p>
+      {% endif %}
       {% if not jump_ready %}
       <p class="note"><b>아직 준비되지 않았다.</b>
          운영 서버에 <code>{{ user.username }}</code> 점프 계정이 없다.

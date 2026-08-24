@@ -242,7 +242,8 @@ def _sshkey_ctx(request, user, errors=(), saved=""):
             "lab_id": lab_id,
             "lab_label": f"lab {lab_id}" if lab_id else "미배정",
             "current": sshkeys.describe(raw) if raw else None,
-            "key_at": (db.get_user(user["username"]) or {}).get("ssh_key_at"),
+            # 저장은 밀리초까지 하지만(반영 여부 판정에 필요하다) 화면에는 초까지만.
+            "key_at": ((db.get_user(user["username"]) or {}).get("ssh_key_at") or "")[:19] or None,
             "errors": list(errors), "saved": saved,
             "busy": runner.busy(lab_id) if lab_id else True,
             "jump_user": A["jump_host"]["user"], "jump_ip": A["jump_host"]["office_ip"],
@@ -254,6 +255,9 @@ def _sshkey_ctx(request, user, errors=(), saved=""):
             # 점프 계정이 없으면 ssh 가 조용히 비밀번호를 묻는다(= 영원히 못 들어간다).
             # 콘솔은 운영 서버에서 돌고 있으니 여기서 바로 확인해 알려준다.
             "jump_ready": _jump_account_exists(user["username"]),
+            # 계정이 있는 것과 **지금 키가 거기 들어 있는 것**은 다르다.
+            "jump_stale": any(u["username"].lower() == user["username"].lower()
+                              for u in db.jump_stale_users()),
             "pve_url": L.IPAM["access"]["proxmox"]["api_endpoint"],
             "vm_name": L.vm_name(lab_id or 1, node),
             # Proxmox 로그인 계정 — **자기 랩 것만**. 랩당 1계정이라 여기서 보여 줄 수 있고,
@@ -296,7 +300,8 @@ async def sshkey_save(request: Request, key: str = Form(""), remove: str = Form(
     return tpl.TemplateResponse(
         request, "sshkey.html",
         _sshkey_ctx(request, user, saved=f"저장했다 ({fp}). "
-                                         f"[지금 랩에 반영] 을 누르거나 다음 [설정 적용] 때 들어간다."))
+                                         f"랩 노드에는 [지금 랩에 반영] 으로 들어간다. "
+                                         f"점프 호스트는 관리자가 따로 반영해야 한다 — 아래를 볼 것."))
 
 
 @app.get("/sshkey/config")
@@ -913,6 +918,7 @@ async def admin_setup(request: Request, lab: int = 1):
         "health": pve.last(), "pending": db.count_pending(),
         "checks": checks, "counts": n, "lab": lab,
         "buttons": _setup_buttons(jump_ready),
+        "jump_stale": db.jump_stale_users(),
         "manual": _setup_manual(jump_ready), "jump_ready": jump_ready,
         "busy": runner.busy(jobs.SETUP_LAB),
     })
@@ -925,9 +931,17 @@ async def admin_setup_run(request: Request, action: str):
         return JSONResponse({"error": "권한이 없다"}, status_code=403)
     if action not in jobs.SETUP_ACTIONS:
         return JSONResponse({"error": f"모르는 작업: {action}"}, status_code=400)
+    # 성공했을 때만 시각을 남긴다. 실패한 실행을 "반영했다" 로 기록하면
+    # 그 뒤로 아무도 밀린 키를 눈치채지 못한다.
+    # 시각은 **시작 시각**을 쓴다 — 헬퍼는 시작할 때의 DB 를 읽으므로,
+    # 도는 동안 들어온 키는 아직 반영되지 않았다.
+    done = None
+    if action == "setup-jump-apply":
+        started = await asyncio.to_thread(db.now_utc)
+        done = lambda j: j.status == "ok" and db.mark_jump_applied(started)   # noqa: E731
     try:
         job = await runner.submit(jobs.SETUP_LAB, action, "m10", None,
-                                  user.get("username"))
+                                  user.get("username"), on_done=done)
     except jobs.NotReady as e:
         return JSONResponse({"error": e.message, "health": e.health}, status_code=503)
     except RuntimeError as e:

@@ -356,10 +356,63 @@ def set_ssh_key(username, key):
     """공개키 저장(빈 문자열이면 제거). 검증은 부르는 쪽에서 한다."""
     with connect() as con:
         cur = con.execute(
+            # 밀리초까지 남긴다. 초 단위로는 [점프 계정 적용] 과 같은 초에 등록된 키를
+            # 반영됐는지 아닌지 가릴 수 없다 (jump_stale_users 가 이 값을 본다).
             "UPDATE users SET ssh_key=?, ssh_key_at=CASE WHEN ?='' THEN NULL "
-            "ELSE datetime('now') END WHERE username=? COLLATE NOCASE",
+            "ELSE strftime('%Y-%m-%d %H:%M:%f','now') END "
+            "WHERE username=? COLLATE NOCASE",
             (key, key, username))
         return cur.rowcount > 0
+
+
+# ------------------------------------------------------- 점프 계정 반영 시각
+#  교육생 키가 가는 곳은 **두 곳**이고 가는 길이 다르다.
+#    운영 서버 /home/<id>/.ssh/authorized_keys ← root 헬퍼 ([점프 계정 적용])
+#    랩 노드   ~lab/.ssh/authorized_keys       ← Ansible ([지금 랩에 반영])
+#  키를 바꾼 뒤 뒤쪽만 돌리면 랩 노드에는 들어가는데 점프 호스트는 옛 키 그대로다.
+#  그러면 ssh 가 첫 홉에서 막히는데 화면은 아무 말도 하지 않았다.
+#  여기서 "언제 반영했는가" 를 남겨 두고 users.ssh_key_at 과 비교한다.
+JUMP_APPLIED_KEY = "jump.applied_at"
+
+
+def now_utc():
+    """DB 가 쓰는 것과 **같은 시계·같은 형식**. 파이썬 시간을 섞으면 시간대가 어긋난다."""
+    with connect() as con:
+        return con.execute("SELECT strftime('%Y-%m-%d %H:%M:%f','now')").fetchone()[0]
+
+
+def mark_jump_applied(stamp=None):
+    """[점프 계정 적용] 이 성공했을 때 부른다.
+
+    stamp 는 **작업을 시작한 시각**을 넣는다. 끝난 시각이 아니다 —
+    헬퍼는 시작할 때의 DB 를 읽으므로, 도는 동안 등록된 키는 반영되지 않았다.
+    끝난 시각으로 적으면 그 키를 '반영됨' 으로 삼켜 버린다.
+    """
+    v = stamp or now_utc()
+    set_setting(JUMP_APPLIED_KEY, v)
+    return v
+
+
+def jump_applied_at():
+    return get_setting(JUMP_APPLIED_KEY) or ""
+
+
+def jump_stale_users():
+    """키가 점프 계정에 아직 반영되지 않은 교육생.
+
+    한 번도 반영한 적이 없으면 키를 가진 교육생 전부가 여기 들어온다 — 맞는 말이다.
+    """
+    applied = jump_applied_at()
+    with connect() as con:
+        rows = con.execute(
+            "SELECT username, name, ssh_key_at FROM users "
+            " WHERE role='user' AND disabled=0 AND ssh_key<>'' "
+            # julianday 로 비교한다. 밀리초까지 있는 값과 예전의 초 단위 값이
+            # 섞여 있어도 둘 다 제대로 파싱된다 — 문자열 비교로는 그게 안 된다.
+            "   AND (?='' OR julianday(ssh_key_at) > julianday(?)) "
+            " ORDER BY username", (applied, applied)).fetchall()
+    return [{"username": r["username"], "name": r["name"],
+             "ssh_key_at": r["ssh_key_at"]} for r in rows]
 
 
 def lab_keys(lab_id):
