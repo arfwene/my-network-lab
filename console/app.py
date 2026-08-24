@@ -608,8 +608,16 @@ async def job_stream(request: Request, job_id: str):
 
     reveal = auth.can(user, "lab.all")
 
-    def sse(line):
-        return f"data: {json.dumps(line, ensure_ascii=False)}\n\n"
+    def sse(lines):
+        """한 프레임에 여러 줄을 싣는다.
+
+        전에는 한 줄에 프레임 하나였다. terraform apply 가 수천 줄을 쏟으면
+        브라우저가 그만큼 콜백을 돌고 그만큼 DOM 을 건드려 탭이 굳었다.
+        묶음 크기는 서버가 정하지 않는다 — 그 순간 쌓인 만큼이라 한가할 때는 한 줄이다.
+        """
+        if isinstance(lines, str):
+            lines = [lines]
+        return f"data: {json.dumps(lines, ensure_ascii=False)}\n\n"
 
     async def gen():
         # 시험 문제(주입한 시나리오)는 실행 로그에 그대로 찍힌다.
@@ -622,8 +630,8 @@ async def job_stream(request: Request, job_id: str):
             yield sse("== 준비 완료. 지금부터 시간이 간다." if job.status == "ok"
                       else "!! 준비 실패 — 관리자에게 알릴 것")
         else:
-            async for line in runner.stream(job_id):
-                if line == "":
+            async for chunk in runner.stream(job_id):
+                if not chunk:
                     # keep-alive. 전에는 빈 줄을 그대로 보냈고 화면은 그것을 버렸다 —
                     # 조용한 구간에 아무것도 안 보여서 멈춘 것처럼 읽혔다.
                     # 이제 "살아 있다 + 얼마나 조용했다" 를 같이 보낸다.
@@ -632,7 +640,7 @@ async def job_stream(request: Request, job_id: str):
                            + json.dumps({"elapsed": el, "quiet": q}, ensure_ascii=False)
                            + "\n\n")
                 else:
-                    yield sse(line)
+                    yield sse(chunk)
         d = json.dumps(job.as_dict(reveal=reveal), ensure_ascii=False)
         yield f"event: done\ndata: {d}\n\n"
 

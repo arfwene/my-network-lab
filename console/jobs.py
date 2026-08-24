@@ -11,6 +11,7 @@
 """
 import asyncio
 import os
+import re
 import shlex
 import sys
 import time
@@ -34,6 +35,26 @@ def _bin(name):
 
 APB = _bin("ansible-playbook")
 TF = "terraform"                      # PATH 에서 찾는다 (Proxmox 관리 워크스테이션에 설치)
+
+# terraform 을 한꺼번에 몇 개나 돌릴 것인가. 기본값은 10 이다.
+#   13대를 동시에 복제하면 pveproxy 가 연결을 끊는다 — HTTP 596 Broken pipe.
+#   실패한 자원 하나 때문에 배포 전체가 멈추고, 그 VM 만 안 뜬 채로 남는다.
+#   4 로 낮추면 조금 느려지지만 그 실패가 사라진다.
+TF_PARALLELISM = 4
+
+# 화면 로그에 남길 최대 줄 수. terraform apply 하나가 수천 줄을 쏟는다.
+MAX_LINES = 5000
+
+# ANSI 이스케이프. terraform 은 파이프로 보내도 색을 넣는다(-no-color 로 껐지만,
+# 다른 도구가 넣는 것까지 여기서 한 번 더 걷어낸다). 안 걷으면 화면에 ␛[0m 이 그대로 찍힌다.
+ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+
+
+def tf_cmd(sub, *extra):
+    cmd = [TF, sub, "-input=false", "-no-color", *extra]
+    if sub in ("apply", "destroy"):
+        cmd.append(f"-parallelism={TF_PARALLELISM}")
+    return cmd
 ANSIBLE = L.ROOT / "infra/ansible"
 JUMP_HELPER = "/usr/local/sbin/lab-access-apply"
 
@@ -121,16 +142,16 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
         n = L.SITE["labs"]["default_count"]
         env = L.ROOT / "infra/terraform/envs/mgmt"
         return [(L.ROOT, [PY, "tools/gen-mgmt.py", "--labs", str(n)]),
-                (env, [TF, "init", "-input=false"]),
-                (env, [TF, "apply", "-auto-approve", "-input=false"])]
+                (env, tf_cmd("init")),
+                (env, tf_cmd("apply", "-auto-approve"))]
 
     if action == "deploy":
         # 브리지 + VM 생성. 배선은 항상 전체 토폴로지로 만든다 (설정만 단계별).
         return [gen_tf,
-                (tf_env(lab_id), [TF, "init", "-input=false"]),
-                (tf_env(lab_id), [TF, "apply", "-auto-approve", "-input=false"])]
+                (tf_env(lab_id), tf_cmd("init")),
+                (tf_env(lab_id), tf_cmd("apply", "-auto-approve"))]
     if action == "destroy":
-        return [(tf_env(lab_id), [TF, "destroy", "-auto-approve", "-input=false"])]
+        return [(tf_env(lab_id), tf_cmd("destroy", "-auto-approve"))]
     if action == "apply":
         return [gen, (ANSIBLE, [APB, "-i", inv, "playbooks/site.yml",
                                 "-e", f"lab_stage={stage}"])]
@@ -188,6 +209,7 @@ class Job:
         self.user = user
         self.steps = steps
         self.lines: list[str] = []
+        self.dropped = 0        # 너무 길어서 버린 앞부분 줄 수
         self.status = "queued"          # queued | running | ok | failed
         # 마지막으로 한 줄이라도 나온 시각. 조용한 구간이 얼마나 길어졌는지 재려고 둔다 —
         # terraform 은 refresh 하는 동안 아무것도 찍지 않아서, 화면만 보면 멈춘 것과 같다.
@@ -198,7 +220,13 @@ class Job:
 
     def emit(self, line):
         self.last_out = time.time()
-        self.lines.append(line.rstrip("\n"))
+        self.lines.append(ANSI_RE.sub("", line).rstrip("\n"))
+        # 로그는 무한히 자라지 않는다. terraform apply 하나가 수천 줄을 쏟아내고,
+        # 그걸 다 들고 있으면 새로 붙는 화면마다 그 전부를 다시 받는다.
+        if len(self.lines) > MAX_LINES:
+            drop = len(self.lines) - MAX_LINES
+            del self.lines[:drop]
+            self.dropped += drop
         self.event.set()
         self.event = asyncio.Event()
 
@@ -293,18 +321,33 @@ class Runner:
             on_done(job)
 
     async def stream(self, job_id):
-        """이미 쌓인 로그부터 보내고, 이후 실시간으로 이어 보낸다."""
+        """이미 쌓인 로그부터 보내고, 이후 실시간으로 이어 보낸다.
+
+        한 줄씩이 아니라 **그 순간 쌓여 있는 만큼 묶어서** 준다.
+        terraform apply 는 짧은 시간에 수천 줄을 쏟는다. 한 줄에 SSE 프레임 하나면
+        브라우저가 그만큼 콜백을 돌고 그만큼 DOM 을 건드린다 — 그 사이 탭이 굳는다.
+        묶음은 저절로 조절된다: 몰아칠 때는 크게, 한가할 때는 한 줄씩이라 지연이 없다.
+        """
         job = self.jobs.get(job_id)
         if not job:
             return
-        idx = 0
+        idx = 0                     # 절대 줄 번호 — 버린 앞부분까지 센다
         while True:
-            while idx < len(job.lines):
-                yield job.lines[idx]
-                idx += 1
+            have = job.dropped + len(job.lines)
+            if idx < have:
+                if idx < job.dropped:
+                    lost = job.dropped - idx
+                    idx = job.dropped
+                    yield [f"… 앞부분 {lost}줄은 너무 길어 버렸다 "
+                           f"(최근 {MAX_LINES}줄만 남긴다)"]
+                    continue
+                chunk = job.lines[idx - job.dropped:]
+                idx = have
+                yield chunk
+                continue
             if job.status in ("ok", "failed"):
                 return
             try:
                 await asyncio.wait_for(job.event.wait(), timeout=15)
             except asyncio.TimeoutError:
-                yield ""          # keep-alive
+                yield []          # keep-alive

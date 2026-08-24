@@ -28,6 +28,10 @@ resource "proxmox_virtual_environment_vm" "node" {
   clone {
     vm_id = var.template_vmid
     full  = false # linked clone — 디스크 사용량을 크게 줄인다
+    # 여러 대를 한꺼번에 복제하면 pveproxy 가 연결을 끊는 일이 있다
+    # (HTTP 596 Broken pipe). 한 번 더 시도하면 대개 넘어간다.
+    # 동시 실행 자체는 console/jobs.py 의 TF_PARALLELISM 이 낮춰 둔다.
+    retries = 3
   }
 
   agent { enabled = true }

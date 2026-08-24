@@ -171,7 +171,8 @@
     return new Promise(res => {
       const es = new EventSource(`/jobs/${id}/stream`);
       es.onmessage = e => {
-        out.textContent += JSON.parse(e.data) + '\n';
+        const lines = JSON.parse(e.data);
+        out.textContent += (Array.isArray(lines) ? lines : [lines]).join('\n') + '\n';
         out.scrollTop = out.scrollHeight;
       };
       es.addEventListener('tick', e => {

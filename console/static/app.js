@@ -121,7 +121,9 @@
   }
 
   // ------------------------------------------------------------ 작업 실행
-  function paint(line) {
+  const LOG_MAX = 4000;          // 화면에 남길 줄 수. 넘으면 앞에서 버린다.
+
+  function lineNode(line) {
     const span = document.createElement('span');
     if (line.startsWith('$ ')) span.className = 'cmd';
     else if (line.startsWith('!!')) span.className = 'err';
@@ -131,7 +133,21 @@
     else if (/^(TASK|PLAY)/.test(line)) span.className = 'task';
     else if (/failed=[1-9]|fatal:|ERROR/.test(line)) span.className = 'err';
     span.textContent = line + '\n';
-    log.appendChild(span);
+    return span;
+  }
+
+  // 여러 줄을 **한 번에** 붙인다.
+  //   전에는 줄마다 appendChild 하고 줄마다 scrollHeight 를 읽었다.
+  //   scrollHeight 읽기는 그 자리에서 레이아웃을 강제한다 — terraform 이 수천 줄을
+  //   쏟으면 그만큼 강제 레이아웃이 일어나 탭이 통째로 굳는다.
+  //   이제 조각 하나를 fragment 로 모아 한 번 붙이고, 스크롤도 한 번만 건드린다.
+  function paint(lines) {
+    if (typeof lines === 'string') lines = [lines];
+    if (!lines.length) return;
+    const frag = document.createDocumentFragment();
+    for (const l of lines) frag.appendChild(lineNode(l));
+    log.appendChild(frag);
+    while (log.childNodes.length > LOG_MAX) log.removeChild(log.firstChild);
     log.scrollTop = log.scrollHeight;
   }
 
@@ -145,7 +161,7 @@
     return new Promise(resolve => {
       if (es) es.close();
       es = new EventSource(`/jobs/${jobId}/stream`);
-      es.onmessage = ev => { const l = JSON.parse(ev.data); if (l !== '') paint(l); };
+      es.onmessage = ev => paint(JSON.parse(ev.data));
       // 조용한 구간을 보이게 한다. terraform 은 refresh 하는 동안 아무것도 찍지 않아서,
       // 이게 없으면 "멈췄다" 와 화면상 구분이 되지 않는다.
       es.addEventListener('tick', ev => {

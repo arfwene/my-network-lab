@@ -105,8 +105,11 @@
     return new Promise(res => {
       const es = new EventSource(`/jobs/${id}/stream`);
       // 서버는 로그 한 줄을 기본 message 이벤트에 JSON 문자열로 싣는다 (app.py sse()).
+      // 한 프레임에 여러 줄이 온다. 한 번에 붙이고 스크롤도 한 번만 건드린다 —
+      // 줄마다 scrollHeight 를 읽으면 그때마다 레이아웃이 강제돼 탭이 굳는다.
       es.onmessage = e => {
-        out.textContent += JSON.parse(e.data) + '\n';
+        const lines = JSON.parse(e.data);
+        out.textContent += (Array.isArray(lines) ? lines : [lines]).join('\n') + '\n';
         out.scrollTop = out.scrollHeight;
       };
       es.addEventListener('tick', e => {

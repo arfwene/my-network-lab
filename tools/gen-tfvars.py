@@ -27,8 +27,10 @@ def main(lab_id, stage):
         "ssh_public_keys": A["ssh_public_keys"],
         "lab_stage": stage,
         "template_vmid": L.IPAM["labs"]["template_vmid"],
-        "mgmt_bridge": L.mgmt_bridge_name(),
-        "mgmt_vlan": L.mgmt_vlan(lab_id),
+        # mgmt_bridge · mgmt_vlan 을 여기 최상위로 내보내지 않는다.
+        #   루트 모듈이 선언하지 않는 값이라 apply 마다 "undeclared variable" 경고가
+        #   두 줄씩 붙었다. 실제로 쓰이는 값은 아래 nodes[].nics[] 안에 이미 있다 —
+        #   같은 값을 두 곳에 두면 한쪽만 고쳐질 때 조용히 어긋난다.
         "mgmt_cidr": L.mgmt_cidr(lab_id),
         "mgmt_gateway": L.mgmt_gateway(lab_id),
         "bridges": [
