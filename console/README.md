@@ -136,15 +136,16 @@ Proxmox 를 아직 켜지 않았다면 `[점검 실패해도 확인 처리]` 로
 ### 토큰 만들기 (Proxmox 셸에서 한 번)
 
 ```bash
-pveum user add terraform@pve
-pveum role add Terraform -privs "Datastore.Allocate Datastore.AllocateSpace \
-  Datastore.Audit Sys.Audit Sys.Console Sys.Modify VM.Allocate VM.Audit VM.Clone \
-  VM.Config.CDROM VM.Config.Cloudinit VM.Config.CPU VM.Config.Disk VM.Config.HWType \
-  VM.Config.Memory VM.Config.Network VM.Config.Options VM.Migrate VM.Monitor \
-  VM.PowerMgmt User.Modify Pool.Allocate"
-pveum aclmod / -user terraform@pve -role Terraform
-pveum user token add terraform@pve lab --privsep 0
+./infra/proxmox-setup.sh          # Proxmox 호스트에서 root 로, 한 번만
 ```
+
+역할·사용자·토큰을 한 번에 만들고 **토큰이 실제로 무엇을 할 수 있는지 확인한 뒤**
+비밀값을 한 번 출력한다. 그 값을 콘솔 [연결 설정] 에 넣는다.
+
+`pveum` 을 손으로 치지 않는 이유는 두 가지다.
+권한을 하나 빠뜨려도 티가 안 나고 나중에 배포가 403 으로 멈추는데 Proxmox 가
+무엇이 없는지 알려주지 않는다. 그리고 **권한 이름이 판올림마다 바뀐다** —
+PVE 9 는 `VM.Monitor` 를 없앴다. 스크립트는 거부당한 이름을 빼고 다시 물어본다.
 
 `Sys.Modify` 는 랩 브리지 생성에 필요하다 — 빼면 VM 은 만들어져도 **배선이 안 된다**.
 

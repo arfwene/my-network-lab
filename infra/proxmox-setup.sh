@@ -28,6 +28,7 @@ G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; B=$'\033[34m'; N=$'\033[0m'
 ok()   { echo "  ${G}✔${N} $*"; }
 warn() { echo "  ${Y}!${N} $*"; }
 bad()  { echo "  ${R}✘${N} $*"; }
+die()  { bad "$*"; exit 1; }
 step() { echo; echo "${B}▸ $*${N}"; }
 
 for a in "$@"; do
@@ -103,12 +104,33 @@ if [ "$MODE" = show ]; then
 fi
 
 # ---------------------------------------------------------------- 역할
+#  Proxmox 는 판올림마다 권한 이름이 늘고 준다 — PVE 9 는 VM.Monitor 를 없앴다.
+#  목록을 박아 두면 그때마다 설치가 여기서 멈춘다.
+#  거부당한 이름만 빼고 다시 물어본다. 다른 이유의 실패는 그대로 보여 준다.
+role_apply() {   # role_apply <add|modify>
+  local verb="$1" privs="$PRIVS" out bad
+  while :; do
+    if out=$(pveum role "$verb" "$ROLE" -privs "$privs" 2>&1); then
+      PRIVS="$privs"
+      return 0
+    fi
+    bad=$(printf '%s\n' "$out" | sed -n "s/.*invalid privilege '\([^']*\)'.*/\1/p" | head -1)
+    if [ -z "$bad" ]; then
+      printf '%s\n' "$out" >&2
+      return 1
+    fi
+    warn "이 Proxmox 는 권한 '$bad' 를 모른다 — 빼고 다시 시도한다"
+    privs=$(printf '%s' "$privs" | tr ',' '\n' | grep -vFx "$bad" | paste -sd,)
+    [ -n "$privs" ] || { echo "남은 권한이 없다" >&2; return 1; }
+  done
+}
+
 step "역할 $ROLE"
 if pveum role list --output-format json 2>/dev/null | grep -q "\"$ROLE\""; then
-  pveum role modify "$ROLE" -privs "$PRIVS"
+  role_apply modify || die "역할 권한을 맞추지 못했다"
   ok "권한 목록을 최신으로 맞췄다"
 else
-  pveum role add "$ROLE" -privs "$PRIVS"
+  role_apply add || die "역할을 만들지 못했다"
   ok "만들었다"
 fi
 
