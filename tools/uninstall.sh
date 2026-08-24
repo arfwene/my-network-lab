@@ -15,6 +15,8 @@
 #      ① 랩 VM 파괴 → ② 관리망 브리지 → ③ 서버 설정 → ④ 저장소
 #
 #  순으로 간다. ①이 실패하면 ④로 넘어가지 않는다.
+#  ②는 무언가 물려 있으면 되지 않는다 — 그래서 먼저 물어보고, 지운 뒤 다시 물어본다.
+#  종료 코드는 근거로 쓰지 않는다. tfstate 가 비는 것과 브리지가 사라지는 것은 다른 사건이다.
 #
 #  ─ 지우지 않는 것 ──────────────────────────────────────────────────────────
 #  · 골든 템플릿 VMID 9000  — 다시 만드는 데 가장 오래 걸린다. 재설치 때 그대로 쓴다.
@@ -121,12 +123,50 @@ elif [ "$KEEP_LABS" = 1 ]; then
 fi
 
 # ============================================================ 3. 관리망 브리지
+#  여기서 두 번 데었다 (docs/TODO.md 1).
+#    · terraform destroy 가 0 으로 끝나는 것과 브리지가 실제로 사라지는 것은 다른 사건이다.
+#      tfstate 만 비고 호스트에는 그대로 남아 있을 수 있다.
+#    · 무언가 물려 있으면 애초에 사라지지 않는다. 운영 서버 VM 의 트렁크 NIC 이 그렇다.
+#  그래서 **묻고 → 지우고 → 다시 물어본다.** 종료 코드는 근거로 쓰지 않는다.
+BRIDGE=$(python3 -c "
+import sys; sys.path.insert(0, '$ROOT/tools')
+import labdesign as L; print(L.mgmt_bridge_name())" 2>/dev/null || echo vmbr9)
+
+pve_bridge() {   # pve_bridge --check|--attached  → 0 없음/안물림 · 1 있음/물림 · 2 못물어봄
+  python3 "$ROOT/tools/pve-bridge.py" "$1" "$BRIDGE" 2>&1
+}
+
 if [ "$KEEP_LABS" = 0 ] && [ "$MGMT_LEFT" = 1 ]; then
-  step "관리망 브리지 파괴"
-  ( cd "$MGMT_ENV" && python3 "$ROOT/tools/with-pve-env.py" -- \
-      terraform destroy -auto-approve -input=false ) \
-    && ok "vmbr9 제거됨" \
-    || warn "관리망 브리지 파괴 실패 — Proxmox 웹에서 직접 지울 것"
+  step "관리망 브리지 $BRIDGE"
+
+  ATTACHED=$(pve_bridge --attached) && RC=0 || RC=$?
+  if [ "$RC" = 1 ]; then
+    warn "아직 물려 있는 VM 이 있다 — 이 상태로는 브리지가 지워지지 않는다:"
+    echo "$ATTACHED" | sed 's/^/      /'
+    warn "  Proxmox 웹에서 해당 VM 의 NIC 을 먼저 떼고 이 스크립트를 다시 돌릴 것"
+    warn "  (운영 서버 VM 의 트렁크 NIC 이 대개 여기 걸린다)"
+    warn "브리지 파괴는 건너뛴다."
+  else
+    [ "$RC" = 2 ] && warn "무엇이 물려 있는지 Proxmox 에 물어보지 못했다 — 그대로 시도한다"
+    ( cd "$MGMT_ENV" && python3 "$ROOT/tools/with-pve-env.py" -- \
+        terraform destroy -auto-approve -input=false ) \
+      || warn "terraform destroy 가 실패했다"
+
+    # 여기가 핵심이다. 성공했다고 믿지 않고 다시 물어본다.
+    RES=$(pve_bridge --check) && RC=0 || RC=$?
+    case "$RC" in
+      0) ok "$BRIDGE 제거 확인됨 (Proxmox 에 다시 물어봤다)" ;;
+      1) warn "$RES"
+         warn "  tfstate 는 비었는데 호스트에는 남아 있다. 대개 둘 중 하나다:"
+         warn "   · Proxmox 웹 [System → Network] 에 **적용 대기 중인 변경**이 있다"
+         warn "     → [Apply Configuration] 을 누르면 반영된다"
+         warn "       (이 스크립트는 호스트 네트워크를 대신 적용하지 않는다 — 원칙이다)"
+         warn "   · 무언가 아직 물려 있다 → 위 [Network] 화면에서 확인할 것"
+         warn "  남겨 두면 재설치 때 '남의 브리지' 로 오인돼 배포가 막힌다." ;;
+      *) warn "제거됐는지 Proxmox 에 확인하지 못했다: $RES"
+         warn "  Proxmox 웹 [System → Network] 에서 $BRIDGE 가 없는지 직접 볼 것" ;;
+    esac
+  fi
 fi
 
 # ============================================================ 4. 콘솔 서비스
@@ -226,10 +266,33 @@ pveum role list --output-format json | grep -q '"LabProvision"' \
   && { pveum role delete LabProvision && echo "  역할 LabProvision 삭제"; }
 
 echo "▸ 관리망 브리지"
-if grep -q "vmbr9" /etc/network/interfaces 2>/dev/null; then
-  echo "  vmbr9 가 아직 있다. 운영 서버 VM 의 NIC 을 먼저 떼고 웹에서 지울 것."
-else
+#  세 곳을 따로 본다. 셋이 다를 수 있고, 다르다는 것 자체가 정보다.
+#    interfaces      = 적용된 설정
+#    interfaces.new  = 아직 [Apply Configuration] 을 누르지 않은 변경
+#    ip link         = 지금 커널에 실제로 있는 것
+BR=vmbr9
+LEFT=0
+if grep -qE "^[[:space:]]*(auto|iface)[[:space:]]+$BR([[:space:]]|$)" /etc/network/interfaces 2>/dev/null; then
+  echo "  /etc/network/interfaces 에 $BR 가 있다"; LEFT=1
+fi
+if [ -f /etc/network/interfaces.new ]; then
+  echo "  적용 대기 중인 변경이 있다 (/etc/network/interfaces.new)"
+  echo "    → 웹 [System -> Network] 의 [Apply Configuration] 을 눌러야 반영된다"
+  grep -qE "^[[:space:]]*(auto|iface)[[:space:]]+$BR([[:space:]]|$)" /etc/network/interfaces.new \
+    && echo "    (반영해도 $BR 는 남는다)" \
+    || echo "    (반영하면 $BR 가 사라진다)"
+  LEFT=1
+fi
+if ip link show "$BR" >/dev/null 2>&1; then
+  echo "  커널에 $BR 가 살아 있다 (ip link)"; LEFT=1
+  ATT=$(bridge link 2>/dev/null | grep -c "master $BR" || true)
+  [ "${ATT:-0}" -gt 0 ] && echo "    포트 ${ATT}개가 물려 있다 — 이게 남아 있으면 지워지지 않는다"
+fi
+if [ "$LEFT" = 0 ]; then
   echo "  없음"
+else
+  echo "  운영 서버 VM 의 트렁크 NIC 을 먼저 떼고, 웹 [System -> Network] 에서 지울 것."
+  echo "  이 스크립트는 호스트 네트워크를 대신 바꾸지 않는다."
 fi
 
 echo
@@ -259,7 +322,9 @@ echo
 echo "=============================================================================="
 echo " 끝났다. 다음"
 echo "=============================================================================="
-echo "  1. $OUT 를 Proxmox 호스트에서 root 로 실행"
-echo "  2. Proxmox 웹에서 운영 서버 VM 의 net1(트렁크 NIC) 제거"
+echo "  1. Proxmox 웹에서 운영 서버 VM 의 net1(트렁크 NIC) 제거"
+echo "     — 이게 남아 있으면 관리망 브리지가 지워지지 않는다. 그래서 첫 번째다."
+echo "  2. $OUT 를 Proxmox 호스트에서 root 로 실행"
+echo "     — 브리지가 남았다고 나오면 [System → Network] 에서 지우고 [Apply Configuration]"
 echo "  3. 저장소를 다시 받아 ./install.sh --service"
 echo "     전체 절차: docs/DEPLOY.md 0절"
