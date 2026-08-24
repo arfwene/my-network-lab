@@ -13,6 +13,8 @@ my-network-lab 웹 콘솔 (v1)
 """
 import asyncio
 import html
+import secrets
+import time
 import subprocess
 import json
 import re
@@ -927,14 +929,50 @@ async def admin_setup_run(request: Request, action: str):
     return JSONResponse({"job_id": job.id})
 
 
+# ------------------------------------------------------- 임시 비밀번호 한 번 보여주기
+#  임시 비밀번호를 리다이렉트 URL 에 실으면 그 값이 브라우저 주소창·방문 기록·
+#  uvicorn 접근 로그·중간 프록시 로그에 **평문으로 남는다.** 화면에서 지워도 로그에는 남는다.
+#  그래서 URL 에는 뜻 없는 표만 싣고, 값은 이 프로세스의 메모리에 잠깐 둔다.
+#    · 디스크에 쓰지 않는다 (var/console.db 에도 남기지 않는다)
+#    · 한 번 꺼내면 사라진다 — 새로고침해도 다시 보이지 않는다
+#    · 5분이 지나면 사라진다
+#  콘솔은 uvicorn 단일 프로세스로 돈다(deploy/my-network-lab.service). 메모리로 충분하다.
+_ONCE = {}
+_ONCE_TTL = 300.0
+_ONCE_MAX = 64
+
+
+def _once_gc(now=None):
+    now = now if now is not None else time.monotonic()
+    for k in [k for k, (exp, _) in _ONCE.items() if exp <= now]:
+        _ONCE.pop(k, None)
+
+
+def once_put(payload):
+    _once_gc()
+    if len(_ONCE) >= _ONCE_MAX:                  # 오래된 것부터 버린다 (무한히 쌓이지 않게)
+        for k in sorted(_ONCE, key=lambda k: _ONCE[k][0])[:len(_ONCE) - _ONCE_MAX + 1]:
+            _ONCE.pop(k, None)
+    tok = secrets.token_urlsafe(16)
+    _ONCE[tok] = (time.monotonic() + _ONCE_TTL, payload)
+    return tok
+
+
+def once_take(tok):
+    _once_gc()
+    v = _ONCE.pop(tok or "", None)
+    return v[1] if v else None
+
+
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_page(request: Request, msg: str = "", err: str = ""):
+async def admin_page(request: Request, msg: str = "", err: str = "", once: str = ""):
     user, redir = require(request, "user.manage")
     if redir:
         return redir
     lo, _ = L.SITE["labs"]["id_range"]
     return tpl.TemplateResponse(request, "admin.html", {
         "user": user, "users": db.list_users(), "msg": msg, "err": err,
+        "secret": once_take(once),
         "health": pve.last(), "pending": db.count_pending(),
         "labs": list(range(lo, L.SITE["labs"]["default_count"] + 1)),
         "policy": passwords.policy_text(),
@@ -967,9 +1005,8 @@ async def admin_create(request: Request, username: str = Form(...), name: str = 
         return RedirectResponse("/admin?err=" + " / ".join(errs), status_code=303)
     db.add_user(username, auth.hash_password(pw), role=role, lab_id=lab,
                 name=name or username, must_change=True)
-    return RedirectResponse(
-        f"/admin?msg={username} 생성됨. 임시 비밀번호: {pw} (첫 로그인에서 변경해야 한다)",
-        status_code=303)
+    tok = once_put({"username": username, "password": pw, "what": "생성됨"})
+    return RedirectResponse(f"/admin?once={tok}", status_code=303)
 
 
 @app.post("/admin/users/{target}/{op}")
@@ -1000,7 +1037,8 @@ async def admin_op(request: Request, target: str, op: str, lab_id: str = Form(""
         pw = passwords.generate()
         db.set_password(target, auth.hash_password(pw), must_change=True)
         db.clear_failures(target)
-        m = f"{target} 임시 비밀번호: {pw} (첫 로그인에서 변경해야 한다)"
+        tok = once_put({"username": target, "password": pw, "what": "비밀번호 재발급"})
+        return RedirectResponse(f"/admin?once={tok}", status_code=303)
     elif op == "unlock":
         db.clear_failures(target)
         m = f"{target} 로그인 잠금 해제"
