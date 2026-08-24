@@ -211,7 +211,18 @@ if [ "$DO_JUMP" = 1 ]; then
   printf '# my-network-lab — 웹 콘솔이 교육생 점프 계정을 적용한다.\n' > "$TMPS"
   printf '# 인자 없음: 이 프로그램 그대로만 실행할 수 있다.\n' >> "$TMPS"
   printf '%s ALL=(root) NOPASSWD: %s\n' "$ME" "$HELPER" >> "$TMPS"
-  printf 'Defaults!%s !requiretty\n' "$HELPER" >> "$TMPS"
+
+  # requiretty 는 sudo 1.9.17 에서 아예 사라졌다 (Ubuntu 26.04 이상).
+  # 그 버전에서는 "unknown setting" 으로 파일 전체가 문법 오류가 된다.
+  # 있으면 명시하고, 없으면 조용히 뺀다 — 어차피 기본값이 off 라 동작은 같다.
+  TMPT=$(mktemp)
+  cat "$TMPS" > "$TMPT"
+  printf 'Defaults!%s !requiretty\n' "$HELPER" >> "$TMPT"
+  if $SUDO visudo -cf "$TMPT" >/dev/null 2>&1; then
+    cat "$TMPT" > "$TMPS"
+  fi
+  rm -f "$TMPT"
+
   if $SUDO visudo -cf "$TMPS" >/dev/null; then
     $SUDO install -o root -g root -m 0440 "$TMPS" "$SUDOERS"
     ok "$SUDOERS  ($ME 가 이 프로그램만 root 로 실행)"
