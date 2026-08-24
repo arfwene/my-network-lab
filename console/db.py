@@ -8,6 +8,7 @@
 동시성: WAL 모드 + 짧은 커넥션. 교육생 수십 명 규모에서 충분하다.
 """
 import json
+import re
 import secrets
 import sqlite3
 import sys
@@ -178,6 +179,18 @@ def connect():
         con.close()
 
 
+# SCHEMA 가 만들기로 한 테이블. 목록을 따로 적지 않고 SCHEMA 에서 뽑는다 —
+# 손으로 적으면 테이블을 더할 때마다 둘이 어긋난다.
+EXPECTED_TABLES = frozenset(
+    re.findall(r"CREATE TABLE IF NOT EXISTS (\w+)", SCHEMA))
+
+
+def missing_tables(con):
+    have = {r["name"] for r in
+            con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    return sorted(EXPECTED_TABLES - have)
+
+
 def init():
     """스키마 생성 · 버전 이행 · 최초 관리자 계정 생성."""
     with connect() as con:
@@ -187,6 +200,20 @@ def init():
         con.executescript(SCHEMA)
         if v < SCHEMA_VERSION:
             con.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        # 스키마를 만들었다고 믿지 않고 확인한다.
+        #   executescript 가 도중에 실패하면 예외가 나지만, 이 파일이 **다른 경로에서
+        #   이미 만들어져** 있었거나 권한 때문에 반영되지 않으면 조용히 반쪽 스키마가
+        #   된다. 그러면 콘솔은 멀쩡히 뜨고 없는 테이블을 건드리는 기능만 20초마다
+        #   오류를 뱉는다 — 원인을 찾기가 아주 어렵다. 여기서 한 번에 죽는 편이 낫다.
+        gone = missing_tables(con)
+        if gone:
+            raise RuntimeError(
+                f"{DB_PATH} 의 스키마가 불완전하다. 없는 테이블: {', '.join(gone)}\n"
+                f"  이 파일을 만든 것이 이 프로그램이 맞는지, 쓰기 권한이 있는지 볼 것:\n"
+                f"    ls -l {DB_PATH}\n"
+                f"    sqlite3 {DB_PATH} '.tables'\n"
+                f"  살릴 수 없는 DB 라면 옮겨 두고 다시 시작하면 새로 만든다 "
+                f"(계정·API 토큰은 다시 넣어야 한다).")
     _migrate_from_yaml()
     ensure_bootstrap_admin()
 

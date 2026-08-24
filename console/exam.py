@@ -283,14 +283,38 @@ async def sweep_once(runner):
 
 
 async def sweeper(runner):
-    """백그라운드 루프. 예외가 나도 절대 멈추지 않는다 — 멈추면 시험이 안 끝난다."""
+    """백그라운드 루프. 예외가 나도 절대 멈추지 않는다 — 멈추면 시험이 안 끝난다.
+
+    다만 '멈추지 않는다'가 '같은 오류를 20초마다 영원히 찍는다'가 되면 안 된다.
+    그러면 로그가 그 한 줄로 덮여서 정작 봐야 할 것이 안 보인다.
+    같은 오류는 처음 한 번과 그 뒤로 가끔만 찍고, 횟수를 함께 남긴다.
+    """
     period = max(5, int(cfg()["sweep_seconds"]))
+    every = max(1, int(1200 / period))      # 되풀이되는 오류는 20분에 한 번만
+    last, repeat, healed = None, 0, False
     while True:
         try:
             for ex in await sweep_once(runner):
                 if ex:
                     print(f"[exam] lab{ex['lab_id']} {ex['module_id']} 마감 확정 "
                           f"— {ex['username']} · {ex['ok']}/{ex['total']}", file=sys.stderr)
+            last, repeat = None, 0
         except Exception as e:              # noqa: BLE001
-            print(f"[exam] 마감 스위퍼 오류(무시하고 계속): {e}", file=sys.stderr)
+            msg = str(e)
+            # 스키마가 없는 것은 기다린다고 낫지 않는다. 딱 한 번 고쳐 본다.
+            if "no such table" in msg and not healed:
+                healed = True
+                try:
+                    db.init()
+                    print("[exam] DB 스키마를 다시 만들었다 — 계속한다", file=sys.stderr)
+                    await asyncio.sleep(period)
+                    continue
+                except Exception as e2:     # noqa: BLE001
+                    msg = f"{msg} · 복구 실패: {e2}"
+            repeat = repeat + 1 if msg == last else 0
+            last = msg
+            if repeat == 0 or repeat % every == 0:
+                more = f"  (같은 오류 {repeat + 1}회째)" if repeat else ""
+                print(f"[exam] 마감 스위퍼 오류(무시하고 계속): {msg}{more}",
+                      file=sys.stderr)
         await asyncio.sleep(period)
