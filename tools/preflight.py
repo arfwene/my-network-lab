@@ -323,6 +323,39 @@ def check_mgmt(lab_id):
 
 
 # ===================================================== 5. 콘솔 운영
+def _uname(uid):
+    try:
+        import pwd                                     # noqa: PLC0415
+        return pwd.getpwuid(uid).pw_name
+    except (KeyError, ImportError):
+        return f"uid {uid}"
+
+
+def _check_schema(dbf):
+    """DB 에 있어야 할 테이블이 다 있는가.
+
+    sqlite3 명령이 깔려 있지 않은 서버가 많다. 콘솔이 쓰는 코드로 그냥 물어본다 —
+    확인하려고 패키지를 더 깔게 만들지 않는다.
+    """
+    try:
+        import db                                      # noqa: PLC0415
+        if db.DB_PATH.resolve() != dbf.resolve():
+            err("DB 경로", f"콘솔은 {db.DB_PATH} 를 본다",
+                f"검사한 파일({dbf})과 다르다 — 둘 중 하나가 엉뚱한 곳이다")
+            return
+        with db.connect() as con:
+            gone = db.missing_tables(con)
+    except Exception as e:                             # noqa: BLE001
+        warn("DB 스키마", f"확인하지 못했다: {e}")
+        return
+    if gone:
+        err("DB 스키마", f"없는 테이블: {', '.join(gone)}",
+            "콘솔을 다시 시작하면 스스로 만든다. 그래도 남으면 위의 소유자·권한을 볼 것: "
+            f"sudo systemctl restart my-network-lab")
+    else:
+        ok("DB 스키마", f"테이블 {len(db.EXPECTED_TABLES)}개 모두 있다")
+
+
 def check_runtime():
     section("콘솔 운영")
     var = L.ROOT / "var"
@@ -334,10 +367,21 @@ def check_runtime():
                                         "" if mode == 0o700 else "chmod 700 var")
         dbf = var / "console.db"
         if dbf.exists():
-            m = dbf.stat().st_mode & 0o777
+            st = dbf.stat()
+            m = st.st_mode & 0o777
             (ok if m == 0o600 else err)("console.db 권한", f"{m:04o}",
                                         "" if m == 0o600 else
                                         "API 토큰이 들어 있다. chmod 600 var/console.db")
+            # 소유자가 다르면 콘솔은 이 파일을 고칠 수 없다.
+            # 다른 계정(대개 sudo)이 먼저 만들어 두면 콘솔은 뜨긴 뜨는데
+            # 스키마가 반쪽인 채로 돈다. 겉으로는 멀쩡해 보인다.
+            if st.st_uid != os.geteuid():
+                err("console.db 소유자", _uname(st.st_uid),
+                    f"콘솔을 돌리는 계정({_uname(os.geteuid())})이 아니다. "
+                    f"sudo chown {_uname(os.geteuid())} {dbf}")
+            else:
+                ok("console.db 소유자", _uname(st.st_uid))
+            _check_schema(dbf)
 
     # CLI(make deploy/mgmt)도 토큰이 필요하다. 콘솔에만 있으면 CLI 가 멈춘다.
     tok = bool(os.environ.get("PROXMOX_VE_API_TOKEN"))
