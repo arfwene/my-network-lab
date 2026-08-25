@@ -294,7 +294,14 @@ def reload_sshd(dry):
 def main():
     ap = argparse.ArgumentParser(description="교육생 점프 계정 적용 (root 전용)")
     ap.add_argument("--dry-run", action="store_true", help="계산만 하고 아무것도 바꾸지 않는다")
+    # 콘솔이 "이 버튼을 보여도 되는가" 를 물을 때 쓴다. 아무것도 읽지 않고 바로 끝난다 —
+    # 이 물음은 화면을 그릴 때마다 나오므로 정책·DB 를 훑어서는 안 된다.
+    ap.add_argument("--probe", action="store_true",
+                    help="sudo 로 여기까지 올 수 있는지만 확인하고 끝낸다")
     a = ap.parse_args()
+    if a.probe:
+        print("ok")
+        return
     if os.geteuid() != 0 and not a.dry_run:
         die("root 로 실행할 것 (콘솔은 sudo 로 부른다)")
 

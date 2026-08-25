@@ -108,7 +108,7 @@ async def _wait(runner, job, key):
 async def _jump_apply(runner):
     global _tries, _jump
     if ready and not ready():
-        # 관리자가 install.sh --jump-apply 를 아직 안 했다. 화면이 그 사실을
+        # 이 서버에 아직 root 헬퍼가 없다 (install.sh 를 안 돌렸거나 옛 버전). 화면이 그 사실을
         # 이미 말하고 있으므로 여기서는 조용히 넘어간다 (매번 로그를 채우지 않는다).
         _fail["jump"] = "콘솔이 아직 점프 계정을 직접 적용할 수 없다 (관리자 설치 필요)"
         return

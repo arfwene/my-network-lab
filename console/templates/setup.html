@@ -15,7 +15,7 @@
       <span class="tag ok">통과 {{ counts.ok }}</span>
       <span class="tag warn">경고 {{ counts.warn }}</span>
       <span class="tag bad">오류 {{ counts.error }}</span>
-      <a class="btn" href="/admin/setup?lab={{ lab }}">다시 검사</a>
+      <a class="btn" href="/admin/setup?lab={{ lab }}&amp;fresh=1">다시 검사</a>
     </p>
 
     {% if counts.error %}
@@ -53,7 +53,7 @@
     <p class="flash">
       <b>교육생이 늘 때마다</b> 서버에 들어가 점프 계정을 만드는 일이 남아 있다.
       아래 한 줄을 <b>한 번</b> 실행해 두면 그 일도 이 화면의 버튼이 된다.
-      <br><code>./install.sh --jump-apply --no-apt</code>
+      <br><code>./install.sh --no-apt</code>
       <br><span class="muted">콘솔 계정에 sudo 를 통째로 주지 않는다 — root 소유 전용 프로그램
       하나만, 인자 없이 실행할 수 있게 한다.</span>
     </p>
@@ -65,7 +65,7 @@
       이 사람들이 <code>ssh</code> 를 하면 <b>첫 홉에서</b> 막힌다.
       아래 <b>[점프 계정 적용]</b> 을 누르면 해결된다.
       {% if not jump_ready %}<br><span class="muted">버튼이 없으면 위의
-      <code>./install.sh --jump-apply --no-apt</code> 를 먼저 한 번 실행할 것.</span>{% endif %}
+      <code>./install.sh --no-apt</code> 를 먼저 한 번 실행할 것.</span>{% endif %}
     </p>
     {% endif %}
     <div class="setup-acts">

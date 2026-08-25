@@ -309,7 +309,7 @@ def _sshkey_ctx(request, user, errors=(), saved="", onboard=False):
 
 @app.get("/sshkey", response_class=HTMLResponse)
 async def sshkey_form(request: Request, onboard: int = 0, later: int = 0,
-                      applied: int = 0, saved: int = 0):
+                      applied: int = 0, changed: int = 0, removed: int = 0):
     user = current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
@@ -324,9 +324,11 @@ async def sshkey_form(request: Request, onboard: int = 0, later: int = 0,
     if applied:
         msg = ("등록했다. 점프 계정과 랩 노드에 자동으로 반영한다 — 1~2분쯤 걸린다. "
                "이 화면은 스스로 새로 고쳐지니 기다리면 된다.")
-    elif saved:
-        msg = ("저장했다. 랩 노드에는 [지금 랩에 반영] 으로 들어간다. "
-               "점프 호스트는 관리자가 따로 반영해야 한다 — 아래를 볼 것.")
+    elif changed:
+        msg = ("바꿨다. 점프 계정과 랩 노드에 자동으로 반영한다 — "
+               "예전 키로는 곧 들어갈 수 없게 된다.")
+    elif removed:
+        msg = "키를 지웠다. 점프 계정과 랩 노드에서 자동으로 회수한다."
     return tpl.TemplateResponse(request, "sshkey.html",
                                 _sshkey_ctx(request, user, saved=msg,
                                             onboard=bool(onboard)))
@@ -341,25 +343,25 @@ async def sshkey_save(request: Request, key: str = Form(""), remove: str = Form(
         return RedirectResponse("/password", status_code=303)
     if remove:
         db.set_ssh_key(user["username"], "")
-        return tpl.TemplateResponse(
-            request, "sshkey.html",
-            _sshkey_ctx(request, user, saved="키를 지웠다. 다음 설정 적용 때 노드에서도 사라진다."))
+        # 지운 것도 반영해야 한다 — 헬퍼가 그 계정의 접근을 회수한다.
+        autokey.request(pick_lab(user))
+        return RedirectResponse("/sshkey?removed=1", status_code=303)
     try:
         normalized = sshkeys.normalize(key)
     except sshkeys.Invalid as e:
         return tpl.TemplateResponse(request, "sshkey.html",
                                     _sshkey_ctx(request, user, errors=[str(e)]),
                                     status_code=400)
-    # **바꾼 것인지 처음 넣은 것인지**를 덮어쓰기 전에 본다.
-    # 처음이면 반영까지 자동으로 걸어 준다 (첫 로그인 절차를 여기서 끝낸다).
+    # 처음 넣은 것인지 바꾼 것인지는 안내 문구만 가른다.
+    # **반영은 둘 다 자동으로 건다** — 바꿀 때만 손으로 눌러야 했더니,
+    # 누르는 것을 잊은 사람이 첫 홉에서 막히고 이유를 알지 못했다.
     first = not (db.get_user(user["username"]) or {}).get("ssh_key")
     db.set_ssh_key(user["username"], normalized)
-    if first:
-        autokey.request(pick_lab(user))
-        request.session.pop("key_later", None)
+    autokey.request(pick_lab(user))
+    request.session.pop("key_later", None)
     # 화면을 바로 그리지 않고 되돌린다(PRG). 자동 반영 중에는 이 화면이 스스로
     # 새로 고쳐지는데, POST 응답을 새로 고치면 브라우저가 폼을 다시 보낸다.
-    return RedirectResponse(f"/sshkey?{'applied' if first else 'saved'}=1", status_code=303)
+    return RedirectResponse(f"/sshkey?{'applied' if first else 'changed'}=1", status_code=303)
 
 
 @app.get("/sshkey/config")
@@ -898,7 +900,7 @@ def _setup_buttons(jump_ready):
             "what": ("콘솔에 등록된 교육생 키로 운영 서버의 점프 계정을 만들고 "
                      "sshd 제한을 갱신한다. 교육생을 추가하거나 키를 바꾼 뒤에 누른다. "
                      "빠진 사람은 만들고, 콘솔에서 사라진 사람은 접근을 회수한다."),
-            "need": "install.sh --jump-apply 로 설치된 root 헬퍼"})
+            "need": "install.sh 가 설치하는 root 헬퍼"})
     return b
 
 
@@ -930,21 +932,35 @@ SETUP_BUTTONS = [
 ]
 
 
-def _jump_apply_ready():
-    """콘솔이 점프 계정을 직접 적용할 수 있는가 (install.sh --jump-apply 를 했는가).
+_JUMP_READY = {"at": 0.0, "val": False}
+_JUMP_READY_TTL = 60.0
 
-    파일 존재만 보지 않는다 — sudoers 규칙이 실제로 이 계정에 걸려 있는지
-    `sudo -n -l` 로 물어본다. 규칙 없이 버튼만 보이면 눌렀을 때 비밀번호를
-    묻다가 조용히 실패한다.
+
+def _jump_apply_ready(force=False):
+    """콘솔이 점프 계정을 직접 적용할 수 있는가.
+
+    **실제로 한 번 실행해 본다.** 예전에는 `sudo -n -l HELPER` 로 물었는데,
+    그건 "권한 목록을 보여 달라" 는 요청이라 sudo 의 verifypw 기본값(all) 아래에서는
+    비밀번호를 요구한다 — 규칙이 NOPASSWD 로 제대로 걸려 있어도, 그 계정에
+    비밀번호가 필요한 다른 sudo 규칙이 하나라도 있으면(예: sudo 그룹) 실패한다.
+    그래서 install.sh 는 "설치됐다" 고 하는데 콘솔은 버튼을 영영 안 보여 줬다.
+
+    --probe 는 헬퍼가 아무것도 읽지 않고 바로 끝내는 길이다. 화면을 그릴 때마다
+    부르므로 결과를 잠깐 들고 있는다.
     """
-    if not Path(jobs.JUMP_HELPER).exists():
-        return False
-    try:
-        r = subprocess.run(["sudo", "-n", "-l", jobs.JUMP_HELPER],
-                           capture_output=True, text=True, timeout=5)
-        return r.returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        return False
+    now = time.time()
+    if not force and now - _JUMP_READY["at"] < _JUMP_READY_TTL:
+        return _JUMP_READY["val"]
+    val = False
+    if Path(jobs.JUMP_HELPER).exists():
+        try:
+            r = subprocess.run(["sudo", "-n", jobs.JUMP_HELPER, "--probe"],
+                               capture_output=True, text=True, timeout=5)
+            val = r.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            val = False
+    _JUMP_READY.update(at=now, val=val)
+    return val
 
 
 def _setup_manual(jump_ready=False):
@@ -969,7 +985,7 @@ def _setup_manual(jump_ready=False):
              "where": "이 운영 서버, sudo",
              "why": ("OS 계정과 sshd 설정을 건드린다. 교육생이 늘 때마다 필요하다. "
                      "아래 한 줄을 한 번 실행해 두면 이 일이 위쪽 버튼으로 바뀐다 — "
-                     f"cd {root} && ./install.sh --jump-apply --no-apt"),
+                     f"cd {root} && ./install.sh --no-apt"),
              "cmd": (f"cd {root} && sudo ./dist/jump-access.sh\n"
                      "sudo cp dist/jump-access.conf /etc/ssh/sshd_config.d/60-lab-jump.conf\n"
                      "sudo sshd -t && sudo systemctl reload ssh")}]),
@@ -983,7 +999,7 @@ def _setup_manual(jump_ready=False):
 
 
 @app.get("/admin/setup", response_class=HTMLResponse)
-async def admin_setup(request: Request, lab: int = 1):
+async def admin_setup(request: Request, lab: int = 1, fresh: int = 0):
     # skip_setup: 이 화면은 **연결 설정을 확인하기 전에도** 열려야 한다.
     # 여기가 무엇이 안 됐는지 알려 주는 곳인데, 안 됐다는 이유로 튕기면 순환이다.
     user, redir = require(request, "user.manage", skip_setup=True)
@@ -991,8 +1007,11 @@ async def admin_setup(request: Request, lab: int = 1):
         return redir
     # make doctor 와 **같은 검사**를 부른다. 화면과 CLI 가 다른 말을 하면 안 된다.
     # 소켓을 쓰므로 이벤트 루프를 막지 않게 스레드로 돌린다.
-    checks = await asyncio.to_thread(preflight.collect, lab)
-    jump_ready = await asyncio.to_thread(_jump_apply_ready)
+    # 기본은 **다시 재지 않는다.** Proxmox 왕복(4초)과 도구 버전 확인(1초)은
+    # 화면을 열 때마다 값이 달라지지 않는데, 그걸 매번 재느라 이 화면이 18초 걸렸다.
+    # [다시 검사] 는 ?fresh=1 로 온다.
+    checks = await asyncio.to_thread(preflight.collect, lab, False, bool(fresh))
+    jump_ready = await asyncio.to_thread(_jump_apply_ready, bool(fresh))
     n = {"ok": 0, "warn": 0, "error": 0, "skip": 0}
     for c in checks:
         if c["status"] in n:
@@ -1158,6 +1177,13 @@ async def admin_op(request: Request, target: str, op: str, lab_id: str = Form(""
         m = f"{target} → lab{lab_id} 재배정 (즉시 반영)"
     else:
         return RedirectResponse("/admin?err=알 수 없는 작업", status_code=303)
+    # 차단·삭제·랩 이동은 **접근 권한이 바뀐 것**이다. 헬퍼가 없어진 사람의
+    # 점프 계정을 회수하고 남은 사람의 키를 다시 쓴다. 안 걸면 차단된 계정이
+    # 콘솔에서만 막히고 ssh 로는 그대로 들어온다.
+    if op in ("disable", "enable", "delete", "lab"):
+        autokey.request(t.get("lab_id"))
+        if op == "lab" and lab_id:
+            autokey.request(int(lab_id))
     return RedirectResponse(f"/admin?msg={m}", status_code=303)
 
 

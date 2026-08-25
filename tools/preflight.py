@@ -22,6 +22,8 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
+import concurrent.futures as cf
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -47,6 +49,24 @@ def skip(t, d="", h=""):  add("skip", t, d, h)
 
 def section(title):
     RESULTS.append(("section", title, "", ""))
+
+
+_RUN_CACHE: dict = {}
+
+
+def run_cached(argv, timeout=20, ttl=300.0):
+    """버전 확인처럼 **결과가 잘 안 변하는** 실행. 잠깐 들고 있는다.
+
+    terraform·ansible 버전을 묻는 것만으로 1초 가까이 나간다. 화면을 열 때마다
+    그 값이 달라질 일은 없다.
+    """
+    key = tuple(argv)
+    hit = _RUN_CACHE.get(key)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    val = run(argv, timeout)
+    _RUN_CACHE[key] = (time.time(), val)
+    return val
 
 
 def run(argv, timeout=20):
@@ -100,7 +120,7 @@ def check_tools():
         err("ansible-playbook", "없다",
             "`make console-setup` 이 venv 안에 설치한다. 시스템에 깔 필요는 없다")
     else:
-        good, line = run([apb, "--version"])
+        good, line = run_cached([apb, "--version"])
         where = "venv" if str(VENV) in apb else "시스템 PATH"
         if good and ver_tuple(line) >= (2, 16):
             ok("ansible-playbook", f"{line}  [{where}]")
@@ -113,7 +133,7 @@ def check_tools():
     if not gal:
         skip("ansible.posix 컬렉션", "ansible-galaxy 가 없어 건너뛴다")
     else:
-        good, _ = run([gal, "collection", "list", "ansible.posix"])
+        good, _ = run_cached([gal, "collection", "list", "ansible.posix"])
         if good:
             ok("ansible.posix 컬렉션", "설치됨 (roles/common 의 sysctl 모듈이 쓴다)")
         else:
@@ -125,7 +145,7 @@ def check_tools():
         err("terraform", "PATH 에 없다",
             "`./install.sh` 가 설치한다. 수동 설치는 docs/DEPLOY.md 참고")
     else:
-        good, line = run([tf, "version"])
+        good, line = run_cached([tf, "version"])
         if good and ver_tuple(line) >= (1, 6):
             ok("terraform", f"{line}  ({tf})")
         elif good:
@@ -167,7 +187,7 @@ def check_config(lab_id_for_keys=1):
         ok("접속 값 출처", f"config/site.local.yml · 노드 {pxm['node_name']} · "
                            f"{pxm['api_endpoint']}")
 
-    good, _ = run([sys.executable, str(ROOT / "tools/validate-site.py")], timeout=60)
+    good, _ = run_cached([sys.executable, str(ROOT / "tools/validate-site.py")], timeout=60)
     if good:
         ok("site 검사", "오류 없음 (`make check` 로 전체 결과를 볼 수 있다)")
     else:
@@ -213,7 +233,7 @@ def check_config(lab_id_for_keys=1):
 
 
 # ===================================================== 3. Proxmox
-def check_proxmox(lab_id_for_pre=1):
+def check_proxmox(lab_id_for_pre=1, fresh=True):
     section("Proxmox 연결")
     if not (L.ROOT / "var/console.db").exists():
         warn("연결 설정", "아직 없다 (var/console.db 미생성)",
@@ -221,7 +241,10 @@ def check_proxmox(lab_id_for_pre=1):
         return
     try:
         import pve                                    # noqa: PLC0415
-        res = pve.check()
+        # 화면에서 부를 때는 방금 잰 값을 다시 쓴다. Proxmox 왕복은 4초쯤 걸리는데
+        # [설치] 화면을 열 때마다 그걸 새로 재면, 헤더 칩이 이미 보여 주고 있는
+        # 같은 값을 위해 사람을 4초 기다리게 하는 것이다. make doctor 는 새로 잰다.
+        res = pve.check() if fresh else pve.cached()
     except Exception as e:                            # noqa: BLE001
         err("연결 점검", f"{type(e).__name__}: {e}")
         return
@@ -306,13 +329,19 @@ def check_mgmt(lab_id):
 
     # 노드가 아직 없으면 닫혀 있는 게 정상이다. 그래서 오류로 올리지 않는다.
     nodes = [L.node_config(lab_id, n, "m10") for n in L.TOPO["nodes"]]
-    live = []
-    for c in nodes:
+
+    # 13대를 **동시에** 두드린다. 하나씩 돌면 랩이 없을 때 13초를 통째로 기다린다 —
+    # 그게 [설치] 화면이 느린 이유의 대부분이었다. 기다리는 시간은 소켓이 쓰지,
+    # CPU 가 쓰는 게 아니므로 스레드로 겹쳐 두면 제일 느린 하나만큼만 걸린다.
+    def alive(c):
         try:
             with socket.create_connection((c["mgmt_ip"], 22), timeout=1.0):
-                live.append(c["node"])
+                return c["node"]
         except OSError:
-            pass
+            return None
+
+    with cf.ThreadPoolExecutor(max_workers=min(16, len(nodes) or 1)) as ex:
+        live = [n for n in ex.map(alive, nodes) if n]
     if not live:
         skip("노드 SSH", f"{len(nodes)}대 중 응답 0 — 아직 배포 전이라면 정상이다",
              "배포 뒤에도 0이면 관리망 경로 문제다")
@@ -512,7 +541,7 @@ def report():
     return 1 if n["error"] else 0
 
 
-def collect(lab_id=1, skip_proxmox=False):
+def collect(lab_id=1, skip_proxmox=False, fresh=True):
     """검사를 돌리고 결과 목록을 돌려준다 — 웹 콘솔의 [설치] 화면이 쓴다.
 
     CLI 와 화면이 **같은 검사**를 봐야 한다. 화면용으로 따로 만들면
@@ -526,7 +555,7 @@ def collect(lab_id=1, skip_proxmox=False):
         section("Proxmox 연결")
         skip("전체", "건너뜀")
     else:
-        check_proxmox(lab_id)
+        check_proxmox(lab_id, fresh=fresh)
         check_mgmt(lab_id)
     check_runtime()
     return [{"status": st, "title": t, "detail": d, "hint": h}

@@ -8,7 +8,11 @@
 #    ./install.sh                 설치만
 #    ./install.sh --service       설치 + systemd 서비스 등록 (부팅 시 자동 기동)
 #    ./install.sh --no-apt        OS 패키지 설치를 건너뛴다 (권한이 없거나 이미 있을 때)
-#    ./install.sh --jump-apply    콘솔이 점프 계정을 직접 적용할 수 있게 한다 (아래 설명)
+#    ./install.sh --no-jump-apply 점프 계정 적용 권한을 설치하지 않는다
+#
+#  점프 계정 적용 권한은 **기본으로 설치한다.** 예전에는 --jump-apply 를 따로
+#  줘야 했는데, 그걸 안 준 서버에서는 교육생이 키를 등록해도 아무 일도 일어나지
+#  않았다 — 그리고 화면에는 그 사실이 드러나지 않았다. 기본값이어야 맞다.
 #
 #  폐쇄망이면 Terraform zip 을 미리 받아 두고:
 #    TERRAFORM_ZIP=/tmp/terraform_1.9.8_linux_amd64.zip ./install.sh
@@ -23,7 +27,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV="$ROOT/console/.venv"
 DO_APT=1
 DO_SERVICE=0
-DO_JUMP=0
+DO_JUMP=1
 PORT="${PORT:-8080}"
 
 G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; B=$'\033[34m'; N=$'\033[0m'
@@ -35,7 +39,8 @@ die()  { echo "  ${R}✘${N} $*" >&2; exit 1; }
 for a in "$@"; do
   case "$a" in
     --service) DO_SERVICE=1 ;;
-    --jump-apply) DO_JUMP=1 ;;
+    --jump-apply) DO_JUMP=1 ;;          # 예전 이름 — 이제 기본값이라 아무 일도 하지 않는다
+    --no-jump-apply) DO_JUMP=0 ;;
     --no-apt)  DO_APT=0 ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) die "모르는 옵션: $a" ;;
@@ -209,8 +214,9 @@ if [ "$DO_JUMP" = 1 ]; then
   # visudo -c 로 먼저 검사한다. 깨진 sudoers 를 넣으면 그 서버에서 sudo 자체가 죽는다.
   TMPS=$(mktemp)
   printf '# my-network-lab — 웹 콘솔이 교육생 점프 계정을 적용한다.\n' > "$TMPS"
-  printf '# 인자 없음: 이 프로그램 그대로만 실행할 수 있다.\n' >> "$TMPS"
-  printf '%s ALL=(root) NOPASSWD: %s\n' "$ME" "$HELPER" >> "$TMPS"
+  printf '# 두 가지 실행만 허용한다: 인자 없이(적용), 그리고 --probe(권한 확인).\n' >> "$TMPS"
+  printf '# sudoers 에서 인자를 안 적으면 **모든 인자가 허용된다** — 그래서 ""(빈 인자)로 못 박는다.\n' >> "$TMPS"
+  printf '%s ALL=(root) NOPASSWD: %s "", %s --probe\n' "$ME" "$HELPER" "$HELPER" >> "$TMPS"
 
   # requiretty 는 sudo 1.9.17 에서 아예 사라졌다 (Ubuntu 26.04 이상).
   # 그 버전에서는 "unknown setting" 으로 파일 전체가 문법 오류가 된다.
@@ -232,8 +238,12 @@ if [ "$DO_JUMP" = 1 ]; then
   fi
   rm -f "$TMPS"
 
-  if sudo -n "$HELPER" --dry-run >/dev/null 2>&1; then
-    ok "콘솔에서 [점프 계정 적용] 버튼을 쓸 수 있다"
+  # 콘솔이 쓰는 것과 **똑같은 방법**으로 확인한다.
+  # 예전에는 여기서 --dry-run 을, 콘솔에서는 `sudo -n -l` 을 썼다. 뒤엣것은
+  # 권한 목록을 요구하는 것이라 sudo 가 비밀번호를 묻고(verifypw 기본값 all),
+  # 그래서 여기서는 "쓸 수 있다" 는데 콘솔에서는 버튼이 영영 안 나왔다.
+  if sudo -n "$HELPER" --probe >/dev/null 2>&1; then
+    ok "콘솔이 점프 계정을 직접 적용한다 — 교육생이 키를 넣으면 자동으로 반영된다"
   else
     warn "sudo -n 확인에 실패했다 — 콘솔은 계속 '복사할 명령' 으로 안내한다"
   fi
@@ -273,7 +283,7 @@ cat <<EOF
   4. 초록이 되면 랩 화면에서 [랩 생성]. make 를 칠 일은 없다.
 
   ※ 교육생이 늘 때마다 서버에 들어와 점프 계정을 만드는 일이 번거롭다면
-       ./install.sh --jump-apply --no-apt
+       ./install.sh --no-apt
      한 번 실행해 두면 그 일도 콘솔 버튼이 된다 (root 소유 헬퍼 + 인자 없는 sudoers).
 
   전체 절차: docs/DEPLOY.md
