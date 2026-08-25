@@ -261,6 +261,9 @@ def _sshkey_ctx(request, user, errors=(), saved="", onboard=False):
             "onboard": bool(onboard),
             # 자동 반영이 걸려 있는가 — 화면이 스스로 새로 고치며 기다린다
             "auto_pending": autokey.pending(lab_id),
+            # "자동으로 반영한다" 고 말해 놓고 조용히 실패하는 것이 제일 나쁘다.
+            # 실패했으면 사유를 그대로 보여 주고, 손으로 거는 길을 알려 준다.
+            "auto_failed": autokey.failures(lab_id),
             "busy": runner.busy(lab_id) if lab_id else True,
             "jump_user": A["jump_host"]["user"], "jump_ip": A["jump_host"]["office_ip"],
             "lab_user": A["lab_user"],
@@ -381,8 +384,11 @@ async def sshkey_apply(request: Request):
     stage = state.load(lab_id).get("stage") or L.STAGES[0]
     try:
         await runner.submit(lab_id, "keys", stage, None, user.get("username"),
-                            on_done=lambda j: state.record(
-                                j.lab_id, j.action, j.stage, j.status == "ok", j.scenario, j.id))
+                            on_done=lambda j: (
+                                state.record(j.lab_id, j.action, j.stage,
+                                             j.status == "ok", j.scenario, j.id),
+                                # 손으로 해결했으면 "자동 반영 실패" 안내도 걷는다
+                                j.status == "ok" and autokey.clear(lab_id=j.lab_id)))
     except (jobs.Locked, jobs.NotReady, RuntimeError, ValueError) as e:
         msg = getattr(e, "message", None) or str(e)
         return tpl.TemplateResponse(request, "sshkey.html",
@@ -859,7 +865,8 @@ async def exam_op(request: Request, exam_id: int, op: str, minutes: str = Form("
 #  남은 준비 작업을 화면 하나에 모으고, 콘솔이 스스로 할 수 있는 것은 버튼으로 만든다.
 #  root 나 다른 호스트가 필요한 것만 명령으로 보여 준다 (복사 버튼과 함께).
 def _setup_buttons(jump_ready):
-    b = list(SETUP_BUTTONS)
+    b = [{**x, "what": _access_what(jump_ready) if x["action"] == "setup-access" else x["what"]}
+         for x in SETUP_BUTTONS]
     if jump_ready:
         b.insert(0, {
             "action": "setup-jump-apply", "label": "점프 계정 적용",
@@ -870,13 +877,26 @@ def _setup_buttons(jump_ready):
     return b
 
 
+def _access_what(jump_ready):
+    """점프 계정 스크립트는 root 헬퍼가 없을 때만 쓰인다.
+
+    헬퍼가 설치돼 있으면 [점프 계정 적용] 버튼이 같은 일을 직접 한다.
+    그런데도 "점프 계정 스크립트를 만든다" 라고 적어 두면, 관리자가 dist/ 의
+    스크립트를 손으로 돌리는 **두 번째 root 경로**를 만든다 — 두 길이 갈라진다.
+    """
+    if jump_ready:
+        return ("Proxmox 콘솔 계정 스크립트를 dist/ 에 만든다. "
+                "점프 계정은 위 [점프 계정 적용] 이 직접 처리하므로 스크립트가 필요 없다.")
+    return ("점프 계정 스크립트와 Proxmox 콘솔 계정 스크립트를 dist/ 에 만든다. "
+            "만들기만 하고 적용하지 않는다 — 적용은 아래 root 절차다.")
+
+
 SETUP_BUTTONS = [
     {"action": "setup-mgmt", "label": "관리망 브리지 만들기",
      "what": "Proxmox 에 VLAN 브리지 1개를 만든다. 전 랩 공용이라 최초 1회면 된다.",
      "need": "Proxmox 연결"},
     {"action": "setup-access", "label": "교육생 접속 파일 만들기",
-     "what": "점프 계정 스크립트와 Proxmox 콘솔 계정 스크립트를 dist/ 에 만든다. "
-             "만들기만 하고 적용하지 않는다 — 적용은 아래 root 절차다.",
+     "what": "",       # jump_ready 에 따라 _setup_buttons 가 채운다
      "need": ""},
     {"action": "setup-docs", "label": "문서 생성",
      "what": "교재·부록·랩 지도·접속 안내를 dist/ 에 파일로 뽑는다. "
@@ -977,7 +997,8 @@ async def admin_setup_run(request: Request, action: str):
     done = None
     if action == "setup-jump-apply":
         started = await asyncio.to_thread(db.now_utc)
-        done = lambda j: j.status == "ok" and db.mark_jump_applied(started)   # noqa: E731
+        done = lambda j: j.status == "ok" and (db.mark_jump_applied(started),   # noqa: E731
+                                               autokey.clear(jump=True))
     try:
         job = await runner.submit(jobs.SETUP_LAB, action, "m10", None,
                                   user.get("username"), on_done=done)
@@ -1223,8 +1244,11 @@ async def settings_save(request: Request, host: str = Form(...), port: str = For
                 return RedirectResponse(
                     "/admin/settings?msg=" + "점검을 통과하지 못한 채로 확인 처리했다. "
                     "랩 실행 시 다시 막힐 수 있다.", status_code=303)
-            errors = ["점검을 통과하지 못했다. 아래 결과를 보고 고치거나, "
-                      "[점검 실패해도 확인 처리] 를 체크하고 다시 저장할 것"]
+            # 여기 오기 전에 pve.save 가 이미 끝났다. "다시 저장할 것" 이라고만 하면
+            # 저장이 안 된 줄로 읽힌다 — 무엇이 됐고 무엇이 안 됐는지 나눠 말한다.
+            errors = ["설정은 저장했다. 다만 연결 점검을 통과하지 못해 확인 처리는 하지 않았다. "
+                      "아래 결과를 보고 고친 뒤 다시 저장하거나, "
+                      "Proxmox 를 아직 켜지 않았다면 [점검 실패해도 확인 처리] 를 체크할 것"]
     return tpl.TemplateResponse(request, "settings.html", {
         "user": user, "pve": {**pve.public(), **{k: v for k, v in values.items()
                                                  if k in ("host", "node", "datastore",

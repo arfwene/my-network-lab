@@ -53,6 +53,15 @@
       <span class="d">이 화면은 10초마다 스스로 새로 고쳐진다. 끝나면 이 안내가 사라진다.</span>
     </p>
     <script>setTimeout(() => location.reload(), 10000);</script>
+    {% elif auto_failed and current %}
+    <p class="flash bad">
+      <b>자동 반영이 되지 않았다.</b>
+      {% for what, why in auto_failed %}<br>· <b>{{ what }}</b> — {{ why }}{% endfor %}
+      <span class="d">키는 저장돼 있다. 랩 노드는 아래 <b>[지금 랩에 반영]</b> 이나
+        모듈 화면의 <b>[이 모듈 적용]</b> 으로 들어간다 —
+        [이 모듈 적용] 은 설정을 다시 올리면서 키도 함께 넣는다.<br>
+        점프 계정은 관리자가 <b>[설치] → [점프 계정 적용]</b> 을 눌러야 한다.</span>
+    </p>
     {% endif %}
 
     <article class="doc">

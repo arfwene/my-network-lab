@@ -25,11 +25,16 @@ import state
 DEBOUNCE = 6.0      # 몰려 드는 등록을 한 번으로 모으는 시간
 COOLDOWN = 45.0     # 한 바퀴 돈 뒤 최소 간격. 되풀이 요청의 바닥이다
 POLL = 1.0
+MAX_TRIES = 3       # 점프 반영 재시도 한계
 
 _jump = False
+_tries = 0
 _labs: set[int] = set()
 _wake = asyncio.Event()
 _running = False
+# 마지막 반영이 실패한 이유. 'jump' 또는 랩 번호가 열쇠다.
+# 화면이 "자동으로 반영한다"고 말해 놓고 조용히 실패하면 그게 제일 나쁘다.
+_fail: dict = {}
 # 점프 헬퍼를 쓸 수 있는가. app 이 _jump_apply_ready 를 꽂는다 —
 # sudoers 규칙이 없으면 눌러 봐야 비밀번호를 묻다가 실패한다.
 ready = None
@@ -41,10 +46,13 @@ def _log(msg):
 
 def request(lab_id):
     """이 랩 교육생의 키를 반영해야 한다고 표시한다. 실행은 워커가 한다."""
-    global _jump
+    global _jump, _tries
     _jump = True
+    _tries = 0
+    _fail.pop("jump", None)
     if lab_id:
         _labs.add(int(lab_id))
+        _fail.pop(int(lab_id), None)
     _wake.set()
 
 
@@ -57,6 +65,28 @@ def pending(lab_id=None):
     return bool(lab_id) and int(lab_id) in _labs
 
 
+def failures(lab_id=None):
+    """마지막 자동 반영이 실패한 것들. 화면이 그대로 보여 준다."""
+    out = []
+    if _fail.get("jump"):
+        out.append(("점프 계정(운영 서버)", _fail["jump"]))
+    if lab_id and _fail.get(int(lab_id)):
+        out.append(("랩 노드", _fail[int(lab_id)]))
+    return out
+
+
+def clear(lab_id=None, jump=False):
+    """손으로 걸어서 해결했으면 실패 기록도 같이 지운다.
+
+    안 지우면 교육생 화면이 "자동 반영이 되지 않았다" 를 계속 붙들고 있다 —
+    이미 [지금 랩에 반영] 으로 들어갔는데도.
+    """
+    if jump:
+        _fail.pop("jump", None)
+    if lab_id:
+        _fail.pop(int(lab_id), None)
+
+
 def _take():
     global _jump
     jump, labs, _jump = _jump, set(_labs), False
@@ -64,18 +94,23 @@ def _take():
     return jump, labs
 
 
-async def _wait(runner, job):
+async def _wait(runner, job, key):
     while job.status in ("queued", "running"):
         await asyncio.sleep(POLL)
-    if job.status != "ok":
-        _log(f"{job.action} 실패 (rc={job.rc}) — 교육생은 화면의 버튼으로 다시 걸 수 있다")
-    return job.status == "ok"
+    if job.status == "ok":
+        _fail.pop(key, None)
+        return True
+    _fail[key] = f"작업이 실패했다 (종료 코드 {job.rc})"
+    _log(f"{job.action} 실패 (rc={job.rc}) — 교육생은 화면의 버튼으로 다시 걸 수 있다")
+    return False
 
 
 async def _jump_apply(runner):
+    global _tries, _jump
     if ready and not ready():
         # 관리자가 install.sh --jump-apply 를 아직 안 했다. 화면이 그 사실을
         # 이미 말하고 있으므로 여기서는 조용히 넘어간다 (매번 로그를 채우지 않는다).
+        _fail["jump"] = "콘솔이 아직 점프 계정을 직접 적용할 수 없다 (관리자 설치 필요)"
         return
     # **시작 시각**을 적는다. 헬퍼는 시작할 때의 DB 를 읽으므로, 도는 동안
     # 등록된 키는 반영되지 않았다. 끝난 시각으로 적으면 그 키를 삼킨다.
@@ -84,10 +119,19 @@ async def _jump_apply(runner):
         job = await runner.submit(jobs.SETUP_LAB, "setup-jump-apply", "m10", None, None,
                                   on_done=lambda j: j.status == "ok" and db.mark_jump_applied(started))
     except Exception as e:                                  # noqa: BLE001
-        request(None)                                       # 다음 바퀴에 다시 시도
+        _fail["jump"] = str(e)
+        _tries += 1
+        if _tries < MAX_TRIES:
+            # 대개 다른 설치 작업이 도는 중이다. 몇 번만 다시 해 본다 —
+            # 무한히 다시 걸면 사유가 안 풀릴 때 로그와 화면이 영원히 돈다.
+            _jump = True
+            _wake.set()
+        else:
+            _log(f"점프 계정 반영을 {MAX_TRIES}번 시도했으나 걸지 못했다 — 그만둔다")
         _log(f"점프 계정 반영을 걸지 못했다: {e}")
         return
-    await _wait(runner, job)
+    _tries = 0
+    await _wait(runner, job, "jump")
 
 
 async def _lab_keys(runner, lab_id):
@@ -98,10 +142,11 @@ async def _lab_keys(runner, lab_id):
         job = await runner.submit(lab_id, "keys", stage, None, None)
     except Exception as e:                                  # noqa: BLE001
         # 랩이 아직 없거나(pve.gate), 시험 중이거나(exam.gate), 바쁘다.
-        # 되풀이해 두드리지 않는다 — 교육생 화면에 수동 버튼이 그대로 있다.
+        # 되풀이해 두드리지 않는다 — 교육생 화면에 사유와 수동 버튼이 남는다.
+        _fail[int(lab_id)] = str(e)
         _log(f"lab{lab_id} 키 반영을 걸지 못했다: {e}")
         return
-    await _wait(runner, job)
+    await _wait(runner, job, int(lab_id))
 
 
 async def worker(runner):

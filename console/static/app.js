@@ -243,11 +243,15 @@
       return;
     }
     jobinfo.textContent = `${action} · ${j.job_id}`;
-    await stream(j.job_id);
-    // 단계가 올라갔으면 배너와 헤더 칩이 거짓말을 하고 있다. 조각을 다시 받아 맞춘다.
-    // (퀴즈 제출 경로에서는 하지 않는다 — 채점 결과가 화면에서 날아간다)
-    if (curModule()) await loadModule(curModule(), $('.tab.on')?.dataset.kind || 'README');
-    restoreActions();
+    try {
+      await stream(j.job_id);
+      // 단계가 올라갔으면 배너와 헤더 칩이 거짓말을 하고 있다. 조각을 다시 받아 맞춘다.
+      // (퀴즈 제출 경로에서는 하지 않는다 — 채점 결과가 화면에서 날아간다)
+      if (curModule()) await loadModule(curModule(), $('.tab.on')?.dataset.kind || 'README');
+    } finally {
+      // 여기서 빠지면 버튼이 잠긴 채로 남는다. 새로고침 말고는 되살릴 길이 없다.
+      restoreActions();
+    }
   }
 
   // ------------------------------------------------------------ 시험 세션
