@@ -36,7 +36,7 @@ sys.path.insert(0, str(HERE.parent / "tools"))
 
 import labdesign as L          # noqa: E402
 import preflight              # noqa: E402  (tools/ — make doctor 와 같은 검사)
-import assess, auth, db, docs, exam, jobs, passwords, pve, sshkeys, state, topology_svg  # noqa: E402
+import assess, auth, autokey, db, docs, exam, jobs, passwords, pve, sshkeys, state, topology_svg  # noqa: E402
 
 db.init()   # 스키마 생성 + (있다면) 예전 YAML 계정 이관
 pve.sync()  # DB 에 저장된 Proxmox 접속 정보를 var/runtime.yml 로 다시 내보낸다
@@ -48,16 +48,20 @@ runner.guard = exam.gate
 
 @asynccontextmanager
 async def lifespan(_app):
-    """마감 스위퍼를 띄운다.
+    """배경 작업을 띄운다 — 시험 마감 스위퍼와 접속 키 자동 반영.
 
     콘솔이 꺼져 있는 동안 지난 마감도 기동 직후 첫 주기에서 확정된다 —
     마감이 프로세스 생존에 의존하면 "껐다 켜서 시간을 벌었다"가 가능해진다.
     """
-    task = asyncio.create_task(exam.sweeper(runner))
+    # 점프 헬퍼를 쓸 수 있는지 묻는 방법을 autokey 에 꽂는다. 판단은 한 곳에만 둔다.
+    autokey.ready = _jump_apply_ready
+    tasks = [asyncio.create_task(exam.sweeper(runner)),
+             asyncio.create_task(autokey.worker(runner))]
     try:
         yield
     finally:
-        task.cancel()
+        for t in tasks:
+            t.cancel()
 
 
 app = FastAPI(title="my-network-lab console", docs_url=None, redoc_url=None,
@@ -99,7 +103,7 @@ def current_user(request):
 
 
 def require(request, cap=None, skip_setup=False):
-    """로그인 → 비밀번호 변경 강제 → 최초 연결 설정 확인 → 권한 확인 순.
+    """로그인 → 비밀번호 변경 → 접속 키 등록 → 최초 연결 설정 확인 → 권한 확인 순.
 
     Proxmox 접속 정보 확인을 비밀번호 변경 바로 다음에 두는 이유:
     이 값이 틀리면 어떤 버튼도 동작하지 않는다. 교육생이 먼저 부딪히기 전에
@@ -110,6 +114,14 @@ def require(request, cap=None, skip_setup=False):
         return None, RedirectResponse("/login", status_code=303)
     if u.get("must_change_password"):
         return None, RedirectResponse("/password", status_code=303)
+    # 키가 없으면 랩에 들어갈 방법이 아예 없다. 비밀번호를 바꾼 직후 여기로 보내
+    # 한 번에 끝내게 한다 — 등록하면 점프 계정·랩 노드 반영까지 자동으로 걸린다.
+    # 가둬 두지는 않는다. [나중에 하기] 로 넘어갈 수 있고, 그 표시는 세션에만 남는다.
+    # u 는 요청마다 DB 에서 다시 읽은 값이다(auth.load_user). 여기서 또 묻지 않는다.
+    if (not skip_setup and u.get("role") == "user"
+            and not u.get("ssh_key")
+            and not request.session.get("key_later")):
+        return None, RedirectResponse("/sshkey?onboard=1", status_code=303)
     if not skip_setup and auth.can(u, "user.manage") and not pve.confirmed():
         return None, RedirectResponse("/admin/settings?setup=1", status_code=303)
     if cap and not auth.can(u, cap):
@@ -232,7 +244,7 @@ def _jump_account_exists(username):
         return False
 
 
-def _sshkey_ctx(request, user, errors=(), saved=""):
+def _sshkey_ctx(request, user, errors=(), saved="", onboard=False):
     lab_id = pick_lab(user)
     raw = (db.get_user(user["username"]) or {}).get("ssh_key") or ""
     node = L.TOPO["nodes"][0]["name"]
@@ -245,6 +257,10 @@ def _sshkey_ctx(request, user, errors=(), saved=""):
             # 저장은 밀리초까지 하지만(반영 여부 판정에 필요하다) 화면에는 초까지만.
             "key_at": ((db.get_user(user["username"]) or {}).get("ssh_key_at") or "")[:19] or None,
             "errors": list(errors), "saved": saved,
+            # 첫 로그인 안내 화면인가 (아직 키가 없어서 여기로 보내진 상태)
+            "onboard": bool(onboard),
+            # 자동 반영이 걸려 있는가 — 화면이 스스로 새로 고치며 기다린다
+            "auto_pending": autokey.pending(lab_id),
             "busy": runner.busy(lab_id) if lab_id else True,
             "jump_user": A["jump_host"]["user"], "jump_ip": A["jump_host"]["office_ip"],
             "lab_user": A["lab_user"],
@@ -268,13 +284,28 @@ def _sshkey_ctx(request, user, errors=(), saved=""):
 
 
 @app.get("/sshkey", response_class=HTMLResponse)
-async def sshkey_form(request: Request):
+async def sshkey_form(request: Request, onboard: int = 0, later: int = 0,
+                      applied: int = 0, saved: int = 0):
     user = current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
     if user.get("must_change_password"):
         return RedirectResponse("/password", status_code=303)
-    return tpl.TemplateResponse(request, "sshkey.html", _sshkey_ctx(request, user))
+    if later:
+        # 지금은 키를 만들 수 없는 사람도 있다. 교재는 읽게 해 준다.
+        # 세션에만 남기므로 다음 로그인 때 다시 묻는다 — 잊고 넘어가지 않게.
+        request.session["key_later"] = True
+        return RedirectResponse("/", status_code=303)
+    msg = ""
+    if applied:
+        msg = ("등록했다. 점프 계정과 랩 노드에 자동으로 반영한다 — 1~2분쯤 걸린다. "
+               "이 화면은 스스로 새로 고쳐지니 기다리면 된다.")
+    elif saved:
+        msg = ("저장했다. 랩 노드에는 [지금 랩에 반영] 으로 들어간다. "
+               "점프 호스트는 관리자가 따로 반영해야 한다 — 아래를 볼 것.")
+    return tpl.TemplateResponse(request, "sshkey.html",
+                                _sshkey_ctx(request, user, saved=msg,
+                                            onboard=bool(onboard)))
 
 
 @app.post("/sshkey", response_class=HTMLResponse)
@@ -295,13 +326,16 @@ async def sshkey_save(request: Request, key: str = Form(""), remove: str = Form(
         return tpl.TemplateResponse(request, "sshkey.html",
                                     _sshkey_ctx(request, user, errors=[str(e)]),
                                     status_code=400)
+    # **바꾼 것인지 처음 넣은 것인지**를 덮어쓰기 전에 본다.
+    # 처음이면 반영까지 자동으로 걸어 준다 (첫 로그인 절차를 여기서 끝낸다).
+    first = not (db.get_user(user["username"]) or {}).get("ssh_key")
     db.set_ssh_key(user["username"], normalized)
-    fp = sshkeys.fingerprint(normalized)
-    return tpl.TemplateResponse(
-        request, "sshkey.html",
-        _sshkey_ctx(request, user, saved=f"저장했다 ({fp}). "
-                                         f"랩 노드에는 [지금 랩에 반영] 으로 들어간다. "
-                                         f"점프 호스트는 관리자가 따로 반영해야 한다 — 아래를 볼 것."))
+    if first:
+        autokey.request(pick_lab(user))
+        request.session.pop("key_later", None)
+    # 화면을 바로 그리지 않고 되돌린다(PRG). 자동 반영 중에는 이 화면이 스스로
+    # 새로 고쳐지는데, POST 응답을 새로 고치면 브라우저가 폼을 다시 보낸다.
+    return RedirectResponse(f"/sshkey?{'applied' if first else 'saved'}=1", status_code=303)
 
 
 @app.get("/sshkey/config")

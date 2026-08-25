@@ -34,6 +34,27 @@
     {% for e in errors %}<div class="err">{{ e }}</div>{% endfor %}
     {% if saved %}<p class="note">{{ saved }}</p>{% endif %}
 
+    {# 첫 로그인. 비밀번호를 바꾸고 여기로 넘어온 상태다.
+       여기서 등록만 하면 점프 계정·랩 노드 반영까지 자동으로 걸리므로,
+       예전처럼 관리자에게 [점프 계정 적용] 을 눌러 달라고 할 일이 없다. #}
+    {% if onboard and not current %}
+    <p class="flash warn">
+      <b>마지막 준비 단계다.</b> 공개키를 등록하면 랩에 들어갈 수 있게 된다.<br>
+      등록만 하면 <b>점프 계정과 랩 노드 반영까지 자동으로</b> 처리된다 —
+      관리자를 기다릴 필요가 없다. 아래 <b>1. 키 만들기</b> 부터 따라가면 된다.
+      <span class="d"><a href="/sshkey?later=1">지금은 건너뛰고 교재만 보기 →</a>
+        (다음 로그인 때 다시 묻는다)</span>
+    </p>
+    {% endif %}
+
+    {% if auto_pending %}
+    <p class="flash warn" id="autobar">
+      <b>반영하는 중이다.</b> 점프 계정과 랩 노드에 키를 넣고 있다 — 1~2분쯤 걸린다.
+      <span class="d">이 화면은 10초마다 스스로 새로 고쳐진다. 끝나면 이 안내가 사라진다.</span>
+    </p>
+    <script>setTimeout(() => location.reload(), 10000);</script>
+    {% endif %}
+
     <article class="doc">
       {% if current %}
       <table>
