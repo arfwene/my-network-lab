@@ -114,19 +114,38 @@ def require(request, cap=None, skip_setup=False):
         return None, RedirectResponse("/login", status_code=303)
     if u.get("must_change_password"):
         return None, RedirectResponse("/password", status_code=303)
-    # 키가 없으면 랩에 들어갈 방법이 아예 없다. 비밀번호를 바꾼 직후 여기로 보내
-    # 한 번에 끝내게 한다 — 등록하면 점프 계정·랩 노드 반영까지 자동으로 걸린다.
-    # 가둬 두지는 않는다. [나중에 하기] 로 넘어갈 수 있고, 그 표시는 세션에만 남는다.
-    # u 는 요청마다 DB 에서 다시 읽은 값이다(auth.load_user). 여기서 또 묻지 않는다.
+    # "첫 로그인" 이 아니라 **끝났는가**로 판단한다. 비밀번호만 바꾸고 나갔다가
+    # 다시 들어오는 사람이 있고, 그 사람에게 절차가 끝난 척하면 안 된다.
+    #   · 랩이 만들어졌는가 — state 에 적어 둔 마지막 값 (진실은 Proxmox 이고,
+    #     마법사가 들어갈 때 다시 물어 이 값을 고친다. 요청마다 API 를 두드리지 않는다)
+    #   · 내 접속 키가 등록됐는가 — u 는 요청마다 DB 에서 다시 읽은 값이다
+    # 가둬 두지는 않는다. [나중에 하기] 로 넘어갈 수 있고, 그 표시는 세션에만 남아
+    # 다음 로그인 때 다시 묻는다.
     if (not skip_setup and u.get("role") == "user"
-            and not u.get("ssh_key")
-            and not request.session.get("key_later")):
+            and not request.session.get("onboard_later")
+            and _onboard_step(u) is not None):
         return None, RedirectResponse("/onboard", status_code=303)
     if not skip_setup and auth.can(u, "user.manage") and not pve.confirmed():
         return None, RedirectResponse("/admin/settings?setup=1", status_code=303)
     if cap and not auth.can(u, cap):
         return None, HTMLResponse("권한이 없다.", status_code=403)
     return u, None
+
+
+def _onboard_step(user):
+    """이 사람에게 아직 남은 준비 단계. 없으면 None.
+
+    관문과 마법사가 **같은 함수**를 본다. 둘이 따로 판단하면 "관문은 보내는데
+    마법사는 할 일이 없다" 는 무한 되돌기가 생긴다.
+    """
+    if auth.can(user, "user.manage"):
+        return None                      # 관리자에게는 이 절차가 없다
+    lab_id = pick_lab(user)
+    if lab_id and state.provisioned(lab_id) is not True:
+        return 1                         # None(모름) 도 한 번 확인하러 보낸다
+    if not (user or {}).get("ssh_key"):
+        return 2
+    return None
 
 
 def pick_lab(user, requested=None):
@@ -312,7 +331,11 @@ def _onboard_ctx(request, user, step, err=""):
     lab_id = pick_lab(user)
     have, total = (None, 0)
     if lab_id:
+        # 마법사에 들어올 때만 Proxmox 에 직접 묻는다. 여기가 그 값을 고치는 자리다 —
+        # 관문은 이 결과를 적어 둔 것만 보고, 요청마다 API 를 두드리지 않는다.
         have, total = pve.lab_vms(lab_id)
+        if have is not None and total:
+            state.set_provisioned(lab_id, have >= total)
     return {
         **nav_ctx(user, "onboard", lab_id),
         "request": request, "user": user, "step": step, "err": err,
@@ -327,7 +350,7 @@ def _onboard_ctx(request, user, step, err=""):
 
 
 @app.get("/onboard", response_class=HTMLResponse)
-async def onboard(request: Request, step: int = 1):
+async def onboard(request: Request, step: int = 0):
     """첫 로그인 절차를 한 화면에서 끝낸다 — 랩 준비 → 접속 키 → 끝.
 
     예전에는 교육생이 로그인한 뒤 무엇을 해야 하는지 화면이 말해 주지 않았고,
@@ -340,7 +363,15 @@ async def onboard(request: Request, step: int = 1):
         return RedirectResponse("/password", status_code=303)
     if auth.can(user, "user.manage"):
         return RedirectResponse("/", status_code=303)     # 관리자는 이 절차가 없다
-    ctx = await asyncio.to_thread(_onboard_ctx, request, user, max(1, min(3, step)))
+    # 어느 칸부터 보여 줄지는 **남은 일**이 정한다. 주소로 직접 고르면 그대로 따른다
+    # (다시 보고 싶을 수 있다). 아무것도 남지 않았으면 마지막 칸이다.
+    want = max(1, min(3, step)) if step else (_onboard_step(user) or 3)
+    ctx = await asyncio.to_thread(_onboard_ctx, request, user, want)
+    # Proxmox 에 물어보지도 못했다면, 여기서 붙잡아 두면 **영영 나갈 수 없다** —
+    # 관문은 '모른다' 를 보고 계속 이리로 되돌리고, 마법사는 계속 알아내지 못한다.
+    # 이 세션에서는 더 막지 않는다. 다음 로그인 때 다시 묻는다.
+    if ctx["lab_unknown"]:
+        request.session["onboard_later"] = True
     return tpl.TemplateResponse(request, "onboard.html", ctx)
 
 
@@ -370,6 +401,7 @@ async def onboard_deploy(request: Request):
         job = await runner.submit(lab_id, "deploy", stage, None, user.get("username"),
                                   on_done=lambda j: state.record(
                                       j.lab_id, j.action, j.stage, j.status == "ok", None, j.id))
+        # state.record 가 성공한 deploy 에서 provisioned 를 True 로 적는다.
     except (jobs.Locked, jobs.NotReady, RuntimeError, ValueError) as e:
         return JSONResponse({"error": getattr(e, "message", None) or str(e)}, status_code=409)
     return JSONResponse({"job_id": job.id})
@@ -386,7 +418,7 @@ async def sshkey_form(request: Request, onboard: int = 0, later: int = 0,
     if later:
         # 지금은 키를 만들 수 없는 사람도 있다. 교재는 읽게 해 준다.
         # 세션에만 남기므로 다음 로그인 때 다시 묻는다 — 잊고 넘어가지 않게.
-        request.session["key_later"] = True
+        request.session["onboard_later"] = True
         return RedirectResponse("/", status_code=303)
     msg = ""
     if applied:
@@ -427,7 +459,6 @@ async def sshkey_save(request: Request, key: str = Form(""), remove: str = Form(
     first = not (db.get_user(user["username"]) or {}).get("ssh_key")
     db.set_ssh_key(user["username"], normalized)
     autokey.request(pick_lab(user))
-    request.session.pop("key_later", None)
     # 화면을 바로 그리지 않고 되돌린다(PRG). 자동 반영 중에는 이 화면이 스스로
     # 새로 고쳐지는데, POST 응답을 새로 고치면 브라우저가 폼을 다시 보낸다.
     # 마법사에서 왔으면 마법사의 다음 칸으로 돌아간다.

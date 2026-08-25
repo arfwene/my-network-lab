@@ -27,12 +27,33 @@ def load(lab_id):
         except Exception:
             pass
     return {"lab_id": lab_id, "stage": None, "applied": [], "verified": [],
-            "last_job": None, "broken": []}
+            "last_job": None, "broken": [], "provisioned": None}
 
 
 def save(lab_id, st):
     _path(lab_id).write_text(json.dumps(st, ensure_ascii=False, indent=2), encoding="utf-8")
     return st
+
+
+def provisioned(lab_id):
+    """이 랩의 VM 이 만들어져 있는가 — **마지막으로 알고 있는 값.**
+
+    진실은 Proxmox 에 있다 (pve.lab_vms). 그런데 그건 API 왕복이라 요청마다
+    물을 수 없다. 그래서 배포·삭제가 끝날 때 여기에 적어 두고, 화면 관문은
+    이 값을 본다. 마법사는 들어갈 때 Proxmox 에 다시 물어 이 값을 고친다.
+
+    None 은 '아니다' 가 아니라 '아직 모른다' 다 — 이 기능이 생기기 전에
+    만들어진 랩이 그렇다. 모르면 한 번 물어보게 둔다.
+    """
+    return load(lab_id).get("provisioned")
+
+
+def set_provisioned(lab_id, ok):
+    st = load(lab_id)
+    if st.get("provisioned") is bool(ok):
+        return st                      # 바뀐 게 없으면 파일을 건드리지 않는다
+    st["provisioned"] = bool(ok)
+    return save(lab_id, st)
 
 
 def stage_gap(lab_id, module_stage):
@@ -81,6 +102,12 @@ def record(lab_id, action, stage=None, ok=True, scenario=None, job_id=None):
         st["broken"] = [b for b in st["broken"] if b != scenario]
     if action == "reset":
         st["broken"] = []
+    # 랩이 생겼는지 없어졌는지. 관문이 요청마다 Proxmox 를 두드리지 않도록
+    # 여기서 적어 둔다 — 진실은 아니고, 마지막으로 확인한 값이다.
+    if ok and action == "deploy":
+        st["provisioned"] = True
+    if ok and action == "destroy":
+        st["provisioned"] = False
     return save(lab_id, st)
 
 
