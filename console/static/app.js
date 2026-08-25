@@ -118,6 +118,18 @@
     if (up) up.onclick = () => run('reset');
   }
 
+  // 헤더 묶음 메뉴는 한 번에 하나만 열린다. 하나가 열려 있는 채로 다른 것을
+  // 누르면, 열린 메뉴가 깔아 둔 덮개가 그 클릭을 먼저 먹어서 두 번 눌러야 한다.
+  document.addEventListener('click', e => {
+    const sum = e.target.closest('.menu > summary');
+    document.querySelectorAll('.menu[open]').forEach(d => {
+      if (!sum || d !== sum.parentElement) d.removeAttribute('open');
+    });
+  }, true);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') document.querySelectorAll('.menu[open]').forEach(d => d.removeAttribute('open'));
+  });
+
   document.addEventListener('click', e => {
     const mod = e.target.closest('.mod:not(.locked)');
     if (mod) loadModule(mod.dataset.module);

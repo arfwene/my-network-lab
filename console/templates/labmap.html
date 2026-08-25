@@ -1,14 +1,7 @@
 {% extends "base.html" %}
 {% block title %}랩 지도 · {{ site_name }}{% endblock %}
 {% block body %}
-<header class="top">
-  <div class="brand">{{ site_name }}</div>
-  <a class="ghost" href="/">← 랩으로</a>
-  <div class="spacer"></div>
-  {% include "_health.html" %}
-  <div class="who">{{ user.name | default(user.username) }}<span class="role">{{ user.role_label }}</span></div>
-  <a class="ghost" href="/logout">나가기</a>
-</header>
+{% include "_topbar.html" %}
 
 <main class="layout">
   <aside class="modules">

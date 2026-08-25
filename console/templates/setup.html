@@ -1,16 +1,7 @@
 {% extends "base.html" %}
 {% block title %}설치 · {{ site_name }}{% endblock %}
 {% block body %}
-<header class="top">
-  <div class="brand">{{ site_name }}</div>
-  <a class="ghost" href="/">← 랩으로</a>
-  <a class="ghost" href="/admin">계정 관리</a>
-  <a class="ghost" href="/admin/settings">연결 설정</a>
-  <div class="spacer"></div>
-  {% include "_health.html" %}
-  <div class="who">{{ user.name }}<span class="role">{{ user.role_label }}</span></div>
-  <a class="ghost" href="/logout">나가기</a>
-</header>
+{% include "_topbar.html" %}
 
 <main class="admin">
 

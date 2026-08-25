@@ -33,7 +33,9 @@
     $('#pvebox-when').textContent =
       `${h.endpoint} · 노드 ${h.node} · ${h.checked_at} · ${h.elapsed_ms}ms`
       + (h.confirmed ? '' : ' · 관리자 확인 전');
-    $('#pvebox-fix').hidden = !h.can_fix;
+    // 교육생 화면에는 이 링크 자체가 없다 (base.html 이 관리자에게만 그린다).
+    const fix = $('#pvebox-fix');
+    if (fix) fix.hidden = !h.can_fix;
   }
 
   const esc = s => String(s).replace(/[&<>"]/g, c =>

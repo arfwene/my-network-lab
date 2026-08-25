@@ -1,0 +1,78 @@
+{# 모든 화면이 쓰는 단 하나의 헤더.
+
+   전에는 10개 템플릿이 각자 헤더를 손으로 썼다. 그래서 화면마다 링크가
+   다르게 나열됐고, [접속 키]·[이력] 같은 곳에 들어가면 내비게이션이 통째로
+   사라져서 뒤로가기 말고는 나올 길이 없었다.
+
+   구조는 셋뿐이다.
+     왼쪽  — 이름표 · (랩 화면에서만) 랩 고르기 · 교육생이 갈 곳 넷
+     오른쪽 — Proxmox 상태 · 랩 단계 · [관리 ▾] · [사용자 ▾]
+   관리자 화면 다섯 개는 낱개 링크가 아니라 [관리] 안에 들어간다. #}
+{% set here = nav | default('', true) %}
+<header class="top">
+  <a class="brand" href="/">{{ site_name }}</a>
+
+  {% if here == 'lab' and nav_labs and nav_labs | length > 1 %}
+  <form class="labpick" method="get" action="/">
+    <select name="lab" onchange="this.form.submit()" aria-label="랩 고르기">
+      {% for l in nav_labs %}<option value="{{ l }}" {{ 'selected' if l == lab_id }}>lab{{ l }}</option>{% endfor %}
+    </select>
+    {% if module %}<input type="hidden" name="m" value="{{ module.id }}">{% endif %}
+  </form>
+  {% endif %}
+
+  <span class="sep"></span>
+
+  <nav class="nav">
+    <a href="/" {% if here == 'lab' %}aria-current="page"{% endif %}>랩</a>
+    <a href="/labmap" {% if here == 'labmap' %}aria-current="page"{% endif %}>랩 지도</a>
+    <a href="/appendix" {% if here == 'appendix' %}aria-current="page"{% endif %}>부록</a>
+    <a href="/history" {% if here == 'history' %}aria-current="page"{% endif %}>이력</a>
+  </nav>
+
+  <div class="spacer"></div>
+
+  {% include "_health.html" %}
+
+  {% if here == 'lab' %}
+  {# 랩 단계 칩. 열어 둔 모듈과 어긋나면 색이 바뀐다 #}
+  {% set g = stage_gap | default({'dir': 'ok', 'need': ''}, true) %}
+  <div class="labstage {{ 'off' if g.dir != 'ok' }}" id="labstage"
+       title="랩에 적용되어 있는 단계다. 열어 둔 모듈이 요구하는 단계와 다르면 색이 바뀐다.">
+    <span class="k">랩</span>
+    <b class="now">{{ lab_state.stage | upper if lab_state and lab_state.stage else '미적용' }}</b>
+    <span class="need" {{ 'hidden' if g.dir == 'ok' }}>· 이 모듈 {{ g.need | upper }}</span>
+  </div>
+  {% endif %}
+
+  {% if nav_admin %}
+  <details class="menu">
+    <summary>관리{% if pending %} <b class="pill">{{ pending }}</b>{% endif %}</summary>
+    <div class="pop">
+      <div class="cap">준비</div>
+      <a href="/admin/setup" {% if here == 'setup' %}aria-current="page"{% endif %}>설치 상태</a>
+      <a href="/admin/settings" {% if here == 'settings' %}aria-current="page"{% endif %}>연결 설정</a>
+      <hr>
+      <div class="cap">운영</div>
+      <a href="/admin" {% if here == 'users' %}aria-current="page"{% endif %}>계정 관리</a>
+      <a href="/admin/reviews" {% if here == 'reviews' %}aria-current="page"{% endif %}>검토 큐
+        {%- if pending %} <b class="pill">{{ pending }}</b>{% endif %}</a>
+      <a href="/admin/exams" {% if here == 'exams' %}aria-current="page"{% endif %}>시험</a>
+    </div>
+  </details>
+  {% endif %}
+
+  <details class="menu">
+    <summary>
+      <span class="who"><span class="name">{{ user.name | default(user.username) }}</span>
+        <span class="role">{{ user.role_label }}</span></span>
+    </summary>
+    <div class="pop">
+      <a href="/sshkey" {% if here == 'sshkey' %}aria-current="page"{% endif %}>접속 키
+        {%- if not has_ssh_key %} <b class="pill">!</b>{% endif %}</a>
+      <a href="/password" {% if here == 'password' %}aria-current="page"{% endif %}>비밀번호</a>
+      <hr>
+      <a href="/logout">나가기</a>
+    </div>
+  </details>
+</header>

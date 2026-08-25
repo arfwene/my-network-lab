@@ -138,12 +138,32 @@ def pick_lab(user, requested=None):
     return labs[0]
 
 
+def nav_ctx(user, here, lab_id=None):
+    """모든 화면이 같은 헤더를 그리는 데 필요한 것.
+
+    전에는 템플릿마다 헤더를 손으로 썼고, 그래서 화면마다 링크가 달랐다.
+    무엇을 보여 줄지는 한 곳에서 정한다.
+    """
+    is_admin = auth.can(user, "user.manage")
+    return {
+        "nav": here,
+        "nav_admin": is_admin,
+        "nav_labs": auth.allowed_labs(user),
+        "lab_id": lab_id,
+        "pending": db.count_pending() if is_admin else 0,
+        "has_ssh_key": bool((user or {}).get("ssh_key")),
+        "health": pve.last(),
+        "site_name": L.SITE["site"]["name"],
+    }
+
+
 def base_ctx(request, user, lab_id):
     st = state.load(lab_id)
     mods = docs.modules()
     is_admin = auth.can(user, "lab.all")
     unlocked = assess.unlocked_modules(user["username"], is_admin)
     return {
+        **nav_ctx(user, "lab", lab_id),
         "request": request, "user": user, "lab_id": lab_id,
         "labs": auth.allowed_labs(user),
         "modules": [{**m, "status": state.module_status(lab_id, m),
@@ -249,7 +269,8 @@ def _sshkey_ctx(request, user, errors=(), saved="", onboard=False):
     raw = (db.get_user(user["username"]) or {}).get("ssh_key") or ""
     node = L.TOPO["nodes"][0]["name"]
     A = L.IPAM["access"]
-    return {"request": request, "user": user, "site_name": L.SITE["site"]["name"],
+    return {**nav_ctx(user, "sshkey", lab_id),
+            "request": request, "user": user, "site_name": L.SITE["site"]["name"],
             "health": pve.last(), "pve": pve.public(),
             "lab_id": lab_id,
             "lab_label": f"lab {lab_id}" if lab_id else "미배정",
@@ -581,6 +602,7 @@ async def history(request: Request, who: str = "", module: str = ""):
             return HTMLResponse("본인 이력만 볼 수 있다.", status_code=403)
         target = who
     return tpl.TemplateResponse(request, "history.html", {
+        **nav_ctx(user, "history"),
         "user": user, "target": target,
         "attempts": db.list_attempts(target, module or None, 200),
         "progress": db.get_progress(target),
@@ -710,6 +732,7 @@ async def labmap(request: Request):
     lab_id = pick_lab(user) or 1
     md = docs.lab_map(lab_id)
     return tpl.TemplateResponse(request, "labmap.html", {
+        **nav_ctx(user, "labmap", lab_id),
         "request": request, "user": user, "site_name": L.SITE["site"]["name"],
         "health": pve.last(), "pve": pve.public(),
         "lab_id": lab_id,
@@ -734,6 +757,7 @@ async def appendix(request: Request, doc: str = "", lab: int | None = None):
     cur = docs.appendix_get(doc) or docs_all[0]
     text = docs.render_appendix(cur["id"], lab_id)
     return tpl.TemplateResponse(request, "appendix.html", {
+        **nav_ctx(user, "appendix", lab_id),
         "request": request, "user": user, "lab_id": lab_id,
         "docs": docs_all, "doc": cur,
         "doc_html": docs.to_html(text) if text else "<p>문서를 찾을 수 없다.</p>",
@@ -824,6 +848,7 @@ async def exams_page(request: Request, msg: str = ""):
     for r in rows:
         r["phase"] = exam.phase(r)
     return tpl.TemplateResponse(request, "exams.html", {
+        **nav_ctx(user, "exams"),
         "request": request, "user": user, "rows": rows, "msg": msg,
         "cfg": exam.cfg(), "pending": db.count_pending(), "health": pve.last(),
         "site_name": L.SITE["site"]["name"],
@@ -973,6 +998,7 @@ async def admin_setup(request: Request, lab: int = 1):
         if c["status"] in n:
             n[c["status"]] += 1
     return tpl.TemplateResponse(request, "setup.html", {
+        **nav_ctx(user, "setup"),
         "user": user, "site_name": L.SITE["site"]["name"],
         "health": pve.last(), "pending": db.count_pending(),
         "checks": checks, "counts": n, "lab": lab,
@@ -1053,6 +1079,7 @@ async def admin_page(request: Request, msg: str = "", err: str = "", once: str =
         return redir
     lo, _ = L.SITE["labs"]["id_range"]
     return tpl.TemplateResponse(request, "admin.html", {
+        **nav_ctx(user, "users"),
         "user": user, "users": db.list_users(), "msg": msg, "err": err,
         "secret": once_take(once),
         "health": pve.last(), "pending": db.count_pending(),
@@ -1148,6 +1175,7 @@ async def reviews(request: Request, module: str = "", msg: str = ""):
                      if i["id"] == sub["item_id"]), {}) if m else {}
         rows.append({**sub, "module": m, "item": item})
     return tpl.TemplateResponse(request, "reviews.html", {
+        **nav_ctx(user, "reviews"),
         "user": user, "rows": rows, "modules": docs.modules(), "filter": module,
         "msg": msg, "pending": db.count_pending(), "health": pve.last(),
         "site_name": L.SITE["site"]["name"],
@@ -1203,6 +1231,7 @@ async def settings_form(request: Request, setup: int = 0, msg: str = "", err: st
     if redir:
         return redir
     return tpl.TemplateResponse(request, "settings.html", {
+        **nav_ctx(user, "settings"),
         "user": user, "pve": pve.public(), "health": pve.last(),
         "setup": bool(setup) or not pve.confirmed(),
         "confirmed": pve.confirmed(), "errors": [], "msg": msg, "err": err,
@@ -1250,6 +1279,7 @@ async def settings_save(request: Request, host: str = Form(...), port: str = For
                       "아래 결과를 보고 고친 뒤 다시 저장하거나, "
                       "Proxmox 를 아직 켜지 않았다면 [점검 실패해도 확인 처리] 를 체크할 것"]
     return tpl.TemplateResponse(request, "settings.html", {
+        **nav_ctx(user, "settings"),
         "user": user, "pve": {**pve.public(), **{k: v for k, v in values.items()
                                                  if k in ("host", "node", "datastore",
                                                           "token_id", "lab_count")}},

@@ -18,7 +18,11 @@
     <div class="modal-body"><ul class="pve-checks" id="pvebox-list"></ul></div>
     <div class="modal-scope" id="pvebox-when"></div>
     <div class="modal-actions">
+      {# 교육생에게 관리자 화면 링크를 주지 않는다 — 눌러도 403 이고,
+         고칠 수 없는 것을 고치라고 말하는 셈이다. #}
+      {% if user.role == 'admin' %}
       <a class="btn" id="pvebox-fix" href="/admin/settings" hidden>연결 설정 →</a>
+      {% endif %}
       <button class="btn" id="pvebox-recheck">다시 점검</button>
       <button class="btn primary" id="pvebox-close">닫기</button>
     </div>

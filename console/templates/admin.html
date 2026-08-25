@@ -1,19 +1,7 @@
 {% extends "base.html" %}
 {% block title %}계정 관리 · {{ site_name }}{% endblock %}
 {% block body %}
-<header class="top">
-  <div class="brand">{{ site_name }}</div>
-  <a class="ghost" href="/">← 랩으로</a>
-  <a class="ghost" href="/admin/setup">설치</a>
-  <a class="ghost" href="/admin/settings">연결 설정</a>
-  <a class="ghost" href="/admin/reviews">검토 큐{% if pending %} <b class="pill">{{ pending }}</b>{% endif %}</a>
-  <a class="ghost" href="/admin/exams">시험</a>
-  <div class="spacer"></div>
-  {% include "_health.html" %}
-  <div class="who">{{ user.name }}<span class="role">{{ user.role_label }}</span></div>
-  <a class="ghost" href="/password">비밀번호</a>
-  <a class="ghost" href="/logout">나가기</a>
-</header>
+{% include "_topbar.html" %}
 
 <main class="admin">
   {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}

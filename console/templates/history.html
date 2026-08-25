@@ -1,26 +1,7 @@
 {% extends "base.html" %}
 {% block title %}제출 이력 · {{ site_name }}{% endblock %}
 {% block body %}
-<header class="top">
-  <div class="brand">{{ site_name }}</div>
-  <a class="ghost" href="/">← 랩으로</a>
-  {% if all_users %}
-  <form class="labpick" method="get" action="/history">
-    <label>대상
-      <select name="who" onchange="this.form.submit()">
-        {% for u in all_users %}
-        <option value="{{ u.username }}" {{ 'selected' if u.username == target }}>
-          {{ u.username }} ({{ u.name }})</option>
-        {% endfor %}
-      </select>
-    </label>
-  </form>
-  {% endif %}
-  <div class="spacer"></div>
-  {% include "_health.html" %}
-  <div class="who">{{ user.name }}<span class="role">{{ user.role_label }}</span></div>
-  <a class="ghost" href="/logout">나가기</a>
-</header>
+{% include "_topbar.html" %}
 
 <main class="admin">
   <section class="card">
