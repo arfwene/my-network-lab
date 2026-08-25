@@ -583,10 +583,11 @@ async def module_view(request: Request, module_id: str, lab: int | None = None,
     is_admin = auth.can(user, "lab.all")
     # 교재 → 과제 → 퀴즈. 화면에서 막는 것만으로는 부족하다(URL 로 건너뛸 수 있다).
     if not db.tab_allowed(user["username"], module_id, kind, is_admin):
-        need = "교재" if kind == "tasks" else "과제"
+        label = {"README": "교재", "quiz": "퀴즈", "tasks": "과제", "verify": "검증"}
+        prev = db.TAB_ORDER[max(0, db.TAB_ORDER.index(kind) - 1)] if kind in db.TAB_ORDER else "README"
         return HTMLResponse(
-            f'<div class="notice"><b>{need}</b> 를 먼저 볼 것. '
-            f'왼쪽에서 순서대로 진행한다 — 교재 → 과제 → 퀴즈·검증.</div>',
+            f'<div class="notice"><b>{label.get(prev, prev)}</b> 를 먼저 보세요. '
+            f'위에서 순서대로 진행합니다 — 교재 → 퀴즈 → 과제 → 검증.</div>',
             status_code=403)
     db.mark_tab_seen(user["username"], module_id, kind)
     ctx = base_ctx(request, user, lab_id)
@@ -596,7 +597,8 @@ async def module_view(request: Request, module_id: str, lab: int | None = None,
             '앞 모듈에서 <b>제출하고 검증</b> 을 눌러 통과할 것.</div>', status_code=403)
     ctx["module"] = module
     ctx["kind"] = kind
-    ctx["module_html"] = "" if kind == "quiz" else _module_html(module, lab_id, user, kind)
+    # 퀴즈·검증 탭은 마크다운이 아니라 폼이다.
+    ctx["module_html"] = "" if kind in ("quiz", "verify") else _module_html(module, lab_id, user, kind)
     ctx.update(_assess_ctx(user, lab_id, module))
     ctx.update(_tab_ctx(user, module))
     return tpl.TemplateResponse(request, "_module.html", ctx)
@@ -637,15 +639,20 @@ async def submit(request: Request, module_id: str):
         return JSONResponse({"error": "없는 모듈"}, status_code=404)
     lab_id = pick_lab(user, None)
     form = await request.form()
+    # 어느 단계에서 낸 것인가. 퀴즈는 개념 확인이라 랩을 건드리지 않는다 —
+    # 랩 검사를 같이 돌리면 아직 설정도 안 한 랩에서 검사가 무조건 실패한다.
+    phase = (form.get("phase") or "verify").strip()
 
     # 서술형을 먼저 저장한다 — 진도 계산이 제출 여부를 보기 때문이다.
     written_res = None
-    if assess.has_written(module):
+    if phase != "quiz" and assess.has_written(module):
         wans = {k[2:]: form.get(k) for k in form.keys() if k.startswith("w_")}
         written_res = assess.submit_written(user["username"], lab_id, module, wans)
 
+    # 퀴즈는 **퀴즈 단계에서만** 채점한다. 검증 폼에는 문항이 없으므로,
+    # 여기서 그냥 채점하면 빈 답으로 0점을 매겨 이미 통과한 점수를 덮어쓴다.
     quiz_res = None
-    if assess.has_quiz(module):
+    if phase == "quiz" and assess.has_quiz(module):
         answers = {}
         for k in form.keys():
             if k.startswith("q_"):
@@ -653,7 +660,7 @@ async def submit(request: Request, module_id: str):
         quiz_res = assess.grade_quiz(module, lab_id, answers)
     assess.sync_progress(user["username"], lab_id, module, quiz=quiz_res)
 
-    if not assess.has_checks(module):
+    if phase == "quiz" or not assess.has_checks(module):
         return JSONResponse({"quiz": quiz_res, "written": written_res, "job_id": None})
 
     def done(job):

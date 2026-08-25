@@ -655,3 +655,8 @@ table.users td b,table.users td strong{color:var(--ink)}
   font:400 13px/1.6 "Geist Mono",ui-monospace,monospace;resize:vertical}
 .ob-form textarea:focus{outline:none;border-color:var(--ink)}
 @media (max-width:640px){.ob{padding:24px 16px 64px}.ob h1{font-size:24px;line-height:32px}}
+
+/* 과제 탭 끝에 붙는 다음 걸음 안내 */
+.next-step{margin-top:32px}
+.next-step h3{margin:0 0 6px}
+.next-step p{margin:0 0 14px}

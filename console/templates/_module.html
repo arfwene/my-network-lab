@@ -45,56 +45,55 @@
 {# 실제 차단은 서버가 한다(/m/{id} 가 403). 여기 표시는 안내일 뿐이므로,
    값이 없어도 화면이 죽지 않게 기본값을 둔다 — 잠금이 안 보이는 것이
    교육생 화면이 500 으로 죽는 것보다 낫다. #}
-{% set ta = tab_allowed | default({'README': true, 'tasks': true, 'quiz': true}, true) %}
+{% set ta = tab_allowed | default({'README': true, 'quiz': true, 'tasks': true, 'verify': true}, true) %}
+{% set K = kind | default('README') %}
 <nav class="tabs" data-module="{{ module.id }}" data-stage="{{ module.stage }}"
      data-gap="{{ gap.dir }}" data-now="{{ gap.now or '' }}">
-  <button class="tab {{ 'on' if kind|default('README') == 'README' }}" data-kind="README">교재</button>
-  <button class="tab {{ 'on' if kind|default('') == 'tasks' }}" data-kind="tasks"
-          {{ 'disabled' if not ta.tasks }}
-          title="{{ '교재를 먼저 볼 것' if not ta.tasks else '실습 과제와 확인 문제' }}">
-    과제{% if not ta.tasks %} <span class="lockmark">🔒</span>{% endif %}</button>
-  {% if quiz or has_checks or written %}
-  <button class="tab {{ 'on' if kind|default('') == 'quiz' }}" data-kind="quiz"
+  <button class="tab {{ 'on' if K == 'README' }}" data-kind="README">교재</button>
+  {% if quiz %}
+  <button class="tab {{ 'on' if K == 'quiz' }}" data-kind="quiz"
           {{ 'disabled' if not ta.quiz }}
-          title="{{ '과제를 먼저 볼 것' if not ta.quiz else '퀴즈 · 랩 상태 검사' }}">
-    퀴즈 · 검증{% if written %} · 서술{% endif %}
-    {% if not ta.quiz %}<span class="lockmark">🔒</span>{% endif %}
+          title="{{ '교재를 먼저 보세요' if not ta.quiz else '개념 확인 문제' }}">
+    퀴즈{% if not ta.quiz %} <span class="lockmark">🔒</span>{% endif %}
+    {% if mstate.quiz_passed %}<span class="tick">✔</span>{% endif %}</button>
+  {% endif %}
+  <button class="tab {{ 'on' if K == 'tasks' }}" data-kind="tasks"
+          {{ 'disabled' if not ta.tasks }}
+          title="{{ '퀴즈를 먼저 보세요' if not ta.tasks else '랩에서 직접 만드는 실습' }}">
+    과제{% if not ta.tasks %} <span class="lockmark">🔒</span>{% endif %}</button>
+  {% if has_checks or written %}
+  <button class="tab {{ 'on' if K == 'verify' }}" data-kind="verify"
+          {{ 'disabled' if not ta.verify }}
+          title="{{ '과제를 먼저 보세요' if not ta.verify else '랩 상태 검사 · 서술 제출' }}">
+    검증{% if written %} · 서술{% endif %}
+    {% if not ta.verify %}<span class="lockmark">🔒</span>{% endif %}
     {% if mstate.complete %}<span class="tick">✔</span>
-    {% else %}<span class="todo" title="아직 통과하지 못했다">●</span>{% endif %}
+    {% else %}<span class="todo" title="아직 통과하지 못했어요">●</span>{% endif %}
   </button>
   {% endif %}
   {% if user.role == 'admin' %}
-  <button class="tab {{ 'on' if kind|default('') == 'answers' }}" data-kind="answers">해설 <span class="only">관리자</span></button>
+  <button class="tab {{ 'on' if K == 'answers' }}" data-kind="answers">해설 <span class="only">관리자</span></button>
   {% endif %}
 </nav>
 
-{% if kind|default('README') == 'quiz' %}
+{# ---- 퀴즈: 개념 확인만. 랩은 건드리지 않는다 ---- #}
+{% if K == 'quiz' %}
   <div class="assess">
     <div class="assess-intro">
-      <h3>제출하고 검증</h3>
-      <p>
-        {% if quiz %}퀴즈 {{ quiz.questions | length }}문항({{ quiz.pass_score }}% 이상 통과){% endif %}
-        {% if quiz and has_checks %} · {% endif %}
-        {% if has_checks %}랩 상태 검사{% endif %}
-        {% if written %} · 서술 {{ written | length }}개{% endif %}
-        <br>
-        <b>퀴즈와 검사를 통과하면 다음 모듈이 열린다.</b> 횟수 제한은 없다. 틀린 문항은 해설이 나온다.
-        {% if written and not mstate.need_review %}
-        <br>서술 과제는 <b>제출하면 바로 넘어간다.</b> 관리자는 나중에 몰아서 읽고 피드백을 남긴다.
-        {% elif mstate.need_review %}
-        <br><b>이 모듈의 서술 과제는 관리자 승인이 있어야 통과된다.</b>
-        {% endif %}
-      </p>
+      <h3>퀴즈</h3>
+      <p>{{ quiz.questions | length }}문항 · <b>{{ quiz.pass_score }}% 이상이면 통과</b>예요.
+        횟수 제한은 없고, 틀린 문항은 바로 해설이 나옵니다.<br>
+        여기는 <b>개념만</b> 확인해요. 랩에서 직접 만드는 일은 다음 <b>[과제]</b> 에서 합니다.</p>
     </div>
 
-    <form id="quizform" data-module="{{ module.id }}">
-      {% if quiz %}
+    <form id="quizform" data-module="{{ module.id }}" data-phase="quiz">
+      <input type="hidden" name="phase" value="quiz">
       <ol class="quiz">
         {% for q in quiz.questions %}
         <li class="q">
           <div class="qtext">{{ q.text | labtext }}</div>
           {% if q.type == 'short' %}
-            <input class="qshort" type="text" name="q_{{ q.id }}" placeholder="답을 입력" autocomplete="off">
+            <input class="qshort" type="text" name="q_{{ q.id }}" placeholder="답을 입력하세요" autocomplete="off">
           {% else %}
             <div class="choices">
             {% for c in q.choices %}
@@ -105,18 +104,45 @@
               </label>
             {% endfor %}
             </div>
-            {% if q.type == 'multi' %}<span class="qhint">해당하는 것을 모두 고르시오</span>{% endif %}
+            {% if q.type == 'multi' %}<span class="qhint">해당하는 것을 모두 고르세요</span>{% endif %}
           {% endif %}
         </li>
         {% endfor %}
       </ol>
-      {% endif %}
 
+      <div class="assess-actions">
+        <button type="submit" class="btn primary big">채점하기</button>
+        <span class="submitting" hidden>채점 중…</span>
+      </div>
+    </form>
+
+    <div id="assessresult">{% include "_result.html" %}</div>
+  </div>
+
+{# ---- 검증: 랩 상태 검사 + 서술 제출 ---- #}
+{% elif K == 'verify' %}
+  <div class="assess">
+    <div class="assess-intro">
+      <h3>검증</h3>
+      <p>
+        {% if has_checks %}과제에서 만든 설정을 <b>실제 노드에서 확인</b>합니다.{% endif %}
+        {% if written %}{% if has_checks %} 그리고 {% endif %}서술 {{ written | length }}개를 제출해요.{% endif %}
+        <br><b>여기를 통과하면 다음 모듈이 열립니다.</b> 횟수 제한은 없어요.
+        {% if written and not mstate.need_review %}
+        <br>서술은 <b>제출하면 바로 넘어갑니다.</b> 관리자가 나중에 읽고 피드백을 남겨요.
+        {% elif mstate.need_review %}
+        <br><b>이 모듈의 서술은 관리자 승인이 있어야 통과됩니다.</b>
+        {% endif %}
+      </p>
+    </div>
+
+    <form id="quizform" data-module="{{ module.id }}" data-phase="verify">
+      <input type="hidden" name="phase" value="verify">
       {% if has_checks %}
       <div class="checkinfo">
-        <b>랩 상태 검사</b>가 함께 실행된다.
-        설정이 들어갔는지, 의도한 대로 통신이 되는지 실제 노드에서 확인한다.
-        <span class="muted">먼저 실습을 마치고 제출할 것.</span>
+        <b>랩 상태 검사</b>가 실행됩니다.
+        설정이 들어갔는지, 의도한 대로 통신이 되는지 실제 노드에서 확인해요.
+        <span class="muted">먼저 [과제] 를 마치고 눌러 주세요.</span>
       </div>
       {% endif %}
 
@@ -131,13 +157,13 @@
         </h4>
         <p class="prompt">{{ w.prompt | labtext }}</p>
         {% if cur and cur.status == 'changes_requested' and cur.feedback %}
-        <div class="feedback"><b>{{ cur.reviewed_by }} 의 요청:</b> {{ cur.feedback }}</div>
+        <div class="feedback"><b>{{ cur.reviewed_by }} 님의 요청:</b> {{ cur.feedback }}</div>
         {% elif cur and cur.feedback %}
         <div class="feedback ok"><b>{{ cur.reviewed_by }}:</b> {{ cur.feedback }}</div>
         {% endif %}
         <textarea name="w_{{ w.id }}" rows="{{ 10 if w.kind == 'diagram' else 6 }}"
                   class="{{ 'mono' if w.kind == 'diagram' }}"
-                  placeholder="{{ '구성도를 글자로 그린다 (pc1 --- sw1 --- r1 …)' if w.kind == 'diagram' else '적어 볼 것' }}">{{ cur.body if cur else '' }}</textarea>
+                  placeholder="{{ '구성도를 글자로 그려 주세요 (pc1 --- sw1 --- r1 …)' if w.kind == 'diagram' else '적어 주세요' }}">{{ cur.body if cur else '' }}</textarea>
         <div class="wmeta">
           {% if w.min_chars %}{{ w.min_chars }}자 이상{% endif %}
           {% if w.rubric %} · 다뤄야 할 것:
@@ -155,6 +181,18 @@
 
     <div id="assessresult">{% include "_result.html" %}</div>
   </div>
+
 {% else %}
   <article class="doc">{{ module_html | safe }}</article>
+  {% if K == 'tasks' and (has_checks or written) %}
+  {# 과제 탭에는 낼 것이 없다. 그래서 예전에는 다 하고도 "이걸 어디에 내지" 에서
+     멈췄다. 다음에 무엇을 할지 여기서 말한다. #}
+  <div class="assess-intro next-step">
+    <h3>다 하셨나요?</h3>
+    <p>과제에는 따로 제출할 것이 없어요. <b>랩에 만들어 둔 설정 자체가 답</b>입니다.<br>
+      {% if has_checks %}<b>[검증]</b> 을 누르면 실제 노드에서 그 설정을 확인합니다.{% endif %}
+      {% if written %} 거기서 서술 {{ written | length }}개도 함께 제출해요.{% endif %}</p>
+    <button class="btn primary" data-kind="verify" {{ 'disabled' if not ta.verify }}>검증하러 가기 →</button>
+  </div>
+  {% endif %}
 {% endif %}

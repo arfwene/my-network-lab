@@ -255,7 +255,11 @@ def _upgrade_v5_to_v6(con, version):
 
 
 # ============================================================ 탭 열람 순서
-TAB_ORDER = ["README", "tasks", "quiz"]
+# 배우는 순서 = 탭 순서. 개념을 먼저 확인하고(퀴즈), 그다음 랩에서 손으로
+# 만들고(과제), 마지막에 그 결과를 기계가 본다(검증).
+# 전에는 과제가 퀴즈 앞에 있었는데, 과제 탭에는 제출할 것이 아무것도 없어서
+# 교육생이 "이걸 어디에 내라는 거지" 에서 멈췄다.
+TAB_ORDER = ["README", "quiz", "tasks", "verify"]
 
 
 def mark_tab_seen(username, module_id, kind):
