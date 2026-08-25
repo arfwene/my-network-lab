@@ -141,8 +141,12 @@ a:hover{color:var(--accent-deep)}
 @media (max-width:1180px){.layout{grid-template-columns:240px minmax(0,1fr) 300px}}
 .modules,.side{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);
   padding:16px;overflow:auto}
+/* 위 여백을 0 으로 둔다. 이게 남아 있으면 붙박이 탭 **위쪽 틈으로 본문이 지나간다** —
+   여백도 스크롤 영역의 일부라 sticky top:0 이 그 아래에서 멈추기 때문이다.
+   여백은 첫 요소가 대신 진다. */
 .content{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);
-  padding:24px 28px;overflow:auto}
+  padding:0 28px 24px;overflow:auto}
+.content > .module-head{padding-top:24px}
 /* 구획 이름표는 Geist Mono 대문자 — DESIGN.md 의 eyebrow 다 */
 .modules h3,.side h3{font:500 12px/16px "Geist Mono",ui-monospace,monospace;
   text-transform:uppercase;letter-spacing:.04em;color:var(--faint);margin:20px 0 8px}
@@ -174,9 +178,10 @@ a.mod{text-decoration:none;color:var(--ink)}
 .module-head .meta{color:var(--muted);font-size:12px;margin:0}
 /* 교재가 길어 스크롤하면 탭이 화면 밖으로 나간다. 그러면 과제·퀴즈가
    있다는 사실 자체를 모르고 지나친다. 위에 붙여 둔다. */
-.tabs{display:flex;gap:4px;margin:16px 0 20px;border-bottom:1px solid var(--line);
+/* 붙박이 탭. 좌우로 넓혀 카드 안쪽 여백까지 덮는다 — 안 그러면 옆으로 글자가 비친다. */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);
   position:sticky;top:0;z-index:5;background:var(--panel);
-  padding-top:4px;margin-top:0}
+  margin:16px -28px 20px;padding:8px 28px 0}
 /* 미완료 표시. 통과 표시(✔)만 있으면 '아직 안 했다' 가 눈에 띄지 않는다. */
 .tab:disabled{opacity:.45;cursor:not-allowed}
 .tab .lockmark{font-size:12px;vertical-align:middle}
