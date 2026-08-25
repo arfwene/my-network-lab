@@ -475,3 +475,8 @@ pre.code{background:var(--code-bg);padding:14px 16px;border-radius:10px;overflow
   background:color-mix(in srgb,var(--ok) 18%,transparent)}
 .secretbox .btn{font-size:11.5px;padding:3px 9px;vertical-align:middle}
 .secretbox .d{margin-top:8px;font-size:12px;line-height:1.7;color:var(--muted)}
+
+/* 랩 단계와 모듈이 어긋났을 때 교재 위에 뜨는 안내 */
+.stagegap{margin:0 0 16px}
+.stagegap .note{margin:6px 0 10px}
+.stagegap .btn{margin-right:8px}

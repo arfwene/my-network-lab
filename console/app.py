@@ -453,6 +453,8 @@ def _assess_ctx(user, lab_id, module):
         "last_quiz": db.latest_attempt(user["username"], module["id"], "quiz"),
         "last_checks": db.latest_attempt(user["username"], module["id"], "checks"),
         "next_module": mods[i + 1] if i + 1 < len(mods) else None,
+        # 이 모듈을 하기에 랩이 모자란가 · 맞는가 · 앞서 있는가
+        "stage_gap": state.stage_gap(lab_id, module["stage"]),
     }
 
 

@@ -7,19 +7,36 @@
 
   const labId = () => $('.actions')?.dataset.lab || '1';
   const curModule = () => $('.tabs')?.dataset.module || '';
+  // 랩 단계와 이 모듈의 관계. 서버가 _module.html 에 실어 보낸다.
+  const gapDir = () => $('.tabs')?.dataset.gap || 'ok';
+  const need = () => $('.tabs')?.dataset.stage || '';
+  const now = () => $('.tabs')?.dataset.now || '';
 
   // ------------------------------------------------------------ 확인 모달
   //  경고 문구 + 영향 범위를 보여주고, 최종 확인 버튼을 따로 누르게 한다.
   const MODAL = {
+    // 버튼은 하나지만 랩이 어디에 있느냐에 따라 하는 일의 의미가 다르다.
+    // (동작은 언제나 같다 — reset.yml 이 흔적을 지우고 site.yml 을 다시 올린다)
     reset: {
-      title: '이 모듈을 초기 상태로 되돌린다',
-      body: `<ul>
+      title: () => ({
+        behind: `랩을 ${need().toUpperCase()} 단계까지 올린다`,
+        ok: '이 모듈을 초기 상태로 되돌린다',
+        ahead: `랩을 ${need().toUpperCase()} 단계로 되돌린다`
+      })[gapDir()],
+      body: () => `<ul>
+        ${{
+          behind: `<li>이 단계에서 등장하는 <b>장비가 깨어나고</b>, 주소와 라우팅이 올라간다</li>
+                   <li>건너뛴 단계도 함께 들어간다 — 설정은 누적이다</li>`,
+          ok: '',
+          ahead: `<li>지금 랩은 <b>${(now() || '?').toUpperCase()}</b> 다.
+                      뒤 모듈에서 올린 설정(라우팅 · 방화벽 · 서비스)이 <b>지워진다</b></li>`
+        }[gapDir()]}
         <li>실습 중 만든 설정이 <b>모두 사라진다</b> — 추가한 주소, 라우팅, 정적 ARP, 임시로 꽂은 스위치 포트</li>
         <li>주입된 장애도 함께 해제된다</li>
-        <li>VM 은 지워지지 않는다. 설정만 이 모듈의 시작 상태로 돌아간다</li>
+        <li>VM 은 지워지지 않는다. 설정만 이 모듈의 시작 상태가 된다</li>
         <li><b>퀴즈 점수와 제출 이력은 그대로 남는다</b></li>
       </ul>`,
-      ok: '정말 초기화한다'
+      ok: () => gapDir() === 'behind' ? '적용한다' : '정말 되돌린다'
     },
     destroy: {
       title: '랩의 VM 을 전부 삭제한다',
@@ -34,11 +51,11 @@
 
   function confirmAction(kind, scope) {
     return new Promise(resolve => {
-      const m = MODAL[kind];
-      $('#modal-title').textContent = m.title;
-      $('#modal-body').innerHTML = m.body;
+      const m = MODAL[kind], v = x => typeof x === 'function' ? x() : x;
+      $('#modal-title').textContent = v(m.title);
+      $('#modal-body').innerHTML = v(m.body);
       $('#modal-scope').textContent = scope;
-      $('#modal-ok').textContent = m.ok;
+      $('#modal-ok').textContent = v(m.ok);
       $('#modal').hidden = false;
       const close = v => {
         $('#modal').hidden = true;
@@ -82,6 +99,10 @@
     const f = $('#quizform');
     if (f) f.onsubmit = submitAssessment;
     $$('[data-goto]').forEach(b => b.onclick = () => loadModule(b.dataset.goto));
+    // 배너의 [단계 올리기] 는 옆의 [이 모듈 적용] 과 같은 것이다.
+    // 따로 요청을 만들지 않는다 — 확인 창·시험 잠금·로그 처리를 두 벌 두지 않기 위해.
+    const up = $('#stage-up');
+    if (up) up.onclick = () => run('reset');
   }
 
   document.addEventListener('click', e => {
@@ -192,7 +213,7 @@
       if (!await confirmAction(action, scope)) return;
     }
     consoleBox.classList.remove('collapsed');
-    $$('.actions .btn').forEach(x => x.disabled = true);
+    $$('.actions .btn, #stage-up').forEach(x => x.disabled = true);
     const body = new URLSearchParams({
       lab: box.dataset.lab, action, stage: box.dataset.stage,
       scenario, module: curModule()
@@ -238,6 +259,10 @@
     $$('.actions .btn').forEach(x => {
       x.disabled = locked && !allow.includes(x.dataset.action);
     });
+    // 배너 버튼도 같이 잠갔다가 같이 푼다. 여기 빠뜨리면 작업이 도는 동안
+    // 배너만 눌리고, 서버가 "다른 작업이 실행 중이다" 로 되받는다.
+    const up = $('#stage-up');
+    if (up) up.disabled = locked;
   }
 
   function examTick() {

@@ -78,9 +78,15 @@
         {{ act('deploy', '', '랩 생성', 'Terraform — 브리지와 VM 생성') }}
         {{ act('destroy', 'danger', '랩 삭제', 'Terraform — VM 삭제') }}
       </div>
-      {{ act('apply', 'primary', '이 모듈 적용') }}
+      {# 버튼은 하나다. reset.yml 이 흔적을 지운 뒤 site.yml 을 그대로 다시 올리므로
+         '적용'과 '초기화'는 애초에 같은 동작이었다 — 둘로 나눠 두면 교육생이
+         어느 쪽을 눌러야 하는지 매번 고민하고, 앞선 랩에서 '적용'을 눌러
+         반쪽만 되돌아가는 사고가 난다. #}
+      {{ act('reset', 'primary', '이 모듈 적용',
+             '이 모듈의 시작 상태로 맞춘다 — 실습 중 만든 설정은 사라진다') }}
+      <p class="note">망가뜨렸을 때도 <b>이 버튼</b>이다.
+         이 모듈의 시작 상태로 되돌아간다.</p>
       {{ act('verify', '', '연결 확인') }}
-      {{ act('reset', 'warn', '이 모듈 초기화') }}
       <div class="row">
         <select id="scenario" {{ 'disabled' if allow is not none }}>
           <option value="">장애 시나리오…</option>
