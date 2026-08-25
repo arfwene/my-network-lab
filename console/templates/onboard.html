@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}시작하기 · {{ site_name }}{% endblock %}
+{% block body %}
+{# 첫 로그인 절차. 여기서 끝나면 교육생은 바로 실습에 들어갈 수 있다.
+   1) 랩 준비 — 없으면 만든다. 진행률은 terraform 이 찍는 자원 수로 센다.
+   2) 접속 키 — 등록하면 점프 계정과 랩 노드 반영이 자동으로 걸린다.
+   관리자를 기다리는 단계가 하나도 없다. #}
+<header class="top">
+  <a class="brand" href="/">{{ site_name }}</a>
+  <span class="sep"></span>
+  <div class="ob-steps">
+    <span class="s {{ 'on' if step == 1 }} {{ 'done' if step > 1 }}">1 랩 준비</span>
+    <span class="s {{ 'on' if step == 2 }} {{ 'done' if step > 2 }}">2 접속 키</span>
+    <span class="s {{ 'on' if step == 3 }}">3 끝</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="who"><span class="name">{{ user.name | default(user.username) }}</span>
+    <span class="role">lab{{ lab_id }}</span></div>
+  <a class="ghost" href="/logout">나가기</a>
+</header>
+
+<main class="ob">
+  {% if err %}<p class="flash bad">{{ err }}</p>{% endif %}
+
+  {# ---------------------------------------------------------- 1. 랩 준비 #}
+  {% if step == 1 %}
+  <h1>랩을 준비한다</h1>
+  <p class="lead">가상 장비 {{ total }}대를 만든다. <b>1~2분</b>쯤 걸리고,
+     이 화면을 열어 두기만 하면 된다.</p>
+
+  <div class="card ob-card" id="deploybox"
+       data-ready="{{ '1' if lab_ready else '' }}"
+       data-unknown="{{ '1' if lab_unknown else '' }}"
+       data-job="{{ active_job or '' }}">
+    <div class="ob-bar"><i id="bar" style="width:0%"></i></div>
+    <p class="ob-pct"><b id="pct">준비 중</b> <span class="muted" id="msg">확인하고 있다…</span></p>
+    <details class="ob-log" id="logbox" hidden>
+      <summary>자세히 보기</summary>
+      <pre id="out"></pre>
+    </details>
+  </div>
+
+  <div class="ob-acts">
+    <a class="btn primary" id="next" href="/onboard?step=2" hidden>계속 →</a>
+    <a class="btn" id="skip" href="/onboard?step=2" hidden>건너뛰고 키부터 등록 →</a>
+  </div>
+
+  {# ---------------------------------------------------------- 2. 접속 키 #}
+  {% elif step == 2 %}
+  <h1>접속 키를 등록한다</h1>
+  <p class="lead">내 PC 의 <b>공개키</b>를 넣으면 랩 노드에 터미널로 들어갈 수 있다.
+     등록하면 <b>점프 계정과 랩 노드 반영까지 자동으로</b> 처리된다 —
+     관리자를 기다릴 필요가 없다.</p>
+
+  <div class="card ob-card">
+    <h3>키 만들기</h3>
+    <p><b>Windows</b> — 시작 메뉴에서 <code>PowerShell</code> 을 검색해 연다
+       (설치할 것은 없다).</p>
+    <pre class="code"><code>ssh-keygen -t ed25519 -C "{{ user.username }}@내PC"</code></pre>
+    <p>세 번 묻는다. <b>전부 그냥 Enter.</b> 그다음 아래로 공개키를 꺼낸다.</p>
+    <pre class="code"><code>Get-Content $HOME\.ssh\id_ed25519.pub</code></pre>
+    <p class="note"><b>macOS · Linux</b> 는 <code>ssh-keygen -t ed25519</code> 뒤
+       <code>cat ~/.ssh/id_ed25519.pub</code>.</p>
+    <p><code>ssh-ed25519 AAAA...</code> 로 시작하는 <b>한 줄</b>을 통째로 복사해
+       아래에 붙여넣는다. <b>개인키(<code>id_ed25519</code>, 확장자 없는 쪽)는
+       절대 올리지 않는다.</b></p>
+  </div>
+
+  <form method="post" action="/sshkey" class="ob-form">
+    <input type="hidden" name="next" value="/onboard?step=3">
+    <textarea name="key" rows="4" required
+              placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... {{ user.username }}@내PC"></textarea>
+    <div class="ob-acts">
+      <button class="btn primary" type="submit">등록하고 반영</button>
+      <a class="btn" href="/sshkey?later=1">나중에 하기</a>
+    </div>
+  </form>
+
+  {# ---------------------------------------------------------- 3. 끝 #}
+  {% else %}
+  <h1>준비됐다</h1>
+  <p class="lead">랩이 만들어졌고 접속 키도 들어갔다. 바로 시작하면 된다.</p>
+  <div class="ob-acts">
+    <a class="btn primary" href="/">모듈로 가기 →</a>
+    <a class="btn" href="/sshkey">접속 설정 내려받기</a>
+  </div>
+  {% endif %}
+</main>
+
+{% if step == 1 %}
+<script>
+(function () {
+  const box = document.getElementById('deploybox');
+  const bar = document.getElementById('bar'), pct = document.getElementById('pct');
+  const msg = document.getElementById('msg'), out = document.getElementById('out');
+  const logbox = document.getElementById('logbox');
+  const next = document.getElementById('next'), skip = document.getElementById('skip');
+
+  function done(text) { pct.textContent = '완료'; bar.style.width = '100%';
+                        msg.textContent = text; next.hidden = false; }
+  function stop(text) { msg.textContent = text; skip.hidden = false;
+                        bar.parentElement.classList.add('stopped'); pct.textContent = '멈춤'; }
+
+  // 이미 만들어져 있으면 아무것도 하지 않는다.
+  if (box.dataset.ready) { done('랩은 이미 준비돼 있다.'); return; }
+  // Proxmox 에 물어보지 못했다. 여기서 붙잡아 두지 않는다 — 키 등록은 랩과 무관하다.
+  if (box.dataset.unknown && !box.dataset.job) {
+    stop('Proxmox 상태를 확인하지 못했다. 교육 담당자에게 알리고, 먼저 키를 등록해 두면 된다.');
+    return;
+  }
+
+  async function watch(id) {
+    logbox.hidden = false;
+    const es = new EventSource(`/jobs/${id}/stream`);
+    es.onmessage = e => {
+      const lines = JSON.parse(e.data);
+      out.textContent += (Array.isArray(lines) ? lines : [lines]).join('\n') + '\n';
+      out.scrollTop = out.scrollHeight;
+    };
+    es.addEventListener('done', () => es.close());
+    es.onerror = () => es.close();
+
+    // 진행률은 가벼운 창구에서 따로 받는다. 로그 수천 줄을 세어 가며 그릴 이유가 없다.
+    // 15분이면 어떤 이유로든 정상이 아니다. 영원히 두드리지 않는다.
+    const until = Date.now() + 15 * 60 * 1000;
+    while (Date.now() < until) {
+      const r = await fetch(`/jobs/${id}`);
+      if (!r.ok) { stop('작업 상태를 읽지 못했다.'); return; }
+      const j = await r.json();
+      if (j.pct === null) {
+        msg.textContent = `계획을 세우는 중이다 · ${Math.round(j.elapsed)}초`;
+      } else {
+        bar.style.width = j.pct + '%';
+        pct.textContent = j.pct + '%';
+        msg.textContent = `${j.done}/${j.total}대 · ${Math.round(j.elapsed)}초`;
+      }
+      if (j.status === 'ok') { done(`장비 ${j.total}대가 준비됐다.`); return; }
+      if (j.status === 'failed') {
+        stop('랩을 만들지 못했다. 위 [자세히 보기] 의 마지막 줄을 교육 담당자에게 알릴 것.');
+        logbox.open = true;
+        return;
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    stop('너무 오래 걸린다. 교육 담당자에게 알릴 것.');
+  }
+
+  (async () => {
+    if (box.dataset.job) { watch(box.dataset.job); return; }
+    const r = await fetch('/onboard/deploy', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    if (j.ready) { done('랩은 이미 준비돼 있다.'); return; }
+    if (!r.ok || !j.job_id) { stop(j.error || '랩 만들기를 시작하지 못했다.'); return; }
+    if (j.joined) msg.textContent = '같은 랩의 다른 사람이 이미 시작했다 — 함께 기다린다.';
+    watch(j.job_id);
+  })();
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -558,6 +558,23 @@ def cached(force=False, ttl=CACHE_TTL):
     return check()
 
 
+def lab_vms(lab_id, cfg=None):
+    """이 랩의 VM 이 Proxmox 에 몇 대 있는가. (있는 수, 전체 수)
+
+    콘솔 DB 나 tfstate 가 아니라 **Proxmox 에 직접 묻는다.** 진실은 거기 있다 —
+    누가 웹 UI 에서 지웠을 수도 있고, tfstate 가 실패한 배포 뒤에 어긋나 있을 수도 있다.
+    물어보지 못하면 (None, 전체) 를 돌려준다. '0대' 와 '모른다' 는 다르다.
+    """
+    want = set(range(*(lambda a, b: (a, b + 1))(*L.vmid_range(lab_id))))
+    try:
+        cfg = cfg or config()
+        rows = _api(cfg, f"/api2/json/nodes/{cfg['node']}/qemu") or []
+        have = {int(r["vmid"]) for r in rows if str(r.get("vmid", "")).isdigit()}
+        return len(want & have), len(want)
+    except Exception:                                       # noqa: BLE001
+        return None, len(want)
+
+
 def last():
     """점검하지 않고 마지막 결과만. (헤더 아이콘 첫 렌더용)"""
     return _cache["result"]

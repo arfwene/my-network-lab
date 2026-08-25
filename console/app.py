@@ -121,7 +121,7 @@ def require(request, cap=None, skip_setup=False):
     if (not skip_setup and u.get("role") == "user"
             and not u.get("ssh_key")
             and not request.session.get("key_later")):
-        return None, RedirectResponse("/sshkey?onboard=1", status_code=303)
+        return None, RedirectResponse("/onboard", status_code=303)
     if not skip_setup and auth.can(u, "user.manage") and not pve.confirmed():
         return None, RedirectResponse("/admin/settings?setup=1", status_code=303)
     if cap and not auth.can(u, cap):
@@ -307,6 +307,74 @@ def _sshkey_ctx(request, user, errors=(), saved="", onboard=False):
                        db.lab_pve_account(lab_id, create=False) if lab_id else ("", "")))}
 
 
+# ------------------------------------------------------------------ 첫 로그인 마법사
+def _onboard_ctx(request, user, step, err=""):
+    lab_id = pick_lab(user)
+    have, total = (None, 0)
+    if lab_id:
+        have, total = pve.lab_vms(lab_id)
+    return {
+        **nav_ctx(user, "onboard", lab_id),
+        "request": request, "user": user, "step": step, "err": err,
+        "lab_id": lab_id, "have": have, "total": total,
+        # 랩이 온전한가 · 아예 없는가 · 물어보지도 못했는가
+        "lab_ready": have is not None and total and have >= total,
+        "lab_unknown": have is None,
+        "busy": runner.busy(lab_id) if lab_id else True,
+        "active_job": runner.active.get(lab_id) if lab_id else None,
+        "has_key": bool((user or {}).get("ssh_key")),
+    }
+
+
+@app.get("/onboard", response_class=HTMLResponse)
+async def onboard(request: Request, step: int = 1):
+    """첫 로그인 절차를 한 화면에서 끝낸다 — 랩 준비 → 접속 키 → 끝.
+
+    예전에는 교육생이 로그인한 뒤 무엇을 해야 하는지 화면이 말해 주지 않았고,
+    랩은 관리자가 따로 만들어 줘야 했다.
+    """
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user.get("must_change_password"):
+        return RedirectResponse("/password", status_code=303)
+    if auth.can(user, "user.manage"):
+        return RedirectResponse("/", status_code=303)     # 관리자는 이 절차가 없다
+    ctx = await asyncio.to_thread(_onboard_ctx, request, user, max(1, min(3, step)))
+    return tpl.TemplateResponse(request, "onboard.html", ctx)
+
+
+@app.post("/onboard/deploy")
+async def onboard_deploy(request: Request):
+    """랩이 없으면 만든다. 화면이 열릴 때 자동으로 부른다.
+
+    GET 이 아니라 POST 다 — 화면을 새로 고치는 것만으로 VM 27개를 만들면 안 된다.
+    같은 랩의 두 번째 사람이 눌러도 Runner 의 랩 단위 잠금이 막고, 그 사람에게는
+    이미 도는 작업의 번호를 그대로 돌려준다. 그러면 둘이 같은 진행률을 본다.
+    """
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"error": "로그인이 필요하다"}, status_code=401)
+    lab_id = pick_lab(user)
+    if not lab_id:
+        return JSONResponse({"error": "배정된 랩이 없다. 교육 담당자에게 문의할 것"},
+                            status_code=400)
+    running = runner.active.get(lab_id)
+    if running:
+        return JSONResponse({"job_id": running, "joined": True})
+    have, total = await asyncio.to_thread(pve.lab_vms, lab_id)
+    if have is not None and total and have >= total:
+        return JSONResponse({"ready": True})
+    stage = state.load(lab_id).get("stage") or L.STAGES[0]
+    try:
+        job = await runner.submit(lab_id, "deploy", stage, None, user.get("username"),
+                                  on_done=lambda j: state.record(
+                                      j.lab_id, j.action, j.stage, j.status == "ok", None, j.id))
+    except (jobs.Locked, jobs.NotReady, RuntimeError, ValueError) as e:
+        return JSONResponse({"error": getattr(e, "message", None) or str(e)}, status_code=409)
+    return JSONResponse({"job_id": job.id})
+
+
 @app.get("/sshkey", response_class=HTMLResponse)
 async def sshkey_form(request: Request, onboard: int = 0, later: int = 0,
                       applied: int = 0, changed: int = 0, removed: int = 0):
@@ -335,7 +403,8 @@ async def sshkey_form(request: Request, onboard: int = 0, later: int = 0,
 
 
 @app.post("/sshkey", response_class=HTMLResponse)
-async def sshkey_save(request: Request, key: str = Form(""), remove: str = Form("")):
+async def sshkey_save(request: Request, key: str = Form(""), remove: str = Form(""),
+                      next: str = Form("")):
     user = current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
@@ -361,6 +430,11 @@ async def sshkey_save(request: Request, key: str = Form(""), remove: str = Form(
     request.session.pop("key_later", None)
     # 화면을 바로 그리지 않고 되돌린다(PRG). 자동 반영 중에는 이 화면이 스스로
     # 새로 고쳐지는데, POST 응답을 새로 고치면 브라우저가 폼을 다시 보낸다.
+    # 마법사에서 왔으면 마법사의 다음 칸으로 돌아간다.
+    # 값은 우리가 만든 화면 안의 경로만 받는다 — 폼에 실려 오는 주소를 그대로
+    # 믿으면 로그인한 사람을 바깥 사이트로 튕겨 보낼 수 있다.
+    if next in ("/onboard?step=3",):
+        return RedirectResponse(next, status_code=303)
     return RedirectResponse(f"/sshkey?{'applied' if first else 'changed'}=1", status_code=303)
 
 
@@ -668,6 +742,20 @@ async def action(request: Request, lab: int = Form(...), action: str = Form(...)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     return JSONResponse({"job_id": job.id})
+
+
+@app.get("/jobs/{job_id}")
+async def job_info(request: Request, job_id: str):
+    """작업 하나의 상태와 진행률. 온보딩 화면이 몇 초마다 물어본다.
+
+    로그 전체를 받는 스트림과 달리 아주 가볍다 — 진행 막대만 그리면 되는
+    화면이 수천 줄을 받을 이유가 없다.
+    """
+    user = current_user(request)
+    job = runner.jobs.get(job_id)
+    if not user or not job or job.lab_id not in auth.allowed_labs(user):
+        return JSONResponse({"error": "권한 없음"}, status_code=403)
+    return JSONResponse(job.as_dict(reveal=False))
 
 
 @app.get("/jobs/{job_id}/stream")

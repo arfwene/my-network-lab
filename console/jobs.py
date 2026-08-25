@@ -218,6 +218,10 @@ class Job:
         self.steps = steps
         self.lines: list[str] = []
         self.dropped = 0        # 너무 길어서 버린 앞부분 줄 수
+        # 진행률. terraform 은 퍼센트를 찍지 않지만, 계획한 자원 수와 끝난 자원 수는
+        # 로그에 그대로 나온다. 그 둘로 센다 — 지어내지 않는다.
+        self.total = 0
+        self.done = 0
         self.status = "queued"          # queued | running | ok | failed
         # 마지막으로 한 줄이라도 나온 시각. 조용한 구간이 얼마나 길어졌는지 재려고 둔다 —
         # terraform 은 refresh 하는 동안 아무것도 찍지 않아서, 화면만 보면 멈춘 것과 같다.
@@ -228,6 +232,7 @@ class Job:
 
     def emit(self, line):
         self.last_out = time.time()
+        self._count(line)
         self.lines.append(ANSI_RE.sub("", line).rstrip("\n"))
         # 로그는 무한히 자라지 않는다. terraform apply 하나가 수천 줄을 쏟아내고,
         # 그걸 다 들고 있으면 새로 붙는 화면마다 그 전부를 다시 받는다.
@@ -244,6 +249,31 @@ class Job:
         return (round(now - (self.started or now), 1),
                 round(now - (self.last_out or self.started or now), 1))
 
+    # terraform 의 두 줄만 본다.
+    #   Plan: 27 to add, 0 to change, 0 to destroy.
+    #   module.lab.proxmox_virtual_environment_vm.node["pc1"]: Creation complete after 12s [id=...]
+    # destroy 는 "Destruction complete" 로 끝난다.
+    PLAN_RE = re.compile(r"^Plan:\s*(\d+)\s+to add(?:,\s*(\d+)\s+to change)?"
+                         r"(?:,\s*(\d+)\s+to destroy)?")
+    STEP_RE = re.compile(r": (?:Creation|Modifications|Destruction) complete after")
+
+    def _count(self, line):
+        if not self.total:
+            m = self.PLAN_RE.match(line.strip())
+            if m:
+                self.total = sum(int(g) for g in m.groups() if g)
+                return
+        if self.STEP_RE.search(line):
+            self.done += 1
+
+    def pct(self):
+        """0~100. 계획을 아직 못 봤으면 None — '모른다' 를 0% 로 속이지 않는다."""
+        if self.status == "ok":
+            return 100
+        if not self.total:
+            return None
+        return min(99, round(self.done * 100 / self.total))
+
     def as_dict(self, reveal=True):
         return {"id": self.id, "lab_id": self.lab_id, "action": self.action,
                 "stage": self.stage,
@@ -251,7 +281,8 @@ class Job:
                 "module": self.module,
                 "status": self.status,
                 "rc": self.rc, "user": self.user,
-                "elapsed": round((self.finished or time.time()) - (self.started or time.time()), 1)}
+                "elapsed": round((self.finished or time.time()) - (self.started or time.time()), 1),
+                "pct": self.pct(), "done": self.done, "total": self.total}
 
 
 class Runner:
