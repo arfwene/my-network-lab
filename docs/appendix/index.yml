@@ -5,20 +5,20 @@
 appendix:
   - id: cheatsheet
     title: "한 장 치트시트 — 무엇을 볼 때 무슨 명령"
-    summary: "3-step 순서대로 정리한 명령 모음. 인쇄해서 키보드 옆에 둘 것."
+    summary: "3-step 순서대로 정리한 명령 모음. 인쇄해서 키보드 옆에 두세요."
     print: true
 
   - id: flowchart
     title: "트러블슈팅 플로우차트 — 증상에서 원인까지"
-    summary: "신고 문장에서 시작해 원인까지 가는 결정 트리. 감별이 갈리는 지점만 담았다."
+    summary: "신고 문장에서 시작해 원인까지 가는 결정 트리. 감별이 갈리는 지점만 담았습니다."
     print: true
 
   - id: glossary
     title: "용어집"
-    summary: "이 과정에 나온 용어를 한 줄로. 흔한 오해를 함께 적었다."
+    summary: "이 과정에 나온 용어를 한 줄로. 흔한 오해를 함께 적었습니다."
     print: false
 
   - id: vendor-cli
     title: "벤더 CLI 매핑 — FRR · Linux ↔ Cisco IOS"
-    summary: "개념은 같고 명령어만 바뀐다. 실장비로 넘어갈 때 이 표만 있으면 된다."
+    summary: "개념은 같고 명령어만 바뀝니다. 실장비로 넘어갈 때 이 표만 있으면 됩니다."
     print: true

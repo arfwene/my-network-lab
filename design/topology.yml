@@ -242,7 +242,7 @@ nodes:
     stage: m9
     memory: 768
     services: [nginx]
-    desc: "외부 인터넷 흉내. 공인 IP 만 보유 — 사설 IP 는 여기까지 오지 못한다."
+    desc: "외부 인터넷 흉내. 공인 IP 만 보유 — 사설 IP 는 여기까지 오지 못합니다."
     interfaces:
       - {name: eth1, bridge: "402", peer: edge, mac: "52:54:00:51:00:01"}
       - {name: lo0,  type: loopback, desc: "외부 웹사이트 흉내 (공인 IP)"}

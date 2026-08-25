@@ -123,7 +123,7 @@ def render(stage="m10", lab_id=None):
     lab_id = LAB_ID if lab_id is None else int(lab_id)
     d = []
     A = d.append
-    A("<!-- 자동 생성 파일. 직접 수정하지 말 것.")
+    A("<!-- 자동 생성 파일. 직접 수정하지 마세요.")
     A("     생성: python3 tools/render-labmap.py")
     A("     원본: design/topology.yml, design/ipam.yml -->")
     A("")
@@ -159,8 +159,8 @@ def render(stage="m10", lab_id=None):
     for n, mgmt, addrs in node_rows(stage, lab_id):
         A(f'| **{n["name"]}** | {n["role"]} | {n["zone"]} | `{mgmt}` | {addrs} |')
     A("")
-    A("> **관리 IP 로 통신 테스트를 하지 말 것.** 관리망은 랩과 분리돼 있어 항상 통한다.")
-    A("> 모든 검증은 랩 IP(eth1 이후) 기준으로 한다.")
+    A("> **관리 IP 로 통신 테스트를 하지 마세요.** 관리망은 랩과 분리돼 있어 항상 통합니다.")
+    A("> 모든 검증은 랩 IP(eth1 이후) 기준으로 합니다.")
     A("")
     A("## 4. 링크 · 브리지 일람")
     A("")
@@ -198,9 +198,9 @@ def render(stage="m10", lab_id=None):
     for k, v in IPAM["ipv4"]["summary"].items():
         A(f'| {k} | `{v["cidr"]}` | {v["range"]} | {v["desc"]} |')
     A("")
-    A("> 구역별로 대역을 모아둔 이유는 **요약(summarization)** 이다.")
+    A("> 구역별로 대역을 모아둔 이유는 **요약(summarization)** 입니다.")
     A(f'> r1 은 VLAN10·VLAN20 을 따로 광고하지 않고 '
-      f'`{IPAM["ipv4"]["summary"]["site-a"]["cidr"]}` 하나로 광고한다.')
+      f'`{IPAM["ipv4"]["summary"]["site-a"]["cidr"]}` 하나로 광고합니다.')
     A("")
     A("### VLAN")
     A("")
@@ -219,8 +219,8 @@ def render(stage="m10", lab_id=None):
     A(f'| **공인** | `{IPAM["public"]["ipv4"]["transit"]["cidr"]}` | edge ↔ inet | ○ |')
     A(f'| **외부 사이트** | `{IPAM["public"]["ipv4"]["external_site"]["inet_loopback"]}` | inet | ○ |')
     A("")
-    A("> 기본 설정의 공인 대역은 RFC5737 **문서·교육 전용 예약 대역**을 쓴다.")
-    A("> 실제 인터넷에서 라우팅되지 않으므로 실습에 안전하다. (`config/site.yml` 에서 변경 가능)")
+    A("> 기본 설정의 공인 대역은 RFC5737 **문서·교육 전용 예약 대역**을 씁니다.")
+    A("> 실제 인터넷에서 라우팅되지 않으므로 실습에 안전합니다. (`config/site.yml` 에서 변경 가능)")
     A("")
     A("### IPv6")
     A("")
@@ -257,7 +257,7 @@ def render(stage="m10", lab_id=None):
         nid = f'{n["id"]:02x}'
         A(f'| {n["name"]} | `0x{nid}` | `{mgmt_ip(n["name"], lab_id)}` | `52:54:00:{nid}:00:*` |')
     A("")
-    A("> M1 에서 `bridge fdb show` 결과를 볼 때, MAC 만 보고 어느 노드인지 바로 알 수 있다.")
+    A("> M1 에서 `bridge fdb show` 결과를 볼 때, MAC 만 보고 어느 노드인지 바로 알 수 있습니다.")
     A("")
     return "\n".join(d) + "\n"
 

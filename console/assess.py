@@ -116,7 +116,11 @@ def grade_quiz(module, lab_id, answers):
             except ValueError:
                 ok = False
         else:  # short
-            ok = bool(given) and any(_norm(given[0]) == _norm(a) for a in it["answer"])
+            # 정답도 랩 값으로 렌더한다. 단답형 답이 주소인 문항 —
+            # "web 의 IP 는?" — 은 랩마다 답이 다르므로 `{{ ip.web }}` 로 적어야 하는데,
+            # 지문만 렌더하고 정답을 원문 그대로 비교하면 아무도 맞힐 수 없다.
+            want = [Template(str(a)).render(**ctx) for a in it["answer"]]
+            ok = bool(given) and any(_norm(given[0]) == _norm(a) for a in want)
         correct += 1 if ok else 0
         detail.append({
             "id": it["id"], "ok": ok,

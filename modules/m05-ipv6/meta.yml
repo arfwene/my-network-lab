@@ -3,10 +3,10 @@ title: "IPv6 — 주소가 넉넉하면 무엇이 달라지는가"
 stage: m5
 duration: "3시간"
 competencies: [C3, C4, C9]
-summary: "지금까지 만든 망을 IPv6 로 한 번 더 훑는다. ARP 대신 NDP 를 캡처하고, 사설/공인 개념이 ULA/GUA 로 어떻게 대응되는지 확인한다."
+summary: "지금까지 만든 망을 IPv6 로 한 번 더 훑습니다. ARP 대신 NDP 를 캡처하고, 사설/공인 개념이 ULA/GUA 로 어떻게 대응되는지 확인합니다."
 objectives:
-  - "IPv6 주소를 축약·확장하고 주소 유형(Link-local / ULA / GUA / Multicast)을 구분할 수 있다 (C3)"
-  - "ARP·DHCP·브로드캐스트에 대응하는 NDP·SLAAC·멀티캐스트를 대조 설명할 수 있다 (C4)"
-  - "dual-stack 을 구성하고 IPv4 와 IPv6 가 **서로 다른 라우팅 테이블**을 갖는다는 것을 확인할 수 있다 (C4)"
-  - "ULA/GUA 를 사설/공인 IP 와 대조하고, IPv6 에 NAT 가 기본적으로 필요 없는 이유를 설명할 수 있다 (C9)"
-  - "IPv4 는 정상인데 IPv6 만 실패하는 부분 장애를 진단할 수 있다"
+  - "IPv6 주소를 축약·확장하고 주소 유형(Link-local / ULA / GUA / Multicast)을 구분할 수 있습니다 (C3)"
+  - "ARP·DHCP·브로드캐스트에 대응하는 NDP·SLAAC·멀티캐스트를 대조 설명할 수 있습니다 (C4)"
+  - "dual-stack 을 구성하고 IPv4 와 IPv6 가 **서로 다른 라우팅 테이블**을 갖는다는 것을 확인할 수 있습니다 (C4)"
+  - "ULA/GUA 를 사설/공인 IP 와 대조하고, IPv6 에 NAT 가 기본적으로 필요 없는 이유를 설명할 수 있습니다 (C9)"
+  - "IPv4 는 정상인데 IPv6 만 실패하는 부분 장애를 진단할 수 있습니다"
