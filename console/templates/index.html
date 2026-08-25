@@ -58,7 +58,7 @@
       {{ act('reset', 'primary block', '이 모듈 적용',
              '이 모듈의 시작 상태로 맞춘다 — 실습 중 만든 설정은 사라진다') }}
       {{ act('verify', 'block', '연결 확인', '평가와 무관한 도달성 점검') }}
-      <p class="note">초기화할 때도 이 버튼이다.</p>
+      <p class="note">초기화 시에도 사용 가능</p>
 
       <h3>장애 연습</h3>
       <select id="scenario" {{ 'disabled' if allow is not none }}>
@@ -71,17 +71,17 @@
       </div>
 
       <h3>랩 자체</h3>
-      <p class="note">코스에 한 번이면 된다. 삭제하면 VM 이 사라지고
-         다시 만드는 데 몇 분 걸린다.</p>
+      <p class="note">코스당 1회면 충분 · 삭제 시 VM 제거,
+         다시 만드는 데 수 분 소요</p>
       <div class="row">
         {{ act('deploy', '', '랩 생성', 'Terraform — 브리지와 VM 생성') }}
         {{ act('destroy', 'danger', '랩 삭제', 'Terraform — VM 삭제') }}
       </div>
 
       {% if allow is not none %}
-      <p class="note lock">시험 중에는 위 버튼이 잠긴다.
-        {% if exam.phase == 'closed' %}성적이 이미 확정됐다.{% endif %}
-        <b>연결 확인</b>만 열려 있다 — 상태를 보고 보고서를 쓰라는 뜻이다.</p>
+      <p class="note lock">시험 중 위 버튼 잠금
+        {%- if exam.phase == 'closed' %} · 성적 확정됨{% endif %} ·
+        <b>연결 확인</b>만 사용 가능 (상태를 보고 보고서를 쓰라는 뜻)</p>
       {% endif %}
     </div>
 
