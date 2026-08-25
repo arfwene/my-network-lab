@@ -15,9 +15,9 @@
     <button class="btn small" type="button" id="pwshow">보기</button>
     <button class="btn small" type="button" id="pwcopy">복사</button>
     <div class="d">
-      이 값은 <b>지금 이 화면에서만</b> 보인다. 새로고침하면 사라진다 — 저장해 두지 않으므로
-      다시 볼 수 없다. 놓쳤으면 아래 목록에서 [비밀번호 재발급] 을 다시 누르면 된다.<br>
-      본인은 첫 로그인에서 반드시 바꿔야 한다.
+      이 값은 <b>지금 이 화면에서만</b> 보입니다. 새로고침하면 사라집니다 — 저장해 두지 않으므로
+      다시 볼 수 없습니다. 놓쳤으면 아래 목록에서 [비밀번호 재발급] 을 다시 누르면 됩니다.<br>
+      본인은 첫 로그인에서 반드시 바꿔야 합니다.
     </div>
   </div>
   {% endif %}
@@ -26,7 +26,7 @@
     <h3>계정 만들기</h3>
     <form method="post" action="/admin/users" class="newuser">
       <label>아이디<input name="username" required pattern="[a-z][a-z0-9_-]{2,31}"
-             title="영문 소문자로 시작하고 3~32자. 소문자·숫자·_·- 만 쓴다 (OS 계정 이름이 된다)"></label>
+             title="영문 소문자로 시작하고 3~32자. 소문자·숫자·_·- 만 씁니다 (OS 계정 이름이 됩니다)"></label>
       <label>이름<input name="name" placeholder="표시 이름"></label>
       <label>종류
         <select name="role" id="rolesel">
@@ -43,7 +43,7 @@
              placeholder="비우면 자동 생성"></label>
       <button class="btn primary" type="submit">만들기</button>
     </form>
-    <p class="note">규칙: {{ policy }} · 생성된 계정은 <b>첫 로그인에서 비밀번호를 바꿔야</b> 한다.</p>
+    <p class="note">규칙: {{ policy }} · 생성된 계정은 <b>첫 로그인에서 비밀번호를 바꿔야</b> 합니다.</p>
   </section>
 
   <section class="card">
@@ -87,7 +87,7 @@
               <button class="mini warn">차단</button></form>
             {% endif %}
             <form method="post" action="/admin/users/{{ u.username }}/delete" class="inline"
-                  onsubmit="return confirm('{{ u.username }} 계정을 삭제한다. 계속?')">
+                  onsubmit="return confirm('{{ u.username }} 계정을 삭제합니다. 계속?')">
               <button class="mini danger">삭제</button></form>
           </td>
         </tr>
@@ -95,8 +95,8 @@
       </tbody>
     </table>
     <p class="note">
-      <b>차단</b>은 계정을 남긴 채 접근만 막는다 (진행 중인 세션도 즉시 끊긴다).
-      교육 중 문제가 생겼을 때 삭제하면 이력이 사라지므로 차단을 먼저 쓸 것.
+      <b>차단</b>은 계정을 남긴 채 접근만 막습니다 (진행 중인 세션도 즉시 끊깁니다).
+      교육 중 문제가 생겼을 때 삭제하면 이력이 사라지므로 차단을 먼저 써 주세요.
     </p>
   </section>
 </main>

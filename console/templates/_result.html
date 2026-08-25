@@ -1,11 +1,11 @@
 {% if module and module.id == capstone and exam.phase == 'closed' %}
 <div class="frozen">
   <h3>확정 성적 <span class="score {{ 'ok' if exam.passed else 'bad' }}">{{ exam.ok }}/{{ exam.total }}</span></h3>
-  <p>제한 시간이 끝난 <b>{{ exam.closed_at }} UTC</b> 시점의 검사 결과다.
-    지금 랩을 고쳐도 이 숫자는 바뀌지 않는다. 다시 응시하면 새로 확정된다.</p>
+  <p>제한 시간이 끝난 <b>{{ exam.closed_at }} UTC</b> 시점의 검사 결과입니다.
+    지금 랩을 고쳐도 이 숫자는 바뀌지 않습니다. 다시 응시하면 새로 확정됩니다.</p>
   {% if exam.scenarios %}
   <p>이번 회차에 주입된 장애: {% for s in exam.scenarios %}<code>{{ s }}</code> {% endfor %}
-    <span class="muted">— 보고서에 적은 진단과 맞춰 볼 것.</span></p>
+    <span class="muted">— 보고서에 적은 진단과 맞춰 봐 주세요.</span></p>
   {% endif %}
   {% if exam.frozen %}
   <ul class="cresult">
@@ -85,7 +85,7 @@
   {% if written and mstate.written %}
   <section class="rblock">
     <h4>서술 과제
-      <span class="muted">자동 사전검토는 관리자가 빨리 훑기 위한 것이지 채점이 아니다</span>
+      <span class="muted">자동 사전검토는 관리자가 빨리 훑기 위한 것이지 채점이 아닙니다</span>
     </h4>
     <ul class="cresult">
       {% for w in written %}
@@ -117,12 +117,12 @@
       <button class="btn primary big" data-goto="{{ next_module.id }}">
         다음 모듈 → {{ next_module.id | upper }}. {{ next_module.title }}</button>
     {% elif mstate.complete %}
-      <div class="done">마지막 모듈까지 통과했다. 수고했다.</div>
+      <div class="done">마지막 모듈까지 통과했습니다. 수고했습니다.</div>
     {% elif mstate.awaiting_review %}
-      <div class="muted">관리자 승인을 기다리는 중이다 —
-        {{ mstate.awaiting_review | join(', ') }}. 승인되면 다음 모듈이 열린다.</div>
+      <div class="muted">관리자 승인을 기다리는 중입니다 —
+        {{ mstate.awaiting_review | join(', ') }}. 승인되면 다음 모듈이 열립니다.</div>
     {% else %}
-      <div class="muted">통과하면 다음 모듈이 열린다. 고친 뒤 다시 제출할 것.</div>
+      <div class="muted">통과하면 다음 모듈이 열립니다. 고친 뒤 다시 제출해 주세요.</div>
     {% endif %}
   </div>
 </div>

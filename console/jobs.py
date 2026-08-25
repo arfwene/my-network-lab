@@ -82,10 +82,10 @@ PREFLIGHT = {"deploy"}
 # 시작하자마자 한참 조용한 작업들. 무엇을 기다리는 중인지 미리 적어 둔다 —
 # 이유를 모르는 침묵은 사용자에게 "멈췄다" 와 같은 뜻이다.
 QUIET_FIRST = {
-    "destroy": "   terraform 이 먼저 Proxmox 에 자원 27개의 현재 상태를 확인한다(refresh).\n"
-               "   그동안 출력이 없다 — 멈춘 것이 아니다. 아래 경과 시간이 계속 올라가면 정상이다.",
-    "deploy":  "   terraform 이 먼저 상태를 확인하고 실행 계획을 세운다.\n"
-               "   그동안 출력이 없다 — 멈춘 것이 아니다.",
+    "destroy": "   terraform 이 먼저 Proxmox 에 자원 27개의 현재 상태를 확인합니다(refresh).\n"
+               "   그동안 출력이 없습니다 — 멈춘 것이 아닙니다. 아래 경과 시간이 계속 올라가면 정상입니다.",
+    "deploy":  "   terraform 이 먼저 상태를 확인하고 실행 계획을 세웁니다.\n"
+               "   그동안 출력이 없습니다 — 멈춘 것이 아닙니다.",
 }
 
 
@@ -171,7 +171,7 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
                                 "-e", f"lab_stage={stage}"])]
     if action == "check":
         if not module:
-            raise ValueError("검사에는 모듈이 필요하다")
+            raise ValueError("검사에는 모듈이 필요합니다")
         return [(L.ROOT, [PY, "tools/run-checks.py", "--lab", str(lab_id), "--module", module])]
     if action == "exam":
         # 시험 시작 — 깨끗한 랩에서 출발해야 채점이 성립한다.
@@ -183,7 +183,7 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
         # 시나리오 이름이 로그에 그대로 찍히므로 이 작업은 secret 으로 흘린다.
         want = [x for x in (scenario or "").split(",") if x]
         if not want:
-            raise ValueError("시험에 주입할 시나리오가 없다")
+            raise ValueError("시험에 주입할 시나리오가 없습니다")
         known = scenario_ids()
         bad = [x for x in want if x not in known]
         if bad:

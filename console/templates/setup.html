@@ -9,7 +9,7 @@
     <h3>설치 상태</h3>
     <p class="legend">
       <code>make doctor</code> 와 <b>같은 검사</b>다. 두 곳이 다른 말을 하면 안 되므로
-      같은 코드를 부른다. 랩 {{ lab }} 기준.
+      같은 코드를 부릅니다. 랩 {{ lab }} 기준.
     </p>
     <p class="setup-sum">
       <span class="tag ok">통과 {{ counts.ok }}</span>
@@ -19,11 +19,11 @@
     </p>
 
     {% if counts.error %}
-    <p class="flash bad">오류를 먼저 해결할 것. 이 상태로 랩을 만들면 중간에 멈춘다.</p>
+    <p class="flash bad">오류를 먼저 해결해 주세요. 이 상태로 랩을 만들면 중간에 멈춥니다.</p>
     {% elif counts.warn %}
-    <p class="flash">경고는 배포를 막지 않는다. 다만 무슨 뜻인지는 보고 넘어갈 것.</p>
+    <p class="flash">경고는 배포를 막지 않습니다. 다만 무슨 뜻인지는 보고 넘어가 주세요.</p>
     {% else %}
-    <p class="flash ok">준비됐다. 랩 화면에서 <b>[랩 생성]</b> 을 누르면 된다.</p>
+    <p class="flash ok">준비됐습니다. 랩 화면에서 <b>[랩 생성]</b> 을 누르면 됩니다.</p>
     {% endif %}
 
     <table class="pve-checks setup-checks">
@@ -46,26 +46,26 @@
   <section class="card">
     <h3>여기서 바로 할 수 있는 것</h3>
     <p class="legend">
-      전에는 서버에 SSH 로 들어가 <code>make</code> 를 쳐야 했다. 이제 버튼이다.
-      같은 명령을 콘솔이 대신 돌리고 로그를 아래에 그대로 보여 준다.
+      전에는 서버에 SSH 로 들어가 <code>make</code> 를 쳐야 했습니다. 이제 버튼입니다.
+      같은 명령을 콘솔이 대신 돌리고 로그를 아래에 그대로 보여 줍니다.
     </p>
     {% if not jump_ready %}
     <p class="flash">
-      <b>교육생이 늘 때마다</b> 서버에 들어가 점프 계정을 만드는 일이 남아 있다.
-      아래 한 줄을 <b>한 번</b> 실행해 두면 그 일도 이 화면의 버튼이 된다.
+      <b>교육생이 늘 때마다</b> 서버에 들어가 점프 계정을 만드는 일이 남아 있습니다.
+      아래 한 줄을 <b>한 번</b> 실행해 두면 그 일도 이 화면의 버튼이 됩니다.
       <br><code>./install.sh --no-apt</code>
-      <br><span class="muted">콘솔 계정에 sudo 를 통째로 주지 않는다 — root 소유 전용 프로그램
-      하나만, 인자 없이 실행할 수 있게 한다.</span>
+      <br><span class="muted">콘솔 계정에 sudo 를 통째로 주지 않습니다 — root 소유 전용 프로그램
+      하나만, 인자 없이 실행할 수 있게 합니다.</span>
     </p>
     {% endif %}
     {% if jump_stale %}
     <p class="flash warn">
-      <b>교육생 {{ jump_stale|length }}명의 키가 점프 계정에 아직 반영되지 않았다.</b>
+      <b>교육생 {{ jump_stale|length }}명의 키가 점프 계정에 아직 반영되지 않았습니다.</b>
       {% for u in jump_stale %}<code>{{ u.username }}</code>{% if not loop.last %} {% endif %}{% endfor %}<br>
-      이 사람들이 <code>ssh</code> 를 하면 <b>첫 홉에서</b> 막힌다.
-      아래 <b>[점프 계정 적용]</b> 을 누르면 해결된다.
+      이 사람들이 <code>ssh</code> 를 하면 <b>첫 홉에서</b> 막힙니다.
+      아래 <b>[점프 계정 적용]</b> 을 누르면 해결됩니다.
       {% if not jump_ready %}<br><span class="muted">버튼이 없으면 위의
-      <code>./install.sh --no-apt</code> 를 먼저 한 번 실행할 것.</span>{% endif %}
+      <code>./install.sh --no-apt</code> 를 먼저 한 번 실행해 주세요.</span>{% endif %}
     </p>
     {% endif %}
     <div class="setup-acts">
@@ -82,9 +82,9 @@
   <section class="card">
     <h3>여기서는 할 수 없는 것</h3>
     <p class="legend">
-      root 권한이나 <b>다른 호스트</b>가 필요한 절차다. 콘솔은 root 로 돌지 않고
-      Proxmox 호스트에 셸을 갖고 있지도 않다 — 그렇게 만들면 콘솔이 뚫렸을 때
-      Proxmox 전체가 함께 넘어간다. 아래를 복사해 그 자리에서 실행할 것.
+      root 권한이나 <b>다른 호스트</b>가 필요한 절차입니다. 콘솔은 root 로 돌지 않고
+      Proxmox 호스트에 셸을 갖고 있지도 않습니다 — 그렇게 만들면 콘솔이 뚫렸을 때
+      Proxmox 전체가 함께 넘어갑니다. 아래를 복사해 그 자리에서 실행해 주세요.
     </p>
     {% for m in manual %}
     <div class="manual">
@@ -139,7 +139,7 @@
       } else {
         const d = await stream(j.job_id);
         if (d && d.status === 'ok') {
-          out.textContent += '\n완료. 위쪽 [다시 검사] 로 상태를 확인할 것.\n';
+          out.textContent += '\n완료. 위쪽 [다시 검사] 로 상태를 확인해 주세요.\n';
         }
       }
       btns.forEach(x => x.disabled = false);

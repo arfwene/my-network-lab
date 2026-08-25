@@ -31,32 +31,32 @@
     reset: {
       title: () => ({
         behind: `랩을 ${need().toUpperCase()} 단계까지 올린다`,
-        ok: '이 모듈을 초기 상태로 되돌린다',
+        ok: '이 모듈을 초기 상태로 되돌립니다',
         ahead: `랩을 ${need().toUpperCase()} 단계로 되돌린다`
       })[gapDir()],
       body: () => `<ul>
         ${{
-          behind: `<li>이 단계에서 등장하는 <b>장비가 깨어나고</b>, 주소와 라우팅이 올라간다</li>
-                   <li>건너뛴 단계도 함께 들어간다 — 설정은 누적이다</li>`,
+          behind: `<li>이 단계에서 등장하는 <b>장비가 깨어나고</b>, 주소와 라우팅이 올라갑니다</li>
+                   <li>건너뛴 단계도 함께 들어갑니다 — 설정은 누적입니다</li>`,
           ok: '',
           ahead: `<li>지금 랩은 <b>${(now() || '?').toUpperCase()}</b> 다.
-                      뒤 모듈에서 올린 설정(라우팅 · 방화벽 · 서비스)이 <b>지워진다</b></li>`
+                      뒤 모듈에서 올린 설정(라우팅 · 방화벽 · 서비스)이 <b>지워집니다</b></li>`
         }[gapDir()]}
-        <li>실습 중 만든 설정이 <b>모두 사라진다</b> — 추가한 주소, 라우팅, 정적 ARP, 임시로 꽂은 스위치 포트</li>
-        <li>주입된 장애도 함께 해제된다</li>
-        <li>VM 은 지워지지 않는다. 설정만 이 모듈의 시작 상태가 된다</li>
-        <li><b>퀴즈 점수와 제출 이력은 그대로 남는다</b></li>
+        <li>실습 중 만든 설정이 <b>모두 사라집니다</b> — 추가한 주소, 라우팅, 정적 ARP, 임시로 꽂은 스위치 포트</li>
+        <li>주입된 장애도 함께 해제됩니다</li>
+        <li>VM 은 지워지지 않습니다. 설정만 이 모듈의 시작 상태가 됩니다</li>
+        <li><b>퀴즈 점수와 제출 이력은 그대로 남습니다</b></li>
       </ul>`,
-      ok: () => gapDir() === 'behind' ? '적용한다' : '정말 되돌린다'
+      ok: () => gapDir() === 'behind' ? '적용합니다' : '정말 되돌립니다'
     },
     destroy: {
-      title: '랩의 VM 을 전부 삭제한다',
+      title: '랩의 VM 을 전부 삭제합니다',
       body: `<ul>
-        <li>이 랩의 <b>가상 머신과 브리지가 삭제된다</b></li>
-        <li>다시 쓰려면 [랩 생성] 으로 처음부터 만들어야 한다 (수 분 소요)</li>
-        <li>제출 이력은 남는다</li>
+        <li>이 랩의 <b>가상 머신과 브리지가 삭제됩니다</b></li>
+        <li>다시 쓰려면 [랩 생성] 으로 처음부터 만들어야 합니다 (수 분 소요)</li>
+        <li>제출 이력은 남습니다</li>
       </ul>`,
-      ok: '정말 삭제한다'
+      ok: '정말 삭제합니다'
     }
   };
 
@@ -249,7 +249,7 @@
         refreshStatus();
         resolve(d);
       });
-      es.onerror = () => { paint('!! 로그 스트림이 끊겼다'); es.close(); es = null; resolve(null); };
+      es.onerror = () => { paint('!! 로그 스트림이 끊겼습니다'); es.close(); es = null; resolve(null); };
     });
   }
 
@@ -341,11 +341,11 @@
 
   async function startExam() {
     const btn = $('#examstart');
-    if (!confirm('캡스톤 시험을 시작한다.\n\n'
-      + '· 랩이 초기화되고 서버가 고른 장애가 주입된다 (무엇인지는 알려주지 않는다)\n'
+    if (!confirm('캡스톤 시험을 시작합니다.\n\n'
+      + '· 랩이 초기화되고 서버가 고른 장애가 주입됩니다 (무엇인지는 알려주지 않습니다)\n'
       + '· 주입이 끝나는 순간부터 시계가 간다\n'
       + '· 시간이 끝나면 그 순간의 검사 결과가 확정 성적이 된다\n'
-      + '· 못 고친 것은 인계 보고서에 적으면 된다')) return;
+      + '· 못 고친 것은 인계 보고서에 적으면 됩니다')) return;
     btn.disabled = true;
     consoleBox.classList.remove('collapsed');
     const r = await fetch('/exam/start', {
@@ -353,7 +353,7 @@
     });
     const j = await r.json();
     if (!r.ok) {
-      paint('!! ' + (j.error || '시험을 시작하지 못했다'));
+      paint('!! ' + (j.error || '시험을 시작하지 못했습니다'));
       if (r.status === 503) window.pveHealth?.show(j.health);
       btn.disabled = false;
       return;

@@ -180,14 +180,14 @@ def gate(lab_id, action, username):
     if ph == "open":
         if action in OPEN_ALLOWED:
             return None
-        return (f"시험이 진행 중이다 — '{action}' 은(는) 쓸 수 없다. "
-                f"랩은 터미널에서 직접 고칠 것.")
+        return (f"시험이 진행 중입니다 — '{action}' 은(는) 쓸 수 없습니다. "
+                f"랩은 터미널에서 직접 고쳐 주세요.")
     if action in CLOSED_ALLOWED:
         return None
     if ph == "overtime":
-        return "제한 시간이 끝났다 — 성적을 확정하는 중이다. 잠시 뒤 결과가 나온다."
-    return ("제한 시간이 끝나 성적이 확정됐다. 지금 고쳐도 성적은 바뀌지 않는다. "
-            "인계 보고서를 제출할 것. 다시 응시하려면 [캡스톤 다시 시작] 을 누른다.")
+        return "제한 시간이 끝났습니다 — 성적을 확정하는 중입니다. 잠시 뒤 결과가 나옵니다."
+    return ("제한 시간이 끝나 성적이 확정됐습니다. 지금 고쳐도 성적은 바뀌지 않습니다. "
+            "인계 보고서를 제출해 주세요. 다시 응시하려면 [캡스톤 다시 시작] 을 누릅니다.")
 
 
 # ------------------------------------------------------------------ 시작·마감
@@ -195,11 +195,11 @@ def prepare(lab_id, username):
     """시작 전 확인. 문제가 있으면 사유 문자열, 없으면 (모듈, 시나리오 목록)."""
     module = docs.get(module_id())
     if not module:
-        return f"캡스톤 모듈({module_id()})이 없다", None
+        return f"캡스톤 모듈({module_id()})이 없습니다", None
     st = state.load(lab_id)
     if module["stage"] not in (st.get("applied") or []) and st.get("stage") != module["stage"]:
-        return (f"먼저 [이 모듈 적용] 으로 랩을 {module['stage']} 단계까지 올려야 한다. "
-                f"시험은 정상 동작하는 랩에서 시작한다.", None)
+        return (f"먼저 [이 모듈 적용] 으로 랩을 {module['stage']} 단계까지 올려야 합니다. "
+                f"시험은 정상 동작하는 랩에서 시작합니다.", None)
     return None, module
 
 

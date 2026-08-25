@@ -38,7 +38,7 @@
   {# 랩 단계 칩. 열어 둔 모듈과 어긋나면 색이 바뀐다 #}
   {% set g = stage_gap | default({'dir': 'ok', 'need': ''}, true) %}
   <div class="labstage {{ 'off' if g.dir != 'ok' }}" id="labstage"
-       title="랩에 적용되어 있는 단계다. 열어 둔 모듈이 요구하는 단계와 다르면 색이 바뀐다.">
+       title="랩에 적용되어 있는 단계입니다. 열어 둔 모듈이 요구하는 단계와 다르면 색이 바뀝니다.">
     <span class="k">랩</span>
     <b class="now">{{ lab_state.stage | upper if lab_state and lab_state.stage else '미적용' }}</b>
     <span class="need" {{ 'hidden' if g.dir == 'ok' }}>· 이 모듈 {{ g.need | upper }}</span>

@@ -139,7 +139,7 @@ def require(request, cap=None, skip_setup=False):
     if not skip_setup and auth.can(u, "user.manage") and not pve.confirmed():
         return None, RedirectResponse("/admin/settings?setup=1", status_code=303)
     if cap and not auth.can(u, cap):
-        return None, HTMLResponse("권한이 없다.", status_code=403)
+        return None, HTMLResponse("권한이 없습니다.", status_code=403)
     return u, None
 
 
@@ -257,7 +257,7 @@ async def password_change(request: Request, current: str = Form(""),
         return RedirectResponse("/login", status_code=303)
     errors = []
     if new1 != new2:
-        errors.append("새 비밀번호가 서로 다르다")
+        errors.append("새 비밀번호가 서로 다릅니다")
     else:
         # 최초 비밀번호 변경은 현재 비밀번호를 다시 묻지 않는다 (방금 로그인했다)
         errors = auth.change_password(u["username"], new1, current,
@@ -396,10 +396,10 @@ async def onboard_deploy(request: Request):
     """
     user = current_user(request)
     if not user:
-        return JSONResponse({"error": "로그인이 필요하다"}, status_code=401)
+        return JSONResponse({"error": "로그인이 필요합니다"}, status_code=401)
     lab_id = pick_lab(user)
     if not lab_id:
-        return JSONResponse({"error": "배정된 랩이 없다. 교육 담당자에게 문의할 것"},
+        return JSONResponse({"error": "배정된 랩이 없습니다. 교육 담당자에게 문의해 주세요"},
                             status_code=400)
     running = runner.active.get(lab_id)
     if running:
@@ -433,13 +433,13 @@ async def sshkey_form(request: Request, onboard: int = 0, later: int = 0,
         return RedirectResponse("/", status_code=303)
     msg = ""
     if applied:
-        msg = ("등록했다. 점프 계정과 랩 노드에 자동으로 반영한다 — 1~2분쯤 걸린다. "
-               "이 화면은 스스로 새로 고쳐지니 기다리면 된다.")
+        msg = ("등록했습니다. 점프 계정과 랩 노드에 자동으로 반영합니다 — 1~2분쯤 걸립니다. "
+               "이 화면은 스스로 새로 고쳐지니 기다리면 됩니다.")
     elif changed:
-        msg = ("바꿨다. 점프 계정과 랩 노드에 자동으로 반영한다 — "
-               "예전 키로는 곧 들어갈 수 없게 된다.")
+        msg = ("바꿨습니다. 점프 계정과 랩 노드에 자동으로 반영합니다 — "
+               "예전 키로는 곧 들어갈 수 없게 됩니다.")
     elif removed:
-        msg = "키를 지웠다. 점프 계정과 랩 노드에서 자동으로 회수한다."
+        msg = "키를 지웠습니다. 점프 계정과 랩 노드에서 자동으로 회수합니다."
     return tpl.TemplateResponse(request, "sshkey.html",
                                 _sshkey_ctx(request, user, saved=msg,
                                             onboard=bool(onboard)))
@@ -493,7 +493,7 @@ async def sshkey_config(request: Request):
         return RedirectResponse("/login", status_code=303)
     lab_id = pick_lab(user)
     if not lab_id:
-        return HTMLResponse("배정된 랩이 없다.", status_code=403)
+        return HTMLResponse("배정된 랩이 없습니다.", status_code=403)
     # 점프 계정 이름 = 콘솔 계정 이름 (tools/gen-jumpaccess.py 가 그렇게 만든다)
     proc = await asyncio.to_thread(
         subprocess.run,
@@ -550,7 +550,7 @@ async def index(request: Request, lab: int | None = None, m: str | None = None):
         return redir
     lab_id = pick_lab(user, lab)
     if lab_id is None:
-        return HTMLResponse("배정된 랩이 없다. 교육 담당자에게 문의할 것.", status_code=403)
+        return HTMLResponse("배정된 랩이 없습니다. 교육 담당자에게 문의해 주세요.", status_code=403)
     mods = docs.modules()
     ctx = base_ctx(request, user, lab_id)
     if m and ctx["unlocked"].get(m):
@@ -574,7 +574,7 @@ async def index(request: Request, lab: int | None = None, m: str | None = None):
 def _module_html(module, lab_id, user, kind="README"):
     text = docs.render_markdown(module, lab_id, kind)
     if text is None:
-        return "<p>문서가 없다.</p>"
+        return "<p>문서가 없습니다.</p>"
     return docs.to_html(text, module)
 
 
@@ -589,7 +589,7 @@ async def module_view(request: Request, module_id: str, lab: int | None = None,
     if not module:
         return HTMLResponse("없는 모듈", status_code=404)
     if kind == "answers" and not auth.can_see_answers(user):
-        return HTMLResponse('<div class="notice">해설은 관리자만 볼 수 있다.</div>',
+        return HTMLResponse('<div class="notice">해설은 관리자만 볼 수 있습니다.</div>',
                             status_code=403)
     is_admin = auth.can(user, "lab.all")
     # 교재 → 과제 → 퀴즈. 화면에서 막는 것만으로는 부족하다(URL 로 건너뛸 수 있다).
@@ -604,8 +604,8 @@ async def module_view(request: Request, module_id: str, lab: int | None = None,
     ctx = base_ctx(request, user, lab_id)
     if not ctx["unlocked"].get(module_id, False):
         return HTMLResponse(
-            '<div class="notice">앞 모듈을 통과해야 열린다. '
-            '앞 모듈에서 <b>제출하고 검증</b> 을 눌러 통과할 것.</div>', status_code=403)
+            '<div class="notice">앞 모듈을 통과해야 열립니다. '
+            '앞 모듈에서 <b>제출하고 검증</b> 을 눌러 통과해 주세요.</div>', status_code=403)
     ctx["module"] = module
     ctx["kind"] = kind
     # 퀴즈·검증 탭은 마크다운이 아니라 폼이다.
@@ -644,7 +644,7 @@ def _assess_ctx(user, lab_id, module):
 async def submit(request: Request, module_id: str):
     user, redir = require(request)
     if redir:
-        return JSONResponse({"error": "로그인이 필요하다"}, status_code=401)
+        return JSONResponse({"error": "로그인이 필요합니다"}, status_code=401)
     module = docs.get(module_id)
     if not module:
         return JSONResponse({"error": "없는 모듈"}, status_code=404)
@@ -724,7 +724,7 @@ async def history(request: Request, who: str = "", module: str = ""):
     target = user["username"]
     if who and who != user["username"]:
         if not auth.can(user, "user.manage"):
-            return HTMLResponse("본인 이력만 볼 수 있다.", status_code=403)
+            return HTMLResponse("본인 이력만 볼 수 있습니다.", status_code=403)
         target = who
     return tpl.TemplateResponse(request, "history.html", {
         **nav_ctx(user, "history"),
@@ -765,14 +765,14 @@ async def action(request: Request, lab: int = Form(...), action: str = Form(...)
                  module: str = Form("")):
     user = current_user(request)
     if not user:
-        return JSONResponse({"error": "로그인이 필요하다"}, status_code=401)
+        return JSONResponse({"error": "로그인이 필요합니다"}, status_code=401)
     if user.get("must_change_password"):
-        return JSONResponse({"error": "비밀번호를 먼저 변경할 것"}, status_code=403)
+        return JSONResponse({"error": "비밀번호를 먼저 변경해 주세요"}, status_code=403)
     cap = auth.ACTION_CAP.get(action)
     if not cap or not auth.can(user, cap):
-        return JSONResponse({"error": f"'{action}' 권한이 없다"}, status_code=403)
+        return JSONResponse({"error": f"'{action}' 권한이 없습니다"}, status_code=403)
     if lab not in auth.allowed_labs(user):
-        return JSONResponse({"error": "이 랩에 대한 권한이 없다"}, status_code=403)
+        return JSONResponse({"error": "이 랩에 대한 권한이 없습니다"}, status_code=403)
     try:
         job = await runner.submit(lab, action, stage, scenario or None,
                                   user.get("username"),
@@ -834,11 +834,11 @@ async def job_stream(request: Request, job_id: str):
         # 시험 문제(주입한 시나리오)는 실행 로그에 그대로 찍힌다.
         # 응시자에게는 진행 사실만 알리고 내용은 보내지 않는다 — 관리자는 그대로 본다.
         if job.secret and not reveal:
-            yield sse("$ 시험 준비 중 — 랩을 초기화하고 장애를 주입한다")
-            yield sse("   (무엇을 주입했는지는 보이지 않는다)")
+            yield sse("$ 시험 준비 중 — 랩을 초기화하고 장애를 주입합니다")
+            yield sse("   (무엇을 주입했는지는 보이지 않습니다)")
             while job.status not in ("ok", "failed"):
                 await asyncio.sleep(0.5)
-            yield sse("== 준비 완료. 지금부터 시간이 간다." if job.status == "ok"
+            yield sse("== 준비 완료. 지금부터 시간이 갑니다." if job.status == "ok"
                       else "!! 준비 실패 — 관리자에게 알릴 것")
         else:
             async for chunk in runner.stream(job_id):
@@ -891,7 +891,7 @@ async def appendix(request: Request, doc: str = "", lab: int | None = None):
     lab_id = pick_lab(user, lab)
     docs_all = docs.appendix()
     if not docs_all:
-        return HTMLResponse("부록이 아직 없다. <code>make appendix</code> 를 먼저 실행할 것.",
+        return HTMLResponse("부록이 아직 없습니다. <code>make appendix</code> 를 먼저 실행해 주세요.",
                             status_code=404)
     cur = docs.appendix_get(doc) or docs_all[0]
     text = docs.render_appendix(cur["id"], lab_id)
@@ -899,7 +899,7 @@ async def appendix(request: Request, doc: str = "", lab: int | None = None):
         **nav_ctx(user, "appendix", lab_id),
         "request": request, "user": user, "lab_id": lab_id,
         "docs": docs_all, "doc": cur,
-        "doc_html": docs.to_html(text) if text else "<p>문서를 찾을 수 없다.</p>",
+        "doc_html": docs.to_html(text) if text else "<p>문서를 찾을 수 없습니다.</p>",
         "health": pve.last(), "site_name": L.SITE["site"]["name"],
     })
 
@@ -913,15 +913,15 @@ async def exam_start(request: Request, lab: int = Form(...), minutes: str = Form
     """
     user, redir = require(request)
     if redir:
-        return JSONResponse({"error": "로그인이 필요하다"}, status_code=401)
+        return JSONResponse({"error": "로그인이 필요합니다"}, status_code=401)
     if lab not in auth.allowed_labs(user):
-        return JSONResponse({"error": "이 랩에 대한 권한이 없다"}, status_code=403)
+        return JSONResponse({"error": "이 랩에 대한 권한이 없습니다"}, status_code=403)
     if not auth.can(user, "lab.break"):
-        return JSONResponse({"error": "시험을 시작할 권한이 없다"}, status_code=403)
+        return JSONResponse({"error": "시험을 시작할 권한이 없습니다"}, status_code=403)
 
     live = exam.current(lab)
     if live and exam.phase(live) in ("open", "overtime"):
-        return JSONResponse({"error": "시험이 이미 진행 중이다"}, status_code=409)
+        return JSONResponse({"error": "시험이 이미 진행 중입니다"}, status_code=409)
     why, module = exam.prepare(lab, user["username"])
     if why:
         return JSONResponse({"error": why}, status_code=400)
@@ -971,10 +971,10 @@ async def exam_start(request: Request, lab: int = Form(...), minutes: str = Form
 async def exam_status(request: Request, lab: int | None = None):
     user = current_user(request)
     if not user:
-        return JSONResponse({"error": "로그인이 필요하다"}, status_code=401)
+        return JSONResponse({"error": "로그인이 필요합니다"}, status_code=401)
     lab_id = pick_lab(user, lab)
     if lab_id is None:
-        return JSONResponse({"error": "배정된 랩이 없다"}, status_code=403)
+        return JSONResponse({"error": "배정된 랩이 없습니다"}, status_code=403)
     return JSONResponse(exam.view(lab_id, user))
 
 
@@ -1005,7 +1005,7 @@ async def exam_op(request: Request, exam_id: int, op: str, minutes: str = Form("
     if op == "close":
         # 확정은 스위퍼에 맡긴다. 시간 초과와 같은 경로여야 결과가 어긋나지 않는다.
         db.exam_expire(exam_id)
-        note = "즉시 마감 — 곧 검사가 돌고 성적이 확정된다"
+        note = "즉시 마감 — 곧 검사가 돌고 성적이 확정됩니다"
     elif op == "extend":
         try:
             m = max(1, min(600, int(minutes)))
@@ -1016,7 +1016,7 @@ async def exam_op(request: Request, exam_id: int, op: str, minutes: str = Form("
     elif op == "cancel":
         # 취소는 성적도 잠금도 남기지 않는다. 준비 실수를 되돌리는 용도다.
         db.exam_close(exam_id, "cancelled", None)
-        note = "취소 — 성적도 잠금도 남지 않는다"
+        note = "취소 — 성적도 잠금도 남지 않습니다"
     else:
         return RedirectResponse("/admin/exams?msg=알 수 없는 작업", status_code=303)
     return RedirectResponse(f"/admin/exams?msg={ex['username']} · lab{ex['lab_id']} {note}",
@@ -1035,8 +1035,8 @@ def _setup_buttons(jump_ready):
         b.insert(0, {
             "action": "setup-jump-apply", "label": "점프 계정 적용",
             "what": ("콘솔에 등록된 교육생 키로 운영 서버의 점프 계정을 만들고 "
-                     "sshd 제한을 갱신한다. 교육생을 추가하거나 키를 바꾼 뒤에 누른다. "
-                     "빠진 사람은 만들고, 콘솔에서 사라진 사람은 접근을 회수한다."),
+                     "sshd 제한을 갱신합니다. 교육생을 추가하거나 키를 바꾼 뒤에 누릅니다. "
+                     "빠진 사람은 만들고, 콘솔에서 사라진 사람은 접근을 회수합니다."),
             "need": "install.sh 가 설치하는 root 헬퍼"})
     return b
 
@@ -1049,22 +1049,22 @@ def _access_what(jump_ready):
     스크립트를 손으로 돌리는 **두 번째 root 경로**를 만든다 — 두 길이 갈라진다.
     """
     if jump_ready:
-        return ("Proxmox 콘솔 계정 스크립트를 dist/ 에 만든다. "
-                "점프 계정은 위 [점프 계정 적용] 이 직접 처리하므로 스크립트가 필요 없다.")
-    return ("점프 계정 스크립트와 Proxmox 콘솔 계정 스크립트를 dist/ 에 만든다. "
-            "만들기만 하고 적용하지 않는다 — 적용은 아래 root 절차다.")
+        return ("Proxmox 콘솔 계정 스크립트를 dist/ 에 만듭니다. "
+                "점프 계정은 위 [점프 계정 적용] 이 직접 처리하므로 스크립트가 필요 없습니다.")
+    return ("점프 계정 스크립트와 Proxmox 콘솔 계정 스크립트를 dist/ 에 만듭니다. "
+            "만들기만 하고 적용하지 않습니다 — 적용은 아래 root 절차입니다.")
 
 
 SETUP_BUTTONS = [
     {"action": "setup-mgmt", "label": "관리망 브리지 만들기",
-     "what": "Proxmox 에 VLAN 브리지 1개를 만든다. 전 랩 공용이라 최초 1회면 된다.",
+     "what": "Proxmox 에 VLAN 브리지 1개를 만듭니다. 전 랩 공용이라 최초 1회면 됩니다.",
      "need": "Proxmox 연결"},
     {"action": "setup-access", "label": "교육생 접속 파일 만들기",
      "what": "",       # jump_ready 에 따라 _setup_buttons 가 채운다
      "need": ""},
     {"action": "setup-docs", "label": "문서 생성",
-     "what": "교재·부록·랩 지도·접속 안내를 dist/ 에 파일로 뽑는다. "
-             "웹 화면은 이것 없이도 나온다 — 인쇄·배포용이다.",
+     "what": "교재·부록·랩 지도·접속 안내를 dist/ 에 파일로 뽑습니다. "
+             "웹 화면은 이것 없이도 나옵니다 — 인쇄·배포용입니다.",
      "need": ""},
 ]
 
@@ -1107,30 +1107,30 @@ def _setup_manual(jump_ready=False):
     return [
         {"title": "Proxmox 권한·API 토큰",
          "where": f"Proxmox 호스트({node}) 에서 root",
-         "why": "Proxmox 자신의 계정을 만드는 일이라 API 로는 할 수 없다. 최초 1회.",
+         "why": "Proxmox 자신의 계정을 만드는 일이라 API 로는 할 수 없습니다. 최초 1회.",
          "cmd": "./infra/proxmox-setup.sh"},
         {"title": "골든 템플릿 (VMID 9000)",
          "where": f"Proxmox 호스트({node}) 에서 root",
-         "why": "디스크 이미지를 내려받아 가공한다. 최초 1회.",
+         "why": "디스크 이미지를 내려받아 가공합니다. 최초 1회.",
          "cmd": "./infra/template/build-golden-template.sh --storage local-lvm"},
         {"title": "이 서버를 관리망에 연결",
          "where": "이 운영 서버, sudo",
-         "why": "netplan 을 쓰는 데 root 가 필요하다. 콘솔은 root 로 돌지 않는다. 최초 1회.",
+         "why": "netplan 을 쓰는 데 root 가 필요합니다. 콘솔은 root 로 돌지 않습니다. 최초 1회.",
          "cmd": f"cd {root} && make mgmt-net"},
         *([] if jump_ready else [
             {"title": "점프 계정 적용",
              "where": "이 운영 서버, sudo",
-             "why": ("OS 계정과 sshd 설정을 건드린다. 교육생이 늘 때마다 필요하다. "
-                     "아래 한 줄을 한 번 실행해 두면 이 일이 위쪽 버튼으로 바뀐다 — "
+             "why": ("OS 계정과 sshd 설정을 건드립니다. 교육생이 늘 때마다 필요합니다. "
+                     "아래 한 줄을 한 번 실행해 두면 이 일이 위쪽 버튼으로 바뀝니다 — "
                      f"cd {root} && ./install.sh --no-apt"),
              "cmd": (f"cd {root} && sudo ./dist/jump-access.sh\n"
                      "sudo cp dist/jump-access.conf /etc/ssh/sshd_config.d/60-lab-jump.conf\n"
                      "sudo sshd -t && sudo systemctl reload ssh")}]),
         {"title": "Proxmox 콘솔 계정 적용",
          "where": f"Proxmox 호스트({node}) 에서 root",
-         "why": ("pveum 은 Proxmox 호스트에만 있다. 랩당 1계정이라 "
-                 "교육생이 늘어도 다시 할 필요는 없다 — 랩을 늘릴 때만 한다. "
-                 "비밀번호는 교육생이 [접속 키] 화면에서 직접 본다."),
+         "why": ("pveum 은 Proxmox 호스트에만 있습니다. 랩당 1계정이라 "
+                 "교육생이 늘어도 다시 할 필요는 없습니다 — 랩을 늘릴 때만 합니다. "
+                 "비밀번호는 교육생이 [접속 키] 화면에서 직접 봅니다."),
          "cmd": "./console-access.sh          # dist/ 에서 복사해 온 파일"},
     ]
 
@@ -1169,7 +1169,7 @@ async def admin_setup(request: Request, lab: int = 1, fresh: int = 0):
 async def admin_setup_run(request: Request, action: str):
     user = current_user(request)
     if not user or not auth.can(user, "user.manage"):
-        return JSONResponse({"error": "권한이 없다"}, status_code=403)
+        return JSONResponse({"error": "권한이 없습니다"}, status_code=403)
     if action not in jobs.SETUP_ACTIONS:
         return JSONResponse({"error": f"모르는 작업: {action}"}, status_code=400)
     # 성공했을 때만 시각을 남긴다. 실패한 실행을 "반영했다" 로 기록하면
@@ -1263,7 +1263,7 @@ async def admin_create(request: Request, username: str = Form(...), name: str = 
         return RedirectResponse("/admin?err=알 수 없는 계정 종류", status_code=303)
     lab = int(lab_id) if lab_id else None
     if role == "user" and lab is None:
-        return RedirectResponse("/admin?err=사용자 계정은 랩을 배정해야 한다", status_code=303)
+        return RedirectResponse("/admin?err=사용자 계정은 랩을 배정해야 합니다", status_code=303)
     pw = password or passwords.generate()
     errs = passwords.validate(pw, username)
     if errs:
@@ -1285,13 +1285,13 @@ async def admin_op(request: Request, target: str, op: str, lab_id: str = Form(""
 
     # 마지막 관리자를 잠그거나 지우지 못하게 막는다
     if t["role"] == "admin" and op in ("disable", "delete") and db.count_admins(exclude=target) == 0:
-        return RedirectResponse("/admin?err=마지막 관리자 계정은 막거나 지울 수 없다", status_code=303)
+        return RedirectResponse("/admin?err=마지막 관리자 계정은 막거나 지울 수 없습니다", status_code=303)
     if target.lower() == user["username"].lower() and op in ("disable", "delete"):
-        return RedirectResponse("/admin?err=자기 계정에는 할 수 없다", status_code=303)
+        return RedirectResponse("/admin?err=자기 계정에는 할 수 없습니다", status_code=303)
 
     if op == "disable":
         db.set_disabled(target, True)
-        m = f"{target} 차단됨 (진행 중인 세션도 즉시 막힌다)"
+        m = f"{target} 차단됨 (진행 중인 세션도 즉시 막힙니다)"
     elif op == "enable":
         db.set_disabled(target, False)
         m = f"{target} 차단 해제"
@@ -1309,7 +1309,7 @@ async def admin_op(request: Request, target: str, op: str, lab_id: str = Form(""
         m = f"{target} 로그인 잠금 해제"
     elif op == "lab":
         if t["role"] != "user":
-            return RedirectResponse("/admin?err=관리자에게는 랩을 배정하지 않는다", status_code=303)
+            return RedirectResponse("/admin?err=관리자에게는 랩을 배정하지 않습니다", status_code=303)
         db.set_lab(target, int(lab_id))
         m = f"{target} → lab{lab_id} 재배정 (즉시 반영)"
     else:
@@ -1358,7 +1358,7 @@ async def review_one(request: Request, sub_id: int, op: str = Form(...),
         return RedirectResponse("/admin/reviews?msg=알 수 없는 작업", status_code=303)
     if op == "changes" and not feedback.strip():
         return RedirectResponse(
-            "/admin/reviews?msg=재제출을 요청할 때는 무엇을 고쳐야 하는지 적어야 한다",
+            "/admin/reviews?msg=재제출을 요청할 때는 무엇을 고쳐야 하는지 적어야 합니다",
             status_code=303)
     db.review_submission(sub_id, "approved" if op == "approve" else "changes_requested",
                          feedback.strip(), user["username"])
@@ -1381,7 +1381,7 @@ async def health_pve(request: Request, force: int = 0):
     """
     u = current_user(request)
     if not u:
-        return JSONResponse({"error": "로그인이 필요하다"}, status_code=401)
+        return JSONResponse({"error": "로그인이 필요합니다"}, status_code=401)
     res = await asyncio.to_thread(pve.cached, bool(force))
     if not auth.can(u, "user.manage"):
         res = {**res, "checks": [{**c, "hint": ""} for c in res["checks"]]}
@@ -1434,13 +1434,13 @@ async def settings_save(request: Request, host: str = Form(...), port: str = For
             if force_confirm:
                 pve.mark_confirmed(user["username"], forced=True)
                 return RedirectResponse(
-                    "/admin/settings?msg=" + "점검을 통과하지 못한 채로 확인 처리했다. "
-                    "랩 실행 시 다시 막힐 수 있다.", status_code=303)
+                    "/admin/settings?msg=" + "점검을 통과하지 못한 채로 확인 처리했습니다. "
+                    "랩 실행 시 다시 막힐 수 있습니다.", status_code=303)
             # 여기 오기 전에 pve.save 가 이미 끝났다. "다시 저장할 것" 이라고만 하면
             # 저장이 안 된 줄로 읽힌다 — 무엇이 됐고 무엇이 안 됐는지 나눠 말한다.
-            errors = ["설정은 저장했다. 다만 연결 점검을 통과하지 못해 확인 처리는 하지 않았다. "
+            errors = ["설정은 저장했습니다. 다만 연결 점검을 통과하지 못해 확인 처리는 하지 않았습니다. "
                       "아래 결과를 보고 고친 뒤 다시 저장하거나, "
-                      "Proxmox 를 아직 켜지 않았다면 [점검 실패해도 확인 처리] 를 체크할 것"]
+                      "Proxmox 를 아직 켜지 않았다면 [점검 실패해도 확인 처리] 를 체크해 주세요"]
     return tpl.TemplateResponse(request, "settings.html", {
         **nav_ctx(user, "settings"),
         "user": user, "pve": {**pve.public(), **{k: v for k, v in values.items()
@@ -1459,7 +1459,7 @@ async def settings_test(request: Request):
     """저장하지 않고 지금 값으로만 점검한다."""
     user, redir = require(request, "user.manage", skip_setup=True)
     if redir:
-        return JSONResponse({"error": "권한이 없다"}, status_code=403)
+        return JSONResponse({"error": "권한이 없습니다"}, status_code=403)
     form = await request.form()
     cfg = pve.config()
     probe = {**cfg,

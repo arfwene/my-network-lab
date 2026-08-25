@@ -5,19 +5,19 @@
     <div class="clock" id="examclock">--:--</div>
     <div class="ex-t"><b>캡스톤 진행 중</b>
       <span class="muted">{{ exam.owner }} · {{ exam.minutes }}분</span></div>
-    <p class="ex-n">랩은 <b>터미널에서</b> 고친다. 이 시간 동안 콘솔의 적용·초기화·장애 버튼은 잠긴다.</p>
+    <p class="ex-n">랩은 <b>터미널에서</b> 고칩니다. 이 시간 동안 콘솔의 적용·초기화·장애 버튼은 잠깁니다.</p>
   {% elif exam.phase == 'overtime' %}
     <div class="clock over">00:00</div>
     <div class="ex-t"><b>시간 종료 — 성적 확정 중</b></div>
-    <p class="ex-n">마지막 검사를 돌리고 있다. 잠시 뒤 결과가 나온다.</p>
+    <p class="ex-n">마지막 검사를 돌리고 있습니다. 잠시 뒤 결과가 나옵니다.</p>
   {% else %}
     <div class="clock done">확정</div>
     <div class="ex-t"><b>성적 확정됨</b>
       {% if exam.total %}<span class="score {{ 'ok' if exam.passed else 'bad' }}">{{ exam.ok }}/{{ exam.total }}</span>
       {% else %}<span class="score bad">검사 못 돌림</span>{% endif %}
       <span class="muted">{{ exam.closed_at }} UTC</span></div>
-    <p class="ex-n">지금 랩을 고쳐도 <b>성적은 바뀌지 않는다.</b>
-      상태를 확인하고 <b>인계 보고서</b>를 제출할 것.
+    <p class="ex-n">지금 랩을 고쳐도 <b>성적은 바뀌지 않습니다.</b>
+      상태를 확인하고 <b>인계 보고서</b>를 제출해 주세요.
       {% if exam.scenarios %}<br>이번 회차에 주입된 장애:
         {% for s in exam.scenarios %}<code>{{ s }}</code> {% endfor %}{% endif %}
     </p>

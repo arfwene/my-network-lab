@@ -61,11 +61,11 @@ def valid_username(name):
     """(괜찮은가, 사유). 사유는 화면에 그대로 보여 줄 수 있는 문장이다."""
     n = (name or "").strip()
     if not USERNAME_RE.match(n):
-        return False, ("아이디는 영문 소문자로 시작하고 3~32자여야 한다. "
-                       "쓸 수 있는 글자는 영문 소문자 · 숫자 · - · _ 뿐이다 "
+        return False, ("아이디는 영문 소문자로 시작하고 3~32자여야 합니다. "
+                       "쓸 수 있는 글자는 영문 소문자 · 숫자 · - · _ 뿐입니다 "
                        "(이 이름이 운영 서버의 OS 계정이 된다)")
     if n in RESERVED_NAMES:
-        return False, f"'{n}' 은 시스템이 쓰는 이름이다. 다른 이름을 쓸 것"
+        return False, f"'{n}' 은 시스템이 쓰는 이름입니다. 다른 이름을 써 주세요"
     return True, ""
 
 
@@ -111,13 +111,13 @@ def authenticate(username, password):
     """성공하면 사용자 dict. 실패하면 LoginError(횟수 제한 포함)."""
     username = (username or "").strip()
     if not username:
-        raise LoginError("아이디를 입력할 것")
+        raise LoginError("아이디를 입력해 주세요")
 
     left = db.locked_seconds(username)
     if left > 0:
         raise LoginError(
-            f"로그인 시도가 {MAX_ATTEMPTS}회를 넘어 잠겼다. "
-            f"{left // 60}분 {left % 60}초 뒤에 다시 시도할 것.", locked_seconds=left)
+            f"로그인 시도가 {MAX_ATTEMPTS}회를 넘어 잠겼습니다. "
+            f"{left // 60}분 {left % 60}초 뒤에 다시 시도해 주세요.", locked_seconds=left)
 
     u = db.get_user(username)
     ok = bool(u) and not u.get("disabled") and verify_password(password, u["password"])
@@ -128,9 +128,9 @@ def authenticate(username, password):
         remaining, until = db.record_failure(username, MAX_ATTEMPTS, LOCKOUT_MINUTES)
         if remaining == 0:
             raise LoginError(
-                f"로그인 시도 {MAX_ATTEMPTS}회 실패. {LOCKOUT_MINUTES}분간 잠긴다.",
+                f"로그인 시도 {MAX_ATTEMPTS}회 실패. {LOCKOUT_MINUTES}분간 잠깁니다.",
                 locked_seconds=LOCKOUT_MINUTES * 60)
-        raise LoginError(f"아이디 또는 비밀번호가 맞지 않는다. "
+        raise LoginError(f"아이디 또는 비밀번호가 맞지 않습니다. "
                          f"({MAX_ATTEMPTS - remaining}/{MAX_ATTEMPTS}회 실패)",
                          remaining=remaining)
 
@@ -146,9 +146,9 @@ def change_password(username, new_password, current_password=None, require_curre
     if not u:
         return ["없는 계정"]
     if require_current and not verify_password(current_password or "", u["password"]):
-        return ["현재 비밀번호가 맞지 않는다"]
+        return ["현재 비밀번호가 맞지 않습니다"]
     if verify_password(new_password, u["password"]):
-        return ["기존과 다른 비밀번호를 써야 한다"]
+        return ["기존과 다른 비밀번호를 써야 합니다"]
     errs = passwords.validate(new_password, username)
     if errs:
         return errs

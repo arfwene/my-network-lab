@@ -10,7 +10,7 @@
       <li>
         <button class="mod {{ 'on' if module and m.id == module.id }} {{ '' if m.unlocked else 'locked' }}"
                 data-module="{{ m.id }}" {{ 'disabled' if not m.unlocked }}
-                title="{{ '앞 모듈을 통과해야 열린다' if not m.unlocked else m.summary }}">
+                title="{{ '앞 모듈을 통과해야 열립니다' if not m.unlocked else m.summary }}">
           <span class="dot {{ 'done' if m.progress.complete else m.status }}"></span>
           <span class="t"><b>{{ m.id | upper }}</b> {{ m.title }}</span>
           <span class="d">{{ '🔒' if not m.unlocked else ('✔' if m.progress.complete else m.duration) }}</span>
@@ -56,7 +56,7 @@
 
       <h3>이 모듈</h3>
       {{ act('reset', 'primary block', '이 모듈 적용',
-             '이 모듈의 시작 상태로 맞춘다 — 실습 중 만든 설정은 사라진다') }}
+             '이 모듈의 시작 상태로 맞춥니다 — 실습 중 만든 설정은 사라집니다') }}
       {{ act('verify', 'block', '연결 확인', '평가와 무관한 도달성 점검') }}
       <p class="note">초기화 시에도 사용 가능</p>
 
@@ -88,21 +88,21 @@
     <div class="capstone" id="capstone" {{ '' if module and module.id == capstone else 'hidden' }}>
       <h3>캡스톤 시험</h3>
       {% if exam.phase in ('open', 'overtime') %}
-        <p class="note">진행 중이다. 남은 시간은 위 <b>랩 상태</b>에 있다.</p>
+        <p class="note">진행 중입니다. 남은 시간은 위 <b>랩 상태</b>에 있습니다.</p>
       {% else %}
         <p class="note">
-          랩을 초기화한 뒤 <b>서버가 고른 장애 {{ exam.faults }}가지</b>를 주입한다.
-          <b>무엇을 주입했는지는 알려주지 않는다.</b><br>
+          랩을 초기화한 뒤 <b>서버가 고른 장애 {{ exam.faults }}가지</b>를 주입합니다.
+          <b>무엇을 주입했는지는 알려주지 않습니다.</b><br>
           제한 시간 <b>{{ exam.minutes }}분</b>. 시간이 끝나면 그 순간의 검사 결과가
-          <b>확정 성적</b>이 되고, 그 뒤에 고쳐도 성적은 바뀌지 않는다.<br>
-          <b>못 고친 채로 끝나도 된다.</b> 남은 것을 인계 보고서에 적는 것까지가 과제다.
+          <b>확정 성적</b>이 되고, 그 뒤에 고쳐도 성적은 바뀌지 않습니다.<br>
+          <b>못 고친 채로 끝나도 됩니다.</b> 남은 것을 인계 보고서에 적는 것까지가 과제입니다.
         </p>
         <button class="btn danger big" id="examstart">
           {{ '캡스톤 다시 시작' if exam.phase == 'closed' else '캡스톤 시작' }}</button>
       {% endif %}
     </div>
-    <p class="note">랩 준비는 버튼으로, <b>학습은 터미널에서</b> 한다.<br>
-      <code>ssh pc1</code> 로 들어가 직접 명령을 쳐볼 것.</p>
+    <p class="note">랩 준비는 버튼으로, <b>학습은 터미널에서</b> 합니다.<br>
+      <code>ssh pc1</code> 로 들어가 직접 명령을 쳐봐 주세요.</p>
   </aside>
 </main>
 

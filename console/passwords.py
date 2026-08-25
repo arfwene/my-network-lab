@@ -44,11 +44,11 @@ def validate(pw: str, username: str = "") -> list[str]:
     """정책 위반 목록. 비어 있으면 통과."""
     errs = []
     if len(pw or "") < MIN_LEN:
-        errs.append(f"{MIN_LEN}자 이상이어야 한다 (현재 {len(pw or '')}자)")
+        errs.append(f"{MIN_LEN}자 이상이어야 합니다 (현재 {len(pw or '')}자)")
     if REQUIRE_SPECIAL and not any(c in SPECIAL for c in (pw or "")):
-        errs.append("특수문자를 1개 이상 포함해야 한다")
+        errs.append("특수문자를 1개 이상 포함해야 합니다")
     if username and pw and username.lower() in pw.lower():
-        errs.append("계정 이름을 비밀번호에 포함할 수 없다")
+        errs.append("계정 이름을 비밀번호에 포함할 수 없습니다")
     return errs
 
 
