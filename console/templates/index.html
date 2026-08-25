@@ -11,6 +11,16 @@
     <input type="hidden" name="m" value="{{ module.id if module }}">
   </form>
   <div class="spacer"></div>
+  {# 랩이 지금 어느 단계인지. 사이드바 안쪽에만 두면 눈에 안 띈다 —
+     "교재대로 했는데 왜 안 되지" 의 답이 대개 이 값이다.
+     열어 둔 모듈과 어긋나면 색이 바뀐다. #}
+  {% set g = stage_gap | default({'dir': 'ok', 'need': ''}, true) %}
+  <div class="labstage {{ 'off' if g.dir != 'ok' }}" id="labstage"
+       title="랩에 적용되어 있는 단계다. 열어 둔 모듈이 요구하는 단계와 다르면 색이 바뀐다.">
+    <span class="k">랩</span>
+    <b class="now">{{ lab_state.stage | upper if lab_state.stage else '미적용' }}</b>
+    <span class="need" {{ 'hidden' if g.dir == 'ok' }}>· 이 모듈 {{ g.need | upper }}</span>
+  </div>
   {% include "_health.html" %}
   <div class="who">{{ user.name | default(user.username) }}
     <span class="role">{{ user.role_label }}</span></div>

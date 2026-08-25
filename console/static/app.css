@@ -480,3 +480,12 @@ pre.code{background:var(--code-bg);padding:14px 16px;border-radius:10px;overflow
 .stagegap{margin:0 0 16px}
 .stagegap .note{margin:6px 0 10px}
 .stagegap .btn{margin-right:8px}
+
+/* 헤더의 랩 단계 칩 — 열어 둔 모듈과 어긋나면 경고색 */
+.labstage{display:flex;align-items:center;gap:6px;border:1px solid var(--line);
+  border-radius:999px;padding:5px 11px;font-size:12px;color:var(--muted)}
+.labstage .k{opacity:.75}
+.labstage .now{color:var(--ink);font-size:12.5px}
+.labstage.off{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,var(--line));
+  background:color-mix(in srgb,var(--warn) 9%,transparent)}
+.labstage.off .now{color:var(--warn)}

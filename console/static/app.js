@@ -12,6 +12,17 @@
   const need = () => $('.tabs')?.dataset.stage || '';
   const now = () => $('.tabs')?.dataset.now || '';
 
+  // 헤더의 랩 단계 칩. 모듈을 옮기거나 작업이 끝날 때마다 다시 칠한다.
+  function paintLabStage() {
+    const el = $('#labstage');
+    if (!el) return;
+    const ok = gapDir() === 'ok', n = now(), s = el.querySelector('.need');
+    el.classList.toggle('off', !ok);
+    el.querySelector('.now').textContent = n ? n.toUpperCase() : '미적용';
+    s.textContent = ok ? '' : `\u00b7 이 모듈 ${need().toUpperCase()}`;
+    s.hidden = ok;
+  }
+
   // ------------------------------------------------------------ 확인 모달
   //  경고 문구 + 영향 범위를 보여주고, 최종 확인 버튼을 따로 누르게 한다.
   const MODAL = {
@@ -51,11 +62,12 @@
 
   function confirmAction(kind, scope) {
     return new Promise(resolve => {
-      const m = MODAL[kind], v = x => typeof x === 'function' ? x() : x;
-      $('#modal-title').textContent = v(m.title);
-      $('#modal-body').innerHTML = v(m.body);
+      // 문구는 값일 수도, 랩 상태를 보고 만드는 함수일 수도 있다.
+      const m = MODAL[kind], txt = x => typeof x === 'function' ? x() : x;
+      $('#modal-title').textContent = txt(m.title);
+      $('#modal-body').innerHTML = txt(m.body);
       $('#modal-scope').textContent = scope;
-      $('#modal-ok').textContent = v(m.ok);
+      $('#modal-ok').textContent = txt(m.ok);
       $('#modal').hidden = false;
       const close = v => {
         $('#modal').hidden = true;
@@ -79,6 +91,7 @@
       $('.side h3 small').textContent = stage;
       fetch(`/topology.svg?stage=${stage}`).then(r => r.text()).then(s => $('#topo').innerHTML = s);
     }
+    paintLabStage();
     const cap = $('.actions')?.dataset.capstone;
     if ($('#capstone')) $('#capstone').hidden = (id !== cap);
     const u = new URL(location);
@@ -231,6 +244,9 @@
     }
     jobinfo.textContent = `${action} · ${j.job_id}`;
     await stream(j.job_id);
+    // 단계가 올라갔으면 배너와 헤더 칩이 거짓말을 하고 있다. 조각을 다시 받아 맞춘다.
+    // (퀴즈 제출 경로에서는 하지 않는다 — 채점 결과가 화면에서 날아간다)
+    if (curModule()) await loadModule(curModule(), $('.tab.on')?.dataset.kind || 'README');
     restoreActions();
   }
 
