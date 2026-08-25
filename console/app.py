@@ -81,7 +81,18 @@ def _labtext(value):
     그래서 ① 먼저 이스케이프하고 ② 백틱만 <code> 로 살리고 ③ 줄바꿈을 <br> 로 바꾼다.
     """
     text = html.escape(str(value or ""))
-    text = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", text)
+    # 코드 조각을 먼저 빼 둔다. 굵게 표시를 그 안에서도 찾으면
+    # `a**b**c` 같은 문자열이 코드가 아니라 강조로 읽힌다.
+    spans = []
+
+    def _stash(m):
+        spans.append(m.group(1))
+        return f"\x00{len(spans) - 1}\x00"
+
+    text = re.sub(r"`([^`\n]+)`", _stash, text)
+    # 교재와 같은 표기를 퀴즈에서도 쓴다. 안 하면 화면에 별 두 개가 그대로 보인다.
+    text = re.sub(r"\*\*([^*\n]+)\*\*", r"<b>\1</b>", text)
+    text = re.sub(r"\x00(\d+)\x00", lambda m: f"<code>{spans[int(m.group(1))]}</code>", text)
     return Markup(text.replace("\n", "<br>"))
 
 

@@ -189,7 +189,10 @@ a.mod{text-decoration:none;color:var(--ink)}
 .tab .only{font-size:12px;color:var(--warn);
   border:1px solid color-mix(in srgb,var(--warn-line) 40%,var(--line));
   padding:0 5px;border-radius:var(--r-sm)}
-.doc{max-width:74ch}
+/* 본문 폭은 화면을 따라간다. 예전에는 74ch 로 못 박아 두어서, 넓은 화면에서도
+   글이 가운데 좁은 띠에만 나오고 그림이 작게 눌렸다. */
+.doc{max-width:none;width:100%}
+.doc img{max-width:100%;height:auto}
 .doc h1{font-size:22px;margin-top:0}
 .doc h2{font-size:18px;margin-top:1.8em;padding-bottom:.3em;border-bottom:1px solid var(--line)}
 .doc h3{font-size:15px;margin-top:1.5em}
@@ -660,3 +663,17 @@ table.users td b,table.users td strong{color:var(--ink)}
 .next-step{margin-top:32px}
 .next-step h3{margin:0 0 6px}
 .next-step p{margin:0 0 14px}
+
+/* ---------- 그림 크게 보기 ---------- */
+/* 토폴로지는 선이 가늘어 작게 나오면 읽을 수 없다. 눌러서 화면 가득 띄운다. */
+.topo-wrap, .topo-box, .doc img{cursor:zoom-in}
+#lightbox{position:fixed;inset:0;z-index:200;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--ink) 82%,transparent);padding:24px;cursor:zoom-out}
+#lightbox .lb-inner{background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:20px;max-width:min(1400px,96vw);max-height:92vh;
+  overflow:auto;box-shadow:var(--shadow-2);cursor:default}
+#lightbox svg{width:100%;height:auto;min-width:min(1100px,90vw)}
+#lightbox img{max-width:100%;height:auto;display:block}
+#lightbox .lb-close{position:fixed;top:16px;right:20px;z-index:201}
+@media (max-width:640px){#lightbox .lb-inner{padding:10px}
+  #lightbox svg{min-width:0}}

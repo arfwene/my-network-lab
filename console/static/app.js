@@ -122,6 +122,29 @@
     if (up) up.onclick = () => run('reset');
   }
 
+  // ------------------------------------------------------------ 그림 크게 보기
+  //  토폴로지 SVG 는 선이 가늘어 작게 나오면 읽을 수 없다. 원본을 복제해 띄운다 —
+  //  옮기면 원래 자리가 비고, 닫을 때 되돌려 놓는 일이 남는다.
+  const lb = $('#lightbox');
+  function zoom(el) {
+    if (!lb) return;
+    const inner = lb.querySelector('.lb-inner');
+    inner.innerHTML = '';
+    inner.appendChild(el.cloneNode(true));
+    lb.hidden = false;
+  }
+  function unzoom() { if (lb) { lb.hidden = true; lb.querySelector('.lb-inner').innerHTML = ''; } }
+  document.addEventListener('click', e => {
+    if (lb && !lb.hidden) {
+      // 그림 자체를 누른 것이 아니면 닫는다 (바깥 · [닫기] 둘 다).
+      if (!e.target.closest('.lb-inner') || e.target.closest('.lb-close')) unzoom();
+      return;
+    }
+    const pic = e.target.closest('.topo-wrap, .topo-box, .doc img');
+    if (pic) zoom(pic.matches('img') ? pic : (pic.querySelector('svg') || pic));
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') unzoom(); });
+
   // 헤더 묶음 메뉴는 한 번에 하나만 열린다. 하나가 열려 있는 채로 다른 것을
   // 누르면, 열린 메뉴가 깔아 둔 덮개가 그 클릭을 먼저 먹어서 두 번 눌러야 한다.
   document.addEventListener('click', e => {

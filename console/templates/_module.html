@@ -100,7 +100,7 @@
               <label class="choice">
                 <input type="{{ 'radio' if q.type == 'single' else 'checkbox' }}"
                        name="q_{{ q.id }}" value="{{ loop.index0 }}">
-                <span>{{ c }}</span>
+                <span>{{ c | labtext }}</span>
               </label>
             {% endfor %}
             </div>
