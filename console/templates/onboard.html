@@ -95,6 +95,7 @@
   const msg = document.getElementById('msg'), out = document.getElementById('out');
   const logbox = document.getElementById('logbox');
   const next = document.getElementById('next'), skip = document.getElementById('skip');
+  const TOTAL = {{ total or 0 }};              // 이 랩의 가상 장비 수
 
   function done(text) { pct.textContent = '완료'; bar.style.width = '100%';
                         msg.textContent = text; next.hidden = false; }
@@ -132,9 +133,11 @@
       } else {
         bar.style.width = j.pct + '%';
         pct.textContent = j.pct + '%';
-        msg.textContent = `${j.done}/${j.total}대 · ${Math.round(j.elapsed)}초`;
+        // 숫자는 장비로 말한다. terraform 이 세는 27개는 VM 13대 + 링크 브리지 13개라,
+        // 그대로 보여 주면 "가상 장비 13대" 라고 해 놓고 26대가 지나간다.
+        msg.textContent = `장비 ${j.vm}/${TOTAL}대 · ${Math.round(j.elapsed)}초`;
       }
-      if (j.status === 'ok') { done(`장비 ${j.total}대가 준비됐다.`); return; }
+      if (j.status === 'ok') { done(`장비 ${TOTAL}대가 준비됐다.`); return; }
       if (j.status === 'failed') {
         stop('랩을 만들지 못했다. 위 [자세히 보기] 의 마지막 줄을 교육 담당자에게 알릴 것.');
         logbox.open = true;

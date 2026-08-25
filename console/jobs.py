@@ -222,6 +222,10 @@ class Job:
         # 로그에 그대로 나온다. 그 둘로 센다 — 지어내지 않는다.
         self.total = 0
         self.done = 0
+        # 자원 중 **VM 만** 따로 센다. terraform 은 VM 13대와 링크 브리지 13개를
+        # 합쳐 27개라고 말하는데, 교육생에게 "13/26대" 라고 보여 주면 장비가
+        # 두 배로 늘어난 것처럼 읽힌다. 막대는 전체로, 숫자는 장비로 말한다.
+        self.done_vm = 0
         self.status = "queued"          # queued | running | ok | failed
         # 마지막으로 한 줄이라도 나온 시각. 조용한 구간이 얼마나 길어졌는지 재려고 둔다 —
         # terraform 은 refresh 하는 동안 아무것도 찍지 않아서, 화면만 보면 멈춘 것과 같다.
@@ -256,6 +260,8 @@ class Job:
     PLAN_RE = re.compile(r"^Plan:\s*(\d+)\s+to add(?:,\s*(\d+)\s+to change)?"
                          r"(?:,\s*(\d+)\s+to destroy)?")
     STEP_RE = re.compile(r": (?:Creation|Modifications|Destruction) complete after")
+    # 자원 주소에 이 타입이 들어 있으면 가상 머신이다 (modules/lab/main.tf).
+    VM_RE = re.compile(r"proxmox_virtual_environment_vm\.")
 
     def _count(self, line):
         if not self.total:
@@ -265,6 +271,8 @@ class Job:
                 return
         if self.STEP_RE.search(line):
             self.done += 1
+            if self.VM_RE.search(line):
+                self.done_vm += 1
 
     def pct(self):
         """0~100. 계획을 아직 못 봤으면 None — '모른다' 를 0% 로 속이지 않는다."""
@@ -282,7 +290,8 @@ class Job:
                 "status": self.status,
                 "rc": self.rc, "user": self.user,
                 "elapsed": round((self.finished or time.time()) - (self.started or time.time()), 1),
-                "pct": self.pct(), "done": self.done, "total": self.total}
+                "pct": self.pct(), "done": self.done, "total": self.total,
+                "vm": self.done_vm}
 
 
 class Runner:
