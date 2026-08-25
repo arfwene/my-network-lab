@@ -8,7 +8,9 @@
 - name: "my-network-lab :: 설정 적용"
   hosts: all
   become: true
-  gather_facts: true
+  # 키만 올릴 때(--tags keys)는 팩트가 필요 없다. 13대에서 팩트를 걷는 것만으로
+  # 몇 초가 나가므로 그때만 끈다 — 기본값은 지금까지와 같이 걷는다.
+  gather_facts: "{{ gather_facts_on | default(true) | bool }}"
   serial: "{{ ansible_serial | default('100%') }}"
 
   pre_tasks:

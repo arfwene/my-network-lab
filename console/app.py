@@ -334,7 +334,10 @@ async def sshkey_config(request: Request):
 
 @app.post("/sshkey/apply")
 async def sshkey_apply(request: Request):
-    """지금 단계 그대로 설정만 다시 올린다 — 키 배포는 common 역할에 들어 있다."""
+    """접속 키만 랩 노드에 올린다 (common 역할의 keys 태그).
+
+    예전에는 site.yml 전체를 다시 돌렸다. 키 한 줄 넣자고 13대의 설정을 다시
+    올리느라 몇 분이 걸렸고, 교육생은 버튼이 먹통인 줄 알았다."""
     user = current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
@@ -343,7 +346,7 @@ async def sshkey_apply(request: Request):
         return RedirectResponse("/sshkey", status_code=303)
     stage = state.load(lab_id).get("stage") or L.STAGES[0]
     try:
-        await runner.submit(lab_id, "apply", stage, None, user.get("username"),
+        await runner.submit(lab_id, "keys", stage, None, user.get("username"),
                             on_done=lambda j: state.record(
                                 j.lab_id, j.action, j.stage, j.status == "ok", j.scenario, j.id))
     except (jobs.Locked, jobs.NotReady, RuntimeError, ValueError) as e:

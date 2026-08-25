@@ -66,8 +66,8 @@ def tf_env(lab_id):
 #   저장소 경로를 찾아 명령을 외워야 한다는 뜻이었고, 그게 배포를 어렵게 만든 주범이다.
 SETUP_ACTIONS = {"setup-mgmt", "setup-docs", "setup-access", "setup-jump-apply"}
 SETUP_LAB = 0
-ACTIONS = {"deploy", "destroy", "apply", "verify", "reset", "break", "fix", "check",
-           "exam"} | SETUP_ACTIONS
+ACTIONS = {"deploy", "destroy", "apply", "keys", "verify", "reset", "break", "fix",
+           "check", "exam"} | SETUP_ACTIONS
 # 문서·계정 파일 생성은 Proxmox 와 무관하다. 여기에 관문을 두면
 # "Proxmox 가 아직 안 되니 안내 문서도 못 만든다" 는 막다른 길이 생긴다.
 NO_PVE = {"setup-docs", "setup-access", "setup-jump-apply"}
@@ -155,6 +155,14 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
     if action == "apply":
         return [gen, (ANSIBLE, [APB, "-i", inv, "playbooks/site.yml",
                                 "-e", f"lab_stage={stage}"])]
+    if action == "keys":
+        # 접속 키만. site.yml 을 통째로 다시 올리면 13대 × 전 역할이 다시 도는데,
+        # authorized_keys 한 줄 때문에 그럴 이유가 없다 — 태그로 세 작업만 고른다.
+        # 단계 설정은 건드리지 않으므로 state 의 stage 도 움직이지 않는다.
+        return [gen, (ANSIBLE, [APB, "-i", inv, "playbooks/site.yml",
+                                "-e", f"lab_stage={stage}",
+                                "-e", "gather_facts_on=false",
+                                "--tags", "keys"])]
     if action == "verify":
         return [(ANSIBLE, [APB, "-i", inv, "playbooks/verify.yml",
                            "-e", f"lab_stage={stage}"])]

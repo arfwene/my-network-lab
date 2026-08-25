@@ -37,6 +37,8 @@
   notify: netplan apply
 
 # --- 접속 키 -----------------------------------------------------------------
+#  tags: [keys] 가 붙은 세 작업만 키를 다룬다. 콘솔의 [지금 랩에 반영] 은
+#  --tags keys 로 이것만 돌린다 — 키 한 줄 넣자고 랩 전체를 다시 설정하지 않는다.
 #  cloud-init 은 VM 을 만들 때 한 번만 키를 넣는다. 교육생이 바뀔 때마다 VM 을 다시
 #  만들 수는 없으므로, 여기서 매 설정 적용마다 다시 쓴다.
 #  exclusive: 손으로 넣은 키는 지운다 — "랩 초기화"의 의미를 접속 경로까지 넓힌다.
@@ -44,6 +46,7 @@
 # 그러면 이 노드에는 두 번 다시 들어갈 수 없다 (SSH 로만 관리하므로 복구 수단이 없다).
 # 여기서 멈추는 편이 낫다.
 - name: 관리자 공개키가 있는지 확인 (없으면 잠금 사고가 난다)
+  tags: [keys]
   ansible.builtin.assert:
     that: admin_ssh_keys | length > 0
     fail_msg: >-
@@ -53,6 +56,7 @@
     quiet: true
 
 - name: 랩 계정 authorized_keys (운영 서버 + 이 랩 교육생)
+  tags: [keys]
   ansible.posix.authorized_key:
     user: "{{ ansible_user }}"
     key: "{{ (admin_ssh_keys + (trainee_ssh_keys | map(attribute='key') | list))
@@ -61,6 +65,7 @@
     state: present
 
 - name: 배포된 접속 키 확인용 목록
+  tags: [keys]
   ansible.builtin.copy:
     dest: /etc/lab-authorized
     mode: "0644"

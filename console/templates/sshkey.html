@@ -88,7 +88,8 @@ cat ~/.ssh/id_ed25519.pub</code></pre>
 
       <h3>3. 언제 반영되나</h3>
       <p>저장하면 <b>다음 [설정 적용] 때</b> 랩 노드에 들어간다.
-         지금 랩이 놀고 있으면 아래 버튼으로 바로 반영할 수 있다.</p>
+         기다릴 것 없이 아래 버튼을 누르면 된다 —
+         <b>키만</b> 올리므로 랩 설정은 건드리지 않고, 몇 초면 끝난다.</p>
       <form method="post" action="/sshkey/apply">
         <button class="btn" type="submit" {{ 'disabled' if busy or not current }}>
           지금 랩에 반영</button>
