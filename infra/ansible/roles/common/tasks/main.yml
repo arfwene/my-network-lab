@@ -93,12 +93,21 @@
   loop_control: {label: "{{ item.k }}={{ item.v }}"}
 
 - name: lab-whereami 헬퍼 배포 (내 인터페이스가 어느 링크에 붙어 있는가)
+  # 접속 키만 올릴 때도 함께 깔린다. 온보딩을 마치면 교육생이 곧바로 SSH 로
+  # 들어오는데, 그때 이게 없으면 `lab-whereami` 가 "command not found" 로 끝난다.
+  # 스크립트는 지금 올라가 있는 주소를 읽으므로, 설정 전에 실행해도 거짓말하지
+  # 않고 "아직 설정이 안 올라갔다" 고 알려 준다.
+  tags: [keys]
   ansible.builtin.template:
     src: lab-whereami.j2
     dest: /usr/local/bin/lab-whereami
     mode: "0755"
 
 - name: 로그인 배너 (지금 어느 단계인지 항상 보이게)
+  # lab-whereami 와 같은 이유로 접속 키와 함께 깔린다. 배너가 말하는 것은
+  # "이 랩이 어느 단계 기준으로 만들어졌는가" 이고, 실제로 올라갔는지는
+  # lab-whereami 가 답한다 — 배너는 그쪽을 가리킨다.
+  tags: [keys]
   ansible.builtin.template:
     src: motd.j2
     dest: /etc/motd

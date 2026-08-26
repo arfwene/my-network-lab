@@ -1,19 +1,34 @@
 #!/bin/bash
 # lab-whereami — 내 인터페이스가 어느 링크에 붙어 있는가
 # Proxmox 는 토폴로지를 시각적으로 보여주지 않으므로 이 스크립트가 그 역할을 한다.
+#
+# 주소는 **지금 올라가 있는 값**을 읽는다. 설계값을 그대로 찍으면, 설정이
+# 아직 안 올라간 랩에서도 주소가 있는 것처럼 보인다 — 그게 제일 나쁘다.
 cat <<'BANNER'
 {{ node }} ({{ node_role }}) — {{ desc }}
 BANNER
+
+live_addr() { ip -4 -br addr show dev "$1" 2>/dev/null | awk '{print $3}' | head -1; }
+live_state() { cat "/sys/class/net/$1/operstate" 2>/dev/null || echo none; }
+
+missing=0
 printf '\n%-10s %-8s %-20s %-14s %s\n' 인터페이스 상태 주소 상대노드 설명
 printf '%s\n' "-------------------------------------------------------------------------------"
+m=$(live_addr {{ mgmt_interface }})
 printf '%-10s %-8s %-20s %-14s %s\n' "{{ mgmt_interface }}" \
-  "$(cat /sys/class/net/{{ mgmt_interface }}/operstate 2>/dev/null || echo none)" \
-  "{{ mgmt_ip }}/{{ mgmt_prefixlen }}" "(관리망)" "OOB — 통신 테스트에 쓰지 말 것"
+  "$(live_state {{ mgmt_interface }})" \
+  "${m:--}" "(관리망)" "OOB — 통신 테스트에 쓰지 말 것"
 {% for i in lab_interfaces if i.active %}
+a=$(live_addr {{ i.name }})
+{% if i.ipv4 is defined and i.ipv4 %}[ -z "$a" ] && missing=1{% endif %}
 printf '%-10s %-8s %-20s %-14s %s\n' "{{ i.name }}" \
-  "$(cat /sys/class/net/{{ i.name }}/operstate 2>/dev/null || echo none)" \
-  "{{ i.ipv4 | default('-') }}" "{{ i.peer | default('-') }}" \
+  "$(live_state {{ i.name }})" "${a:--}" "{{ i.peer | default('-') }}" \
   "{{ i.desc | default(i.role | default('', true), true) }}{% if i.vlan is defined and i.vlan %} [VLAN {{ i.vlan }}]{% endif %}"
 {% endfor %}
 echo
-echo "단계: {{ lab_stage }}   |   전체 지도: 웹 콘솔 [랩 지도]"
+if [ "$missing" = 1 ]; then
+  echo "이 노드에 아직 주소가 없습니다 — 설정이 안 올라간 상태입니다."
+  echo "웹 콘솔에서 [이 모듈 적용] 을 누르면 올라갑니다 (1분쯤)."
+  echo
+fi
+echo "설계 단계: {{ lab_stage }}   |   전체 지도: 웹 콘솔 [랩 지도]"
