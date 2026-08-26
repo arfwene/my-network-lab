@@ -12,15 +12,31 @@ live_addr() { ip -4 -br addr show dev "$1" 2>/dev/null | awk '{print $3}' | head
 live_state() { cat "/sys/class/net/$1/operstate" 2>/dev/null || echo none; }
 
 missing=0
-printf '\n%-10s %-8s %-20s %-14s %s\n' 인터페이스 상태 주소 상대노드 설명
+# 머리글은 printf 로 채우지 않고 손으로 맞춘다.
+#   printf 의 %-10s 는 **글자 수**로 채우는데 한글은 터미널에서 두 칸을 쓴다.
+#   그래서 `인터페이스`(5자 = 10칸)와 `mgmt0`(5자 = 5칸)이 같은 폭으로 채워지고
+#   표가 눈에 띄게 어긋난다. 아래 공백은 그 두 칸을 계산해 넣은 것이다.
+#   본문 칸은 전부 ASCII 라 %-10s 로 맞는다 — 그래서 상대노드에도 한글을 쓰지 않는다.
+printf '\n%s\n' "인터페이스 상태     주소                 상대노드       설명"
 printf '%s\n' "-------------------------------------------------------------------------------"
 m=$(live_addr {{ mgmt_interface }})
 printf '%-10s %-8s %-20s %-14s %s\n' "{{ mgmt_interface }}" \
   "$(live_state {{ mgmt_interface }})" \
-  "${m:--}" "(관리망)" "OOB — 통신 테스트에 쓰지 말 것"
+  "${m:--}" "-" "관리망(OOB) — 통신 테스트에 쓰지 말 것"
 {% for i in lab_interfaces if i.active %}
 a=$(live_addr {{ i.name }})
-{% if i.ipv4 is defined and i.ipv4 %}[ -z "$a" ] && missing=1{% endif %}
+{# 조건 블록은 반드시 자기 줄을 차지해야 한다.
+   ansible 의 template 모듈은 trim_blocks 가 켜져 있어 블록 태그 뒤의 줄바꿈을
+   지운다. 한 줄에 몰아 쓰면 이렇게 붙어 버린다:
+
+       [ -z "$a" ] && missing=1printf '%-10s ...
+
+   주소가 있으면 && 가 끊어져 printf 가 아예 실행되지 않는다. 그래서 이 표에
+   관리망 한 줄만 나오고 랩 인터페이스는 한 줄도 안 보였다 — 교육생이 자기
+   장비를 파악하는 첫 화면인데. #}
+{% if i.ipv4 is defined and i.ipv4 %}
+[ -z "$a" ] && missing=1
+{% endif %}
 printf '%-10s %-8s %-20s %-14s %s\n' "{{ i.name }}" \
   "$(live_state {{ i.name }})" "${a:--}" "{{ i.peer | default('-') }}" \
   "{{ i.desc | default(i.role | default('', true), true) }}{% if i.vlan is defined and i.vlan %} [VLAN {{ i.vlan }}]{% endif %}"
