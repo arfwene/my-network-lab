@@ -41,7 +41,14 @@ TimeoutStopSec=30
 #  /usr · /boot · /etc 는 읽기 전용으로 둔다 — 랩 운영이 시스템을 고칠 일은 없다.
 #  홈 디렉토리는 막지 않는다: Ansible 이 ~/.ansible/cp 에 SSH 다중화 소켓을,
 #  Terraform 이 ~/.terraform.d 에 프로바이더 캐시를 쓴다. 막으면 작업이 실패한다.
-NoNewPrivileges=yes
+#  NoNewPrivileges 는 **켜지 않는다.** 켜면 sudo 가 아예 동작하지 않는다
+#  ("no new privileges" flag is set, which prevents sudo from running as root).
+#  콘솔은 [점프 계정 적용]·[이 서버를 관리망에 연결] 을 root 소유 헬퍼
+#  두 개로 실행한다 — 인자 없는 sudoers 규칙으로 그 둘만 허용해 두었다.
+#  이걸 켜 두면 두 버튼이 화면에 **뜨지도 않는다**. 콘솔은 조용히
+#  "복사할 명령" 안내로 되돌아가고, 아무도 왜인지 알 수 없다.
+#  실제로 그래서 --service 로 설치한 서버에서는 점프 계정 버튼이 한 번도
+#  나온 적이 없었다. 권한 축소는 sudoers 쪽에서 한다 — 거기가 정확하다.
 PrivateTmp=yes
 ProtectSystem=full
 ProtectKernelTunables=yes

@@ -165,14 +165,24 @@ mkdir -p "$ROOT/var" && chmod 700 "$ROOT/var"
 ok "var/ (0700)"
 
 # ---------------------------------------------------------------- 6. systemd
+#  --service 를 안 줘도, **이미 설치돼 있으면** 유닛을 새로 쓴다.
+#  안 그러면 유닛 자체의 버그(예: NoNewPrivileges 가 sudo 를 막던 것)를 고쳐도
+#  `git pull && ./install.sh --no-apt` 로는 영영 전달되지 않는다.
+UNIT=/etc/systemd/system/my-network-lab.service
+if [ "$DO_SERVICE" = 0 ] && [ -f "$UNIT" ]; then
+  DO_SERVICE=1
+  command -v sudo >/dev/null && SUDO=sudo
+fi
 if [ "$DO_SERVICE" = 1 ]; then
   step "systemd 서비스"
-  UNIT=/etc/systemd/system/my-network-lab.service
   sed -e "s|@USER@|$(id -un)|g" -e "s|@GROUP@|$(id -gn)|g" \
       -e "s|@ROOT@|$ROOT|g"     -e "s|@PORT@|$PORT|g" \
       "$ROOT/deploy/my-network-lab.service" | $SUDO tee "$UNIT" >/dev/null
   $SUDO systemctl daemon-reload
   $SUDO systemctl enable --now my-network-lab.service
+  # 이미 돌고 있었다면 enable --now 는 아무것도 하지 않는다 — 새 유닛과 새 코드를
+  # 읽히려면 다시 띄워야 한다. (콘솔은 시작할 때 코드를 읽는다)
+  $SUDO systemctl restart my-network-lab.service
   sleep 2
   if systemctl is-active --quiet my-network-lab.service; then
     ok "실행 중 — http://$(hostname -I | awk '{print $1}'):$PORT"
