@@ -300,6 +300,9 @@ svg.topo .node>g>.brick{fill:none;stroke:var(--n-line);stroke-width:.9;opacity:.
 svg.topo .node.hl>g>*{stroke:var(--accent);stroke-width:2.4}
 svg.topo .node.hl .n-name{fill:var(--accent)}
 
+.menu .pop .rev{padding:2px 12px 6px;font-size:12px;color:var(--muted);
+  font-family:ui-monospace,SFMono-Regular,monospace}
+
 /* ---------- 교재 안의 작은 구성도 ----------
    토폴로지와 같은 규칙이다. 색은 토큰으로만 쓰고, 칸이 좁으면 줄이는 대신
    가로로 넘긴다 — 줄이면 11px 글자가 못 읽는 크기가 되기 때문. */

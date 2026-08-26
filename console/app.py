@@ -169,6 +169,25 @@ def pick_lab(user, requested=None):
     return labs[0]
 
 
+def _rev():
+    """지금 돌고 있는 코드의 커밋. **프로세스가 뜰 때 한 번만** 읽는다.
+
+    콘솔은 파이썬 코드를 프로세스 시작 때 읽는다. `git pull` 만 하고 다시 띄우지
+    않으면 파일은 새것인데 도는 것은 옛것이다 — 그 상태에서 "고쳤는데 그대로다"
+    를 몇 번 겪었다. 화면이 스스로 어느 커밋으로 도는지 말하게 한다.
+    """
+    try:
+        out = subprocess.run(["git", "-C", str(L.ROOT), "log", "-1",
+                              "--format=%h %cd", "--date=format:%m-%d %H:%M"],
+                             capture_output=True, text=True, timeout=3)
+        return out.stdout.strip() or "?"
+    except Exception:                                        # noqa: BLE001
+        return "?"
+
+
+APP_REV = _rev()
+
+
 def nav_ctx(user, here, lab_id=None):
     """모든 화면이 같은 헤더를 그리는 데 필요한 것.
 
@@ -182,6 +201,7 @@ def nav_ctx(user, here, lab_id=None):
         "nav_labs": auth.allowed_labs(user),
         "lab_id": lab_id,
         "pending": db.count_pending() if is_admin else 0,
+        "app_rev": APP_REV,
         "has_ssh_key": bool((user or {}).get("ssh_key")),
         "health": pve.last(),
         "site_name": L.SITE["site"]["name"],

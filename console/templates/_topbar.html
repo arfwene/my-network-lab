@@ -54,6 +54,11 @@
       <a href="/admin/setup" {% if here == 'setup' %}aria-current="page"{% endif %}>설치 상태</a>
       <a href="/admin/settings" {% if here == 'settings' %}aria-current="page"{% endif %}>연결 설정</a>
       <hr>
+      <div class="cap">지금 도는 코드</div>
+      {# git pull 만 하고 다시 안 띄우면 파일은 새것인데 도는 것은 옛것이다.
+         여기 값이 안 바뀌면 재시작이 안 된 것이다. #}
+      <div class="rev" title="콘솔 프로세스가 시작될 때 읽은 커밋입니다">{{ app_rev }}</div>
+      <hr>
       <div class="cap">운영</div>
       <a href="/admin" {% if here == 'users' %}aria-current="page"{% endif %}>계정 관리</a>
       <a href="/admin/reviews" {% if here == 'reviews' %}aria-current="page"{% endif %}>검토 큐
