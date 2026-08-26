@@ -6,7 +6,6 @@
 > 벤더를 하나 고르면 그 벤더 문법을 배우는 데 시간이 가고, 정작 **개념**이 남지 않기 때문입니다.
 >
 > **개념은 같고 명령어만 바뀝니다.** 이 표만 있으면 실장비로 넘어가는 데 하루면 됩니다.
-> 회사 실장비 열은 비워 두었습니다 — 장비가 정해지면 채워서 사내 문서로 써 주세요.
 
 ---
 
@@ -26,30 +25,30 @@ FRR 의 `vtysh` 는 **일부러 Cisco IOS 문법을 따라 만들어졌습니다
 
 ## 1. 접속과 모드
 
-| 하는 일 | FRR · Linux | Cisco IOS | 회사 실장비 |
-|---|---|---|---|
-| CLI 진입 | `sudo vtysh` | (콘솔·SSH 접속) | |
-| 설정 모드 | `configure terminal` | `configure terminal` | |
-| 인터페이스 모드 | `interface eth2` | `interface Gi0/1` | |
-| 한 줄 실행 | `sudo vtysh -c '<명령>'` | — | |
-| 설정 보기 | `show running-config` | `show running-config` | |
-| 설정 저장 | `write memory` | `write memory` / `copy run start` | |
-| 나가기 | `end` · `exit` | `end` · `exit` | |
+| 하는 일 | FRR · Linux | Cisco IOS |
+|---|---|---|
+| CLI 진입 | `sudo vtysh` | (콘솔·SSH 접속) |
+| 설정 모드 | `configure terminal` | `configure terminal` |
+| 인터페이스 모드 | `interface eth2` | `interface Gi0/1` |
+| 한 줄 실행 | `sudo vtysh -c '<명령>'` | — |
+| 설정 보기 | `show running-config` | `show running-config` |
+| 설정 저장 | `write memory` | `write memory` / `copy run start` |
+| 나가기 | `end` · `exit` | `end` · `exit` |
 
 > FRR 은 이 랩에서 **integrated-vtysh-config** 로 되어 있어
 > `write memory` 가 `/etc/frr/frr.conf` 한 파일에 저장합니다.
 
 ## 2. 인터페이스
 
-| 하는 일 | FRR · Linux | Cisco IOS | 회사 실장비 |
-|---|---|---|---|
-| 요약 상태 | `ip -br link` · `ip -br addr` | `show ip interface brief` | |
-| 상세 | `ip -d link show eth1` | `show interface Gi0/1` | |
-| 주소 주기 | `ip addr add 10.0.0.1/24 dev eth1` | `ip address 10.0.0.1 255.255.255.0` | |
-| 올리기 / 내리기 | `ip link set eth1 up` / `down` | `no shutdown` / `shutdown` | |
-| MTU | `ip link set eth1 mtu 1500` | `mtu 1500` | |
-| 설명 달기 | (netplan `description`) | `description <문구>` | |
-| 카운터 | `ip -s link show eth1` | `show interface Gi0/1` | |
+| 하는 일 | FRR · Linux | Cisco IOS |
+|---|---|---|
+| 요약 상태 | `ip -br link` · `ip -br addr` | `show ip interface brief` |
+| 상세 | `ip -d link show eth1` | `show interface Gi0/1` |
+| 주소 주기 | `ip addr add 10.0.0.1/24 dev eth1` | `ip address 10.0.0.1 255.255.255.0` |
+| 올리기 / 내리기 | `ip link set eth1 up` / `down` | `no shutdown` / `shutdown` |
+| MTU | `ip link set eth1 mtu 1500` | `mtu 1500` |
+| 설명 달기 | (netplan `description`) | `description <문구>` |
+| 카운터 | `ip -s link show eth1` | `show interface Gi0/1` |
 
 ```
 UP  <NO-CARRIER,...>   ≈  Gi0/1 is up, line protocol is down
@@ -58,30 +57,30 @@ DOWN <BROADCAST,...>   ≈  Gi0/1 is administratively down
 
 ## 3. L2 · VLAN
 
-| 하는 일 | Linux Bridge | Cisco IOS | 회사 실장비 |
-|---|---|---|---|
-| MAC 테이블 | `bridge fdb show br br0` | `show mac address-table` | |
-| 포트 목록 | `bridge link show` | `show interfaces status` | |
-| VLAN 만들기 | `bridge vlan add vid 10 dev eth1` | `vlan 10` | |
-| 액세스 포트 | `bridge vlan add vid 10 dev eth1 pvid untagged` | `switchport mode access` + `switchport access vlan 10` | |
-| 트렁크 | `bridge vlan add vid 10 dev eth3` (태그) | `switchport mode trunk` + `switchport trunk allowed vlan 10,20` | |
-| Native VLAN | `pvid untagged` 로 지정한 VLAN | `switchport trunk native vlan 999` | |
-| VLAN 확인 | `bridge vlan show dev eth3` | `show interfaces trunk` | |
+| 하는 일 | Linux Bridge | Cisco IOS |
+|---|---|---|
+| MAC 테이블 | `bridge fdb show br br0` | `show mac address-table` |
+| 포트 목록 | `bridge link show` | `show interfaces status` |
+| VLAN 만들기 | `bridge vlan add vid 10 dev eth1` | `vlan 10` |
+| 액세스 포트 | `bridge vlan add vid 10 dev eth1 pvid untagged` | `switchport mode access` + `switchport access vlan 10` |
+| 트렁크 | `bridge vlan add vid 10 dev eth3` (태그) | `switchport mode trunk` + `switchport trunk allowed vlan 10,20` |
+| Native VLAN | `pvid untagged` 로 지정한 VLAN | `switchport trunk native vlan 999` |
+| VLAN 확인 | `bridge vlan show dev eth3` | `show interfaces trunk` |
 
 > **양쪽 native 가 어긋나면** 링크는 UP 이고 로그도 안 남는데 그 VLAN 만 안 됩니다.
 > 벤더가 달라도 증상은 똑같습니다 (M2-04 시나리오).
 
 ## 4. 라우팅
 
-| 하는 일 | FRR (vtysh) | Cisco IOS | 회사 실장비 |
-|---|---|---|---|
-| 라우팅 표 | `show ip route` | `show ip route` | |
-| 특정 목적지 | `show ip route 10.10.40.0/24` | `show ip route 10.10.40.0` | |
-| 출처별 | `show ip route ospf` · `static` | `show ip route ospf` · `static` | |
-| 커널 실제 경로 | `ip route get {{ ip.web }}` | `show ip cef <주소>` | |
-| 정적 경로 | `ip route 10.10.32.0/19 10.10.64.2` | `ip route 10.10.32.0 255.255.224.0 10.10.64.2` | |
-| 기본 경로 | `ip route 0.0.0.0/0 <다음홉>` | `ip route 0.0.0.0 0.0.0.0 <다음홉>` | |
-| 포워딩 켜기 | `sysctl net.ipv4.ip_forward=1` | (기본 켜짐) | |
+| 하는 일 | FRR (vtysh) | Cisco IOS |
+|---|---|---|
+| 라우팅 표 | `show ip route` | `show ip route` |
+| 특정 목적지 | `show ip route 10.10.40.0/24` | `show ip route 10.10.40.0` |
+| 출처별 | `show ip route ospf` · `static` | `show ip route ospf` · `static` |
+| 커널 실제 경로 | `ip route get {{ ip.web }}` | `show ip cef <주소>` |
+| 정적 경로 | `ip route 10.10.32.0/19 10.10.64.2` | `ip route 10.10.32.0 255.255.224.0 10.10.64.2` |
+| 기본 경로 | `ip route 0.0.0.0/0 <다음홉>` | `ip route 0.0.0.0 0.0.0.0 <다음홉>` |
+| 포워딩 켜기 | `sysctl net.ipv4.ip_forward=1` | (기본 켜짐) |
 
 ```
 FRR / IOS 공통 표기
@@ -96,59 +95,59 @@ FRR / IOS 공통 표기
 
 ## 5. OSPF
 
-| 하는 일 | FRR (vtysh) | Cisco IOS | 회사 실장비 |
-|---|---|---|---|
-| 프로세스 | `router ospf` | `router ospf 1` | |
-| 대역 광고 | `network 10.10.10.0/24 area 0` | `network 10.10.10.0 0.0.0.255 area 0` | |
-| router-id | `ospf router-id 10.10.96.1` | `router-id 10.10.96.1` | |
-| passive | `passive-interface eth1` | `passive-interface Gi0/1` | |
-| cost | `ip ospf cost 10` (인터페이스) | `ip ospf cost 10` | |
-| 타이머 | `ip ospf hello-interval 10` | `ip ospf hello-interval 10` | |
-| 기본 경로 배포 | `default-information originate` | `default-information originate` | |
-| **인접 확인** | `show ip ospf neighbor` | `show ip ospf neighbor` | |
-| 인터페이스 상태 | `show ip ospf interface eth2` | `show ip ospf interface Gi0/1` | |
-| 데이터베이스 | `show ip ospf database` | `show ip ospf database` | |
+| 하는 일 | FRR (vtysh) | Cisco IOS |
+|---|---|---|
+| 프로세스 | `router ospf` | `router ospf 1` |
+| 대역 광고 | `network 10.10.10.0/24 area 0` | `network 10.10.10.0 0.0.0.255 area 0` |
+| router-id | `ospf router-id 10.10.96.1` | `router-id 10.10.96.1` |
+| passive | `passive-interface eth1` | `passive-interface Gi0/1` |
+| cost | `ip ospf cost 10` (인터페이스) | `ip ospf cost 10` |
+| 타이머 | `ip ospf hello-interval 10` | `ip ospf hello-interval 10` |
+| 기본 경로 배포 | `default-information originate` | `default-information originate` |
+| **인접 확인** | `show ip ospf neighbor` | `show ip ospf neighbor` |
+| 인터페이스 상태 | `show ip ospf interface eth2` | `show ip ospf interface Gi0/1` |
+| 데이터베이스 | `show ip ospf database` | `show ip ospf database` |
 
 > **`network` 문법이 다릅니다.** FRR 은 프리픽스(`/24`), IOS 는 **와일드카드 마스크**(`0.0.0.255`).
 > 나머지는 사실상 같습니다 — 인접 조건 다섯(Area · 서브넷 · MTU · 타이머 · 인증)도 동일합니다.
 
 ## 6. IPv6
 
-| 하는 일 | FRR · Linux | Cisco IOS | 회사 실장비 |
-|---|---|---|---|
-| 주소 | `ip -6 addr show eth1` | `show ipv6 interface brief` | |
-| 라우팅 표 | `show ipv6 route` | `show ipv6 route` | |
-| OSPFv3 인접 | `show ipv6 ospf6 neighbor` | `show ipv6 ospf neighbor` | |
-| 이웃 (ARP 대응) | `ip -6 neigh show` | `show ipv6 neighbors` | |
-| RA 끄기 | `ipv6 nd suppress-ra` | `ipv6 nd ra suppress` | |
+| 하는 일 | FRR · Linux | Cisco IOS |
+|---|---|---|
+| 주소 | `ip -6 addr show eth1` | `show ipv6 interface brief` |
+| 라우팅 표 | `show ipv6 route` | `show ipv6 route` |
+| OSPFv3 인접 | `show ipv6 ospf6 neighbor` | `show ipv6 ospf neighbor` |
+| 이웃 (ARP 대응) | `ip -6 neigh show` | `show ipv6 neighbors` |
+| RA 끄기 | `ipv6 nd suppress-ra` | `ipv6 nd ra suppress` |
 
 ## 7. ACL · 방화벽 · NAT
 
-| 하는 일 | nftables (edge) | Cisco IOS | 회사 실장비 |
-|---|---|---|---|
-| 규칙 보기 | `nft list ruleset` | `show access-lists` | |
-| 적용 확인 | `nft list ruleset` (chain 별) | `show ip interface Gi0/1` | |
-| 차단 규칙 | `nft add rule … drop` | `access-list 100 deny …` | |
-| 허용 규칙 | `nft add rule … accept` | `access-list 100 permit …` | |
-| 인터페이스 적용 | (hook 으로 지정) | `ip access-group 100 in` | |
-| **SNAT (PAT)** | `snat to {{ public.nat_pool.snat_address }}` | `ip nat inside source list 1 interface Gi0/0 overload` | |
-| **DNAT** | `dnat to <사설주소>` | `ip nat inside source static tcp <사설> 80 <공인> 80` | |
-| NAT 표 | `conntrack -L` | `show ip nat translations` | |
-| 세션 비우기 | `conntrack -F` | `clear ip nat translation *` | |
+| 하는 일 | nftables (edge) | Cisco IOS |
+|---|---|---|
+| 규칙 보기 | `nft list ruleset` | `show access-lists` |
+| 적용 확인 | `nft list ruleset` (chain 별) | `show ip interface Gi0/1` |
+| 차단 규칙 | `nft add rule … drop` | `access-list 100 deny …` |
+| 허용 규칙 | `nft add rule … accept` | `access-list 100 permit …` |
+| 인터페이스 적용 | (hook 으로 지정) | `ip access-group 100 in` |
+| **SNAT (PAT)** | `snat to {{ public.nat_pool.snat_address }}` | `ip nat inside source list 1 interface Gi0/0 overload` |
+| **DNAT** | `dnat to <사설주소>` | `ip nat inside source static tcp <사설> 80 <공인> 80` |
+| NAT 표 | `conntrack -L` | `show ip nat translations` |
+| 세션 비우기 | `conntrack -F` | `clear ip nat translation *` |
 
 > **순서는 어느 벤더나 같습니다 — 위에서부터 평가하고, 먼저 맞는 것이 이깁니다.**
 > "차단 규칙을 넣었는데 안 먹는다" 의 대부분이 그 앞에 넓은 허용이 있어서입니다.
 
 ## 8. 진단 · 캡처
 
-| 하는 일 | Linux | Cisco IOS | 회사 실장비 |
-|---|---|---|---|
-| 도달성 | `ping -c2 <대상>` | `ping <대상>` | |
-| 경로 | `traceroute -n <대상>` | `traceroute <대상>` | |
-| 포트 확인 | `nc -vz <대상> 80` | `telnet <대상> 80` | |
-| 듣는 포트 | `ss -ltnp` | (장비에는 없음) | |
-| 캡처 | `tcpdump -i eth1 -n` | `monitor capture` / SPAN 후 분석기 | |
-| 로그 | `journalctl -u frr` | `show logging` | |
+| 하는 일 | Linux | Cisco IOS |
+|---|---|---|
+| 도달성 | `ping -c2 <대상>` | `ping <대상>` |
+| 경로 | `traceroute -n <대상>` | `traceroute <대상>` |
+| 포트 확인 | `nc -vz <대상> 80` | `telnet <대상> 80` |
+| 듣는 포트 | `ss -ltnp` | (장비에는 없음) |
+| 캡처 | `tcpdump -i eth1 -n` | `monitor capture` / SPAN 후 분석기 |
+| 로그 | `journalctl -u frr` | `show logging` |
 
 > **실장비에서 캡처는 대개 SPAN(미러링)** 입니다.
 > 장비 자체에서 뜨는 것이 아니라 그 포트를 복사해 분석기로 보냅니다.
@@ -156,12 +155,12 @@ FRR / IOS 공통 표기
 
 ## 9. 저장과 롤백
 
-| 하는 일 | FRR · Linux | Cisco IOS | 회사 실장비 |
-|---|---|---|---|
-| 현재 설정 백업 | `vtysh -c 'show running-config' > 파일` | `copy running-config tftp:` | |
-| 저장 | `write memory` | `write memory` | |
-| 되돌리기 | 백업 파일을 다시 적용 | `configure replace` · `copy start run` | |
-| 안전장치 | (없음 — 백업이 곧 안전장치) | `reload in 10` 후 작업 → 확인되면 `reload cancel` | |
+| 하는 일 | FRR · Linux | Cisco IOS |
+|---|---|---|
+| 현재 설정 백업 | `vtysh -c 'show running-config' > 파일` | `copy running-config tftp:` |
+| 저장 | `write memory` | `write memory` |
+| 되돌리기 | 백업 파일을 다시 적용 | `configure replace` · `copy start run` |
+| 안전장치 | (없음 — 백업이 곧 안전장치) | `reload in 10` 후 작업 → 확인되면 `reload cancel` |
 
 > IOS 의 `reload in 10` 은 **원격 작업 중 스스로를 끊었을 때** 10분 뒤 자동 재부팅으로
 > 되살아나게 하는 장치입니다. 이 랩에는 없지만(관리망이 그 역할을 합니다)
