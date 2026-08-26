@@ -717,6 +717,15 @@ pre.code{background:var(--code-bg);padding:14px 16px;border-radius:var(--r-md);o
   background:var(--panel);color:var(--ink);font:400 14px/20px inherit;font-family:inherit;
   width:100%}
 .qshort textarea{height:auto;padding:8px 10px;line-height:20px;resize:vertical}
+/* 체크박스·라디오는 위 규칙에서 뺀다. `input` 하나로 묶어 두면 height:32px 와
+   width:100% 가 네모에도 걸려, 체크박스가 줄 전체를 차지하는 커다란 상자가 된다.
+   실제로 [연결 설정] 의 세 칸이 그랬다. 브라우저 기본 크기를 그대로 쓰고 색만 맞춘다. */
+.newuser input[type=checkbox],.newuser input[type=radio],
+.pveform input[type=checkbox],.pveform input[type=radio],
+.qshort input[type=checkbox],.qshort input[type=radio],
+.filterbar input[type=checkbox],.filterbar input[type=radio]{
+  height:auto;width:auto;padding:0;border:0;background:none;
+  flex:none;margin:0;accent-color:var(--ink)}
 .newuser input:focus,.pveform input:focus,.qshort input:focus,.qshort textarea:focus{
   outline:none;border-color:var(--ink)}
 .newuser input::placeholder,.pveform input::placeholder{color:var(--faint)}
