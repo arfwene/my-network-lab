@@ -1009,6 +1009,11 @@ async def job_stream(request: Request, job_id: str):
                 else:
                     yield sse("== 준비 완료. 지금부터 시간이 갑니다.")
         else:
+            # 붙자마자 한 번 보낸다. 이게 없으면 이미 한참 돌던 작업에 새로 붙은
+            # 화면이 첫 keep-alive(최대 15초)까지 0초부터 세기 시작한다.
+            el0, q0 = job.quiet()
+            yield ("event: tick\ndata: "
+                   + json.dumps({"elapsed": el0, "quiet": q0}, ensure_ascii=False) + "\n\n")
             async for chunk in runner.stream(job_id):
                 if not chunk:
                     # keep-alive. 전에는 빈 줄을 그대로 보냈고 화면은 그것을 버렸다 —

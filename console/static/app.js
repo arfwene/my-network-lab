@@ -277,26 +277,53 @@
     return sec < 60 ? `${sec}초` : `${Math.floor(sec / 60)}분 ${sec % 60}초`;
   }
 
+  // 경과 시간은 **브라우저가 1초마다 센다.** 서버 값만 쓰면 조용할 때 15초씩
+  // 건너뛰고, 로그가 쏟아지는 동안에는 아예 멈춘 것처럼 보인다 — 실제로
+  // [랩 삭제] 에서 그렇게 보였다. 서버가 보내 줄 때는 그 값으로 시계를 맞춘다.
+  let clock = null, t0 = 0, lastOut = 0;
+
+  function showElapsed() {
+    const el = (Date.now() - t0) / 1000;
+    const q = (Date.now() - lastOut) / 1000;
+    jobinfo.textContent = `진행 중 · ${fmt(el)} 경과`
+      + (q > 20 ? ` · 마지막 출력 ${fmt(q)} 전` : '');
+  }
+
+  function startClock() {
+    t0 = lastOut = Date.now();
+    clearInterval(clock);
+    clock = setInterval(showElapsed, 1000);
+    showElapsed();
+  }
+
+  function stopClock() { clearInterval(clock); clock = null; }
+
   function stream(jobId) {
     return new Promise(resolve => {
       if (es) es.close();
+      startClock();
       es = new EventSource(`/jobs/${jobId}/stream`);
-      es.onmessage = ev => paint(JSON.parse(ev.data));
-      // 조용한 구간을 보이게 한다. terraform 은 refresh 하는 동안 아무것도 찍지 않아서,
-      // 이게 없으면 "멈췄다" 와 화면상 구분이 되지 않는다.
+      es.onmessage = ev => { lastOut = Date.now(); paint(JSON.parse(ev.data)); };
+      // 서버가 알려 주는 진짜 경과로 시계를 맞춘다. 새로고침해서 도중에 붙었거나
+      // 브라우저가 절전으로 멈췄던 경우를 여기서 바로잡는다.
       es.addEventListener('tick', ev => {
         const d = JSON.parse(ev.data);
-        jobinfo.textContent = `진행 중 · ${fmt(d.elapsed)} 경과`
-          + (d.quiet > 20 ? ` · 마지막 출력 ${fmt(d.quiet)} 전` : '');
+        t0 = Date.now() - d.elapsed * 1000;
+        lastOut = Date.now() - d.quiet * 1000;
+        showElapsed();
       });
       es.addEventListener('done', ev => {
         const d = JSON.parse(ev.data);
-        jobinfo.textContent = `${d.action} · ${d.status} · ${d.elapsed}초`;
+        stopClock();
+        jobinfo.textContent = `${d.action} · ${d.status} · ${fmt(d.elapsed)}`;
         es.close(); es = null;
         refreshStatus();
         resolve(d);
       });
-      es.onerror = () => { paint('!! 로그 스트림이 끊겼습니다'); es.close(); es = null; resolve(null); };
+      es.onerror = () => {
+        stopClock();
+        paint('!! 로그 스트림이 끊겼습니다'); es.close(); es = null; resolve(null);
+      };
     });
   }
 

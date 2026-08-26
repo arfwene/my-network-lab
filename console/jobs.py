@@ -82,8 +82,8 @@ PREFLIGHT = {"deploy"}
 # 시작하자마자 한참 조용한 작업들. 무엇을 기다리는 중인지 미리 적어 둔다 —
 # 이유를 모르는 침묵은 사용자에게 "멈췄다" 와 같은 뜻이다.
 QUIET_FIRST = {
-    "destroy": "   terraform 이 먼저 Proxmox 에 자원 27개의 현재 상태를 확인합니다(refresh).\n"
-               "   그동안 출력이 없습니다 — 멈춘 것이 아닙니다. 아래 경과 시간이 계속 올라가면 정상입니다.",
+    "destroy": "   terraform 이 자원 27개를 지웁니다. 지우는 순서가 있어 한 번에 다 사라지지는 않습니다.\n"
+               "   중간에 조용한 구간이 있습니다 — 멈춘 것이 아닙니다. 아래 경과 시간이 계속 올라가면 정상입니다.",
     "deploy":  "   terraform 이 먼저 상태를 확인하고 실행 계획을 세웁니다.\n"
                "   그동안 출력이 없습니다 — 멈춘 것이 아닙니다.",
 }
@@ -204,7 +204,12 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
                 (tf_env(lab_id), tf_cmd("init")),
                 (tf_env(lab_id), tf_cmd("apply", "-auto-approve"))]
     if action == "destroy":
-        return [(tf_env(lab_id), tf_cmd("destroy", "-auto-approve"))]
+        # -refresh=false: 지우기 전에 현재 상태를 다시 읽지 않는다.
+        #   VM 자원은 QEMU 게스트 에이전트가 주소를 알려 줄 때까지 기다리는데,
+        #   게스트 네트워크가 망가져 있으면 그 응답이 안 와서 refresh 단계에서
+        #   몇 분씩 멈춘다 (기본 대기 15분). 어차피 지울 것이라 현재 상태를
+        #   알 필요가 없고, 이미 사라진 자원은 provider 가 조용히 넘어간다.
+        return [(tf_env(lab_id), tf_cmd("destroy", "-auto-approve", "-refresh=false"))]
     if action == "apply":
         return [gen, (ANSIBLE, [APB, "-i", inv, "playbooks/site.yml",
                                 "-e", f"lab_stage={stage}"])]
