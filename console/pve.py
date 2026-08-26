@@ -609,9 +609,28 @@ def gate(force=False, lab_id=None):
 OWNER_TAG = "my-network-lab"
 
 
-def _owned(vm):
+def _owned(vm, names=None):
+    """이 VM 이 우리 랩 것인가.
+
+    보통은 태그로 안다. 그런데 태그는 VM 을 **설정할 때** 붙는다 — 복제는 됐지만
+    설정에서 실패하면 태그 없는 VM 이 남는다. 그 상태로 다시 [랩 생성] 을 누르면
+    검사가 자기가 만든 13대를 "남의 VM" 이라며 막고, 화면은 vmid_start 를 옮기라고
+    한다. 정반대의 안내다.
+
+    이름은 복제할 때 이미 정해진다(lab1-pc1 …). 그래서 이름도 함께 본다.
+    """
     tags = (vm.get("tags") or "").replace(",", ";").split(";")
-    return OWNER_TAG in [t.strip() for t in tags]
+    if OWNER_TAG in [t.strip() for t in tags]:
+        return True
+    return bool(names) and vm.get("name") in names
+
+
+def _lab_vm_names(lab_id):
+    """이 랩이 만들 VM 이름 전부. 이름 규칙은 site.yml 의 labs.naming.vm_name."""
+    try:
+        return {L.vm_name(lab_id, n["name"]) for n in L.TOPO["nodes"]}
+    except Exception:                            # noqa: BLE001
+        return set()
 
 
 # 이 랩이 실제로 쓰는 권한. 경로별로 무엇이 왜 필요한지 적어 둔다 —
@@ -703,8 +722,10 @@ def preflight(lab_id, cfg=None):
     cs.append(c_id)
     try:
         vms = _api(cfg, "/api2/json/cluster/resources?type=vm") or []
-        clash = [v for v in vms if lo <= int(v.get("vmid", 0)) <= hi and not _owned(v)]
-        mine = [v for v in vms if lo <= int(v.get("vmid", 0)) <= hi and _owned(v)]
+        want = _lab_vm_names(lab_id)
+        here = [v for v in vms if lo <= int(v.get("vmid", 0)) <= hi]
+        clash = [v for v in here if not _owned(v, want)]
+        mine = [v for v in here if _owned(v, want)]
         if clash:
             names = ", ".join(f"{v['vmid']}({v.get('name', '?')})" for v in clash[:5])
             c_id.set("error", f"이 구간을 다른 VM 이 쓰고 있다: {names}",
@@ -712,7 +733,12 @@ def preflight(lab_id, cfg=None):
                      "구간으로 옮기거나, 해당 VM 을 옮길 것. 여기서 멈추지 않으면 "
                      "Terraform 이 절반쯤 만들다 실패한다")
         elif mine:
-            c_id.set("ok", f"{len(mine)}대가 이미 이 랩 소유로 존재한다 (재적용)")
+            untagged = [v for v in mine if not _owned(v)]
+            if untagged:
+                c_id.set("ok", f"{len(mine)}대가 이미 이 랩 소유로 존재한다 "
+                               f"(그중 {len(untagged)}대는 설정이 덜 끝났다 — 다시 적용하면 이어서 끝난다)")
+            else:
+                c_id.set("ok", f"{len(mine)}대가 이미 이 랩 소유로 존재한다 (재적용)")
         else:
             c_id.set("ok", "비어 있다")
     except Exception as e:                       # noqa: BLE001

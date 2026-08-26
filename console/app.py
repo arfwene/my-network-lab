@@ -457,7 +457,15 @@ async def onboard_deploy(request: Request):
         # 엉뚱한 작업의 진행률을 그린다 — 기다리라고만 말하고 화면이 다시 묻는다.
         return JSONResponse({"busy": True, "what": ACTION_LABEL.get(action, action)})
     have, total = await asyncio.to_thread(pve.lab_vms, lab_id)
-    if have is not None and total and have >= total:
+    # VM 이 다 있다고 끝난 것이 아니다. 복제는 됐는데 설정에서 실패하면 —
+    # 실제로 VM.Config.CDROM 권한이 없어 13대가 그렇게 남았다 — 꺼진 채로
+    # 다 있다. 그걸 "준비됐다" 로 보면 교육생은 아무것도 안 도는 랩을 받는다.
+    # provisioned 는 **성공한 배포**에서만 True 가 된다.
+    #   None = 이 기능 이전에 만들어진 랩이다. 모르면 있는 것을 믿는다.
+    #   False = 배포가 실패했거나 지웠다. VM 이 다 있다면 앞엣것이다 — 이어서 끝낸다.
+    if have is not None and total and have >= total \
+            and await asyncio.to_thread(state.provisioned, lab_id) is not False:
+        await asyncio.to_thread(state.set_provisioned, lab_id, True)
         return JSONResponse({"ready": True})
     stage = state.load(lab_id).get("stage") or L.STAGES[0]
     try:
