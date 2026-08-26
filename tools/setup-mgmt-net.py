@@ -306,7 +306,7 @@ def main(a):
         if r.returncode:
             die("관리망 적용에 실패했다",
                 f"되돌리려면:  sudo rm {NETPLAN} && sudo netplan apply")
-        print(f"{G}관리망 연결 완료.{N} 이후 랩을 만들고 지워도 여기는 건드리지 않는다.")
+        # 마무리 인사는 헬퍼가 이미 했다. 여기서 또 하면 같은 줄이 두 번 찍힌다.
         return 0
 
     # 헬퍼가 없는 서버(예전 설치)는 예전 길로 간다.
