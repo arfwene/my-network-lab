@@ -81,7 +81,11 @@
   <div class="assess">
     <div class="assess-intro">
       <h3>퀴즈</h3>
-      <p>{{ quiz.questions | length }}문항 · <b>{{ quiz.pass_score }}% 이상이면 통과</b>예요.
+      {# 통과 기준이 100 이면 "100% 이상" 은 이상한 말이다. 기준이 100 일 때와
+         아닐 때를 갈라 쓴다 — 화면이 규칙을 그대로 읽어 주게. #}
+      <p>{{ quiz.questions | length }}문항 ·
+        {% if quiz.pass_score >= 100 %}<b>모두 맞혀야 통과</b>예요.
+        {% else %}<b>{{ quiz.pass_score }}% 이상이면 통과</b>예요.{% endif %}
         횟수 제한은 없고, 틀린 문항은 바로 해설이 나옵니다.<br>
         여기는 <b>개념만</b> 확인해요. 랩에서 직접 만드는 일은 다음 <b>[과제]</b> 에서 합니다.</p>
     </div>

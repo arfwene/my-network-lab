@@ -1,4 +1,12 @@
 ---
+# networkctl reload 는 .network 파일만 다시 읽는다. networkd 를 재시작하면
+# 관리망까지 함께 흔들려 ansible 접속이 끊길 수 있다.
+- name: reload networkd
+  ansible.builtin.command: networkctl reload
+  changed_when: true
+  failed_when: false
+  notify: restart lab-switch
+
 - name: restart lab-switch
   ansible.builtin.systemd:
     name: lab-switch

@@ -69,7 +69,12 @@ ip link set "$BR" type bridge ageing_time 30000
 ip link set "$BR" up
 
 {% for i in lab_interfaces if i.active and i.bridge_id %}
+{# 주석은 조건 블록으로 끝내면 안 된다. ansible 의 template 은 trim_blocks 가
+   켜져 있어 블록 태그 뒤의 줄바꿈을 지운다 — 다음 줄이 주석에 붙어 버린다:
+       # ---- eth1 -> r4 (access)ip link set eth1 up
+   그러면 `ip link set eth1 up` 이 아예 실행되지 않는다. #}
 # ---- {{ i.name }} -> {{ i.peer }}{% if i.mode %} ({{ i.mode }}){% endif %}{% if i.desc %}  {{ i.desc }}{% endif %}
+
 ip link set {{ i.name }} up
 ip link set {{ i.name }} master "$BR" || { echo "{{ i.name }} 포트를 $BR 에 꽂지 못했다" >&2; exit 1; }
 {%   if vf %}

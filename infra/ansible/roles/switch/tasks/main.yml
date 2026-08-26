@@ -2,6 +2,18 @@
 # Linux bridge 를 스위치로 사용한다.
 # 실장비 명령 대응:  bridge fdb show  ==  show mac address-table
 #                    bridge vlan show ==  show vlan brief
+# 포트의 주인을 하나로 만든다. 이것이 없으면 아래 스크립트가 꽂은 포트를
+# networkd 가 도로 떼어 간다 — 오류 없이, 같은 초에.
+- name: 스위치 포트를 networkd 관리에서 뺀다
+  ansible.builtin.template:
+    src: lab-switch-ports.network.j2
+    dest: /etc/systemd/network/05-lab-switch-ports.network
+    mode: "0644"
+  vars:
+    ports: "{{ lab_interfaces | selectattr('active') | selectattr('bridge_id') | map(attribute='name') | list }}"
+  when: (lab_interfaces | selectattr('active') | selectattr('bridge_id') | list | length) > 0
+  notify: reload networkd
+
 - name: 스위칭 설정 스크립트 배포
   ansible.builtin.template:
     src: lab-switch.sh.j2
