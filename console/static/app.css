@@ -74,7 +74,7 @@
     --tag-bad-bg:var(--d-tag-bad-bg); --tag-bad-ink:var(--d-tag-bad-ink);
   }
 }
-/* 헤더의 [밝게 / 어둡게] 로 직접 고른 경우. html 에 data-theme 이 박힌다. */
+/* 헤더의 [다크모드 / 화이트모드] 로 직접 고른 경우. html 에 data-theme 이 박힌다. */
 :root[data-theme="dark"]{
   color-scheme:dark;
   --ink:var(--d-ink); --body:var(--d-body);
@@ -275,18 +275,34 @@ a.mod{text-decoration:none;color:var(--ink)}
 .doc hr{border:0;border-top:1px solid var(--line);margin:2em 0}
 .notice{padding:14px;background:var(--code-bg);border-radius:var(--r-md);color:var(--muted)}
 
-/* 밝게 / 어둡게 단추. 헤더의 상태 칩들과 같은 높이로 앉는다.
+/* 화이트모드 / 다크모드 단추.
+
+   옆의 상태 칩(.hchip)과 같은 크기로 앉되 글자를 잉크색·굵게 올린다 —
+   상태 칩은 **읽는 것**이고 이것은 **누르는 것**이라, 같은 무게로 두면
+   헤더에 회색 칩이 둘 나란히 붙어 어느 쪽이 단추인지 보이지 않는다.
+   잉크 채움(.btn.primary)까지 가지 않는 이유는 DESIGN.md 가 그 채움을
+   주 동작 하나에만 허락하기 때문이다.
+
    단추에는 **바뀔 모습**을 적는다 — 지금 모습을 적으면 누를 때마다 헷갈린다.
    두 글자를 다 심어 두고 여기서 고른다. 그래야 JS 를 기다리지 않는다. */
-.btn.sm.theme{min-width:52px;text-align:center}
-.theme .t-d{display:none}
+.theme{color:var(--ink);font-weight:600;min-width:108px;justify-content:center}
+.theme:hover{background:var(--sunken);border-color:var(--muted)}
+.theme:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.theme > span{display:none;align-items:center;gap:8px}
+/* 반달 — 지금 모드의 반대쪽이 차 있다. 색은 잉크 하나뿐이다. */
+.theme .tdot{width:13px;height:13px;border-radius:50%;flex:none;
+  border:1.5px solid var(--ink);
+  background:linear-gradient(90deg,var(--ink) 0 50%,transparent 50%)}
+.theme .tdot.on{background:linear-gradient(90deg,transparent 0 50%,var(--ink) 50%)}
+
+.theme .t-l{display:inline-flex}
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]) .theme .t-l{display:none}
-  :root:not([data-theme="light"]) .theme .t-d{display:inline}
+  :root:not([data-theme="light"]) .theme .t-d{display:inline-flex}
 }
 :root[data-theme="dark"] .theme .t-l{display:none}
-:root[data-theme="dark"] .theme .t-d{display:inline}
-:root[data-theme="light"] .theme .t-l{display:inline}
+:root[data-theme="dark"] .theme .t-d{display:inline-flex}
+:root[data-theme="light"] .theme .t-l{display:inline-flex}
 :root[data-theme="light"] .theme .t-d{display:none}
 
 /* 장애 연습 — 고르기 전에 무엇을 고르는 것인지 알려 주는 줄 */

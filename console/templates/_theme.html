@@ -1,4 +1,4 @@
-{# 밝게 / 어둡게 전환. 고르지 않으면 시스템 설정을 따른다.
+{# 화이트모드 / 다크모드 전환. 고르지 않으면 시스템 설정을 따른다.
 
    누른 값은 이 브라우저에만 남는다(localStorage) — 서버에 저장하지 않는다.
    화면 색은 계정 설정이 아니라 그 자리에서 보는 사람의 취향이고, 같은 계정으로
@@ -6,7 +6,11 @@
 
    글자는 **두 개를 다 심어 두고 CSS 가 고른다.** JS 로 채우면 스크립트가 돌기
    전까지 빈 단추가 보이고, 폭이 한 번 튄다. 지금 화면이 어떤 모드인지는 이미
-   CSS 가 알고 있으니 JS 에게 다시 물을 이유가 없다. #}
-<button class="btn sm theme" id="themebtn" type="button"
-        title="밝게 / 어둡게 · 고르지 않으면 시스템 설정을 따릅니다"
-        aria-label="화면 밝기 전환"><span class="t-l">어둡게</span><span class="t-d">밝게</span></button>
+   CSS 가 알고 있으니 JS 에게 다시 물을 이유가 없다.
+
+   반달 표시도 각 글자 안에 하나씩 넣는다. 밖에 하나만 두면 그것 때문에
+   테마 선택자를 세 벌 더 써야 한다 — 보이는 쪽이 곧 지금 모드다. #}
+<button class="hchip theme" id="themebtn" type="button"
+        title="화이트모드 / 다크모드 · 고르지 않으면 시스템 설정을 따릅니다"
+        aria-label="화면 모드 전환"><span class="t-l"><i class="tdot"></i>다크모드</span><span
+        class="t-d"><i class="tdot on"></i>화이트모드</span></button>
