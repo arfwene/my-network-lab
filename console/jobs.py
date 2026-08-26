@@ -89,6 +89,15 @@ QUIET_FIRST = {
 }
 
 
+# 끝났을 때 다음에 무엇을 누르면 되는지. 로그가 "완료" 에서 끊기면 사람은
+# **끝난 것인지 멈춘 것인지 구분하지 못한다** — 실제로 [랩 삭제] 뒤에 그랬다.
+NEXT_HINT = {
+    "destroy": "   랩이 지워졌습니다. 다시 만들려면 [랩 생성] 을 누르세요 (1~2분).",
+    "deploy":  "   가상 장비가 준비됐습니다. 이제 [이 모듈 적용] 으로 설정을 올리세요.",
+    "reset":   "   이 모듈의 시작 상태입니다. 터미널에서 실습을 이어 가면 됩니다.",
+}
+
+
 class Locked(RuntimeError):
     """시험이 진행 중이거나 마감되어 실행을 거부했다."""
 
@@ -431,6 +440,8 @@ class Runner:
             job.rc, job.finished = rc, time.time()
             job.status = "ok" if rc == 0 else "failed"
             job.emit(f"== {'완료' if rc == 0 else '실패'} ({job.as_dict()['elapsed']}초)")
+            if rc == 0 and job.action in NEXT_HINT and not job.secret:
+                job.emit(NEXT_HINT[job.action])
         self.active.pop(job.lab_id, None)
         if on_done:
             on_done(job)
