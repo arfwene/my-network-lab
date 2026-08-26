@@ -146,8 +146,14 @@ def to_html(text, module=None):
     # toc 확장이 제목마다 id 를 붙인다. 기본 slugify 는 한글을 통째로 버려서
     # id 가 전부 빈 문자열이 되고, 목차의 모든 줄이 같은 곳을 가리킨다.
     # mdtoc 이 목차를 만들 때 쓴 규칙을 그대로 넘긴다.
+    # <details> 안의 마크다운. md_in_html 은 markdown="1" 이 붙은 것만 처리한다.
+    # 안 붙이면 접힌 칸 안의 표·인용구·굵게가 전부 날것 그대로 화면에 찍힌다 —
+    # 교육생에게는 `**두 번 로그인한다.**` 같은 글자가 그대로 보인다.
+    # 교재 원본에는 안 적는다. 그건 화면 사정이지 문서의 내용이 아니다.
+    text = re.sub(r"<details(?![^>]*markdown=)", '<details markdown="1"', text)
+
     html = md.markdown(text, extensions=["tables", "fenced_code", "attr_list",
-                                         "sane_lists", "toc"],
+                                         "sane_lists", "toc", "md_in_html"],
                        extension_configs={"toc": {"slugify": lambda s, sep: mdtoc.slug(s),
                                                   "permalink": False}})
     return html

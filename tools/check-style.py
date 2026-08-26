@@ -45,7 +45,9 @@ def tables(t):
     for b in blocks:
         cols = b[0].strip().strip("|").count("|") + 1
         rows = len(b) - 2                       # 머리글 + 구분선 제외
-        if cols <= 2 and rows <= 3:
+        # 2열 2행 이하는 거의 항상 표가 아니다 — 문장을 두 도막 낸 것이다.
+        # 3행부터는 훑어서 한 칸을 찾는 목적이 생기므로 표로 인정한다.
+        if cols <= 2 and rows <= 2:
             tiny.append(b[0].strip()[:56])
     return len(blocks), sum(len(b) for b in blocks), tiny, len(lines)
 
@@ -86,7 +88,8 @@ def main(only=None):
         marks = []
         if m["bold_per_sent"] > BOLD_MAX: marks.append("굵게")
         if m["quote_per_100"] > QUOTE_MAX: marks.append("인용")
-        if m["table_pct"] > TABLE_MAX: marks.append("표")
+        # 표 비율은 **재기만 한다.** M10 처럼 13행짜리 명령표·9단계 점검표가 본문인
+        # 문서는 30% 가 나와도 맞다. 실제로 걸러야 하는 것은 아래 '작은표' 쪽이다.
         if m["tiny"]: marks.append("작은표")
         if m["bad_prefix"]: marks.append("머리말")
         col = R if marks else G
@@ -101,7 +104,8 @@ def main(only=None):
                 print(f"        {Y}2열 3행 이하 표{N}: {b}")
     print("-" * 60)
     print(f"기준: 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · "
-          f"표 ≤ {TABLE_MAX}% · 작은표 0 · 머리말 없는 인용구 0")
+          f"작은표 0 · 머리말 없는 인용구 0")
+    print("표% 는 참고값이다 — 찾아보는 표가 본문인 문서는 높아도 맞다.")
     if bad:
         print(f"{Y}{bad}개 모듈이 기준을 넘는다 (docs/STYLE.md){N}")
     else:
