@@ -77,10 +77,12 @@ PAT  :  주소와 **함께 포트도** 바꾼다        여럿이 주소 하나�
 
 **PAT 가 없으면 안 되는 이유**
 
-```
-pc1 {{ ip.pc1 }}:41000  ─┐
-                          ├─ 둘 다 {{ public.nat_pool.snat_address }} 로 바뀌면…
-pc2 {{ ip.pc2 }}:41000  ─┘   응답이 돌아왔을 때 **누구 것인지 알 수 없습니다**
+```labdiagram
+kind: mini
+cols: [["pc1 :41000", "pc2 :41000"], edge]
+links:
+  - { label: 둘 다 {{ public.nat_pool.snat_address }} 로, tone: warn,
+      sub: 응답이 돌아왔을 때 누구 것인지 알 수 없다 }
 ```
 
 그래서 출발지 **포트까지** 바꾸고 그 대응을 표에 적어 둡니다.
@@ -240,12 +242,26 @@ M6 의 감별표가 **경계 장비 앞에서 그대로 쓰입니다.**
 공개 서비스는 잘 돕니다. 그런데 **사내에서** 그 공개 주소로 접속하면 안 됩니다.
 이 신고가 들어오면 헤어핀부터 의심합니다.
 
+```labdiagram
+kind: seq
+actors: [inet, edge, web]
+steps:
+  - { from: inet, to: edge, label: 공개 IP 로, note: DNAT }
+  - { from: edge, to: web, label: 사설로 바뀌어 도착 }
+  - { from: web, to: edge, label: 응답 }
+  - { from: edge, to: inet, label: 역번역, note: 왕복이 edge 를 지난다 — 정상 }
 ```
-밖에서  : inet → edge(DNAT) → web → edge(역번역) → inet          ✓ 왕복이 edge 를 지난다
 
-안에서  : pc1 → edge(DNAT) → web ─┐
-              ✗ ←────────────────┘  web 은 pc1 의 사설 주소를 보고
-                                    "이건 사내 주소네" → edge 를 안 거치고 돌아간다
+**안에서 — 헤어핀**
+
+```labdiagram
+kind: seq
+actors: [pc1, edge, web]
+steps:
+  - { from: pc1, to: edge, label: 공개 IP 로, note: DNAT }
+  - { from: edge, to: web, label: 사설로 바뀌어 도착 }
+  - { from: web, to: pc1, label: 응답은 곧장, tone: warn,
+      note: web 이 pc1 의 사설 주소를 보고 edge 를 안 거친다 }
 ```
 
 **DNAT 은 목적지만 바꿉니다**(2.1). 출발지는 `{{ ip.pc1 }}` 그대로 web 에 도착합니다.
@@ -274,9 +290,14 @@ pc1 은 `{{ dweb.public }}:80` 에 걸었는데 `{{ ip.web }}:80` 에서 답이 
 
 Stateful 장비의 "기억"(2.2)은 공짜가 아닙니다. 표에는 크기가 있고, 항목에는 **수명**이 있습니다.
 
-```
-conntrack 항목 = 원방향(누가 어디로) + 응답방향(어디서 누구에게) + 상태 + 남은 시간
-                                                                   └─ 조용하면 줄어든다
+```labdiagram
+kind: fields
+cells:
+  - { label: 원방향, sub: 누가 어디로 }
+  - { label: 응답방향, sub: 어디서 누구에게 }
+  - { label: 상태 }
+  - { label: 남은 시간, tone: warn }
+callout: { at: 3, text: 조용하면 줄어든다 }
 ```
 
 - **만료(idle timeout)**: 한동안 아무 패킷도 없으면 항목을 지웁니다.

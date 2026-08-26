@@ -300,6 +300,34 @@ svg.topo .node>g>.brick{fill:none;stroke:var(--n-line);stroke-width:.9;opacity:.
 svg.topo .node.hl>g>*{stroke:var(--accent);stroke-width:2.4}
 svg.topo .node.hl .n-name{fill:var(--accent)}
 
+/* ---------- 교재 안의 작은 구성도 ----------
+   토폴로지와 같은 규칙이다. 색은 토큰으로만 쓰고, 칸이 좁으면 줄이는 대신
+   가로로 넘긴다 — 줄이면 11px 글자가 못 읽는 크기가 되기 때문. */
+.dia-wrap{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:14px 12px;margin:1.4em 0;overflow-x:auto}
+svg.dia{display:block;width:auto;height:auto;max-width:none;font-family:inherit}
+svg.dia .dbox{fill:var(--panel);stroke:var(--line);stroke-width:1.2}
+svg.dia .dbox.node{fill:var(--sunken)}
+svg.dia .dbox.ok{fill:color-mix(in srgb,var(--ok) 8%,var(--panel));
+  stroke:color-mix(in srgb,var(--ok) 40%,var(--line))}
+svg.dia .dbox.warn{fill:color-mix(in srgb,var(--warn-line) 10%,var(--panel));
+  stroke:color-mix(in srgb,var(--warn-line) 45%,var(--line))}
+svg.dia .dbox.soft{fill:var(--sunken);stroke-dasharray:4 3}
+svg.dia .l{fill:none;stroke:var(--topo-link);stroke-width:1.5;
+  stroke-linejoin:round;stroke-linecap:round}
+svg.dia .l.dash{stroke-dasharray:4 4;opacity:.65}
+svg.dia .l.warn{stroke:var(--warn-line);stroke-width:1.8}
+svg.dia .head{fill:var(--topo-link);stroke:none}
+svg.dia .l.warn+.head,svg.dia .warn .head{fill:var(--warn-line)}
+svg.dia .t{fill:var(--body)}
+svg.dia .t.b{fill:var(--ink);font-weight:600}
+svg.dia .t.m{fill:var(--muted)}
+svg.dia .t.note{fill:var(--muted)}
+svg.dia .t.note.ok{fill:var(--ok)} svg.dia .t.note.warn{fill:var(--warn)}
+svg.dia .t.m.warn{fill:var(--warn)}
+/* 대역·포트처럼 숫자로 읽는 글자는 고정폭으로 */
+svg.dia .t.seg{fill:var(--body);font-family:ui-monospace,SFMono-Regular,monospace}
+
 /* ---------- 상태 · 실행 ---------- */
 .status-grid{display:flex;flex-direction:column;gap:7px;font-size:12px}
 .status-grid > div{display:flex;justify-content:space-between;gap:10px}
@@ -739,7 +767,7 @@ table.users td b,table.users td strong{color:var(--ink)}
 
 /* ---------- 그림 크게 보기 ---------- */
 /* 토폴로지는 선이 가늘어 작게 나오면 읽을 수 없다. 눌러서 화면 가득 띄운다. */
-.topo-wrap, .topo-box, .doc img{cursor:zoom-in}
+.topo-wrap, .topo-box, .dia-wrap, .doc img{cursor:zoom-in}
 #lightbox{position:fixed;inset:0;z-index:200;display:grid;place-items:center;
   background:color-mix(in srgb,var(--ink) 82%,transparent);padding:24px;cursor:zoom-out}
 #lightbox .lb-inner{background:var(--panel);border:1px solid var(--line);

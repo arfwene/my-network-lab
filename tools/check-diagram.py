@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import labdesign as L
 import topolayout as T
+import diagram as DG
 
 
 def box(x, y, w, h):
@@ -96,18 +97,63 @@ def check(stage, err):
             err(stage, f"글자가 그림 밖으로 나갔다: {tn}")
 
 
+def check_docs(err):
+    """교재 안의 작은 구성도들. 글자가 서로 겹치거나 캔버스를 벗어나지 않는지."""
+    import re
+    from jinja2 import Environment, FileSystemLoader, StrictUndefined
+    import yaml as Y
+    FENCE = re.compile(r"```labdiagram\n(.*?)```", re.S)
+    n = 0
+    for d in sorted((L.ROOT / "modules").iterdir()):
+        if not (d / "meta.yml").exists():
+            continue
+        meta = Y.safe_load((d / "meta.yml").read_text(encoding="utf-8"))
+        env = Environment(loader=FileSystemLoader(d), undefined=StrictUndefined,
+                          keep_trailing_newline=True)
+        ctx = {**L.doc_context(1, meta["stage"]), "meta": meta, "topology_full": ""}
+        for f in sorted(d.glob("*.md.j2")):
+            for k, spec in enumerate(FENCE.findall(env.get_template(f.name).render(**ctx))):
+                where = f"{d.name}/{f.stem} #{k + 1}"
+                try:
+                    s = DG.build(spec)
+                except Exception as e:                       # noqa: BLE001
+                    err(where, f"그리지 못한다: {e}")
+                    continue
+                n += 1
+                tb = []
+                for x in s.texts:
+                    w = DG._tw(x["s"], x["size"])
+                    x0 = x["x"] - (w if x["anchor"] == "end"
+                                   else w / 2 if x["anchor"] == "middle" else 0)
+                    tb.append((x["s"], box(x0, x["y"] - x["size"], w, x["size"] + 3)))
+                for i in range(len(tb)):
+                    for j in range(i + 1, len(tb)):
+                        if hit(tb[i][1], tb[j][1], pad=2):
+                            err(where, f"글자끼리 겹친다: «{tb[i][0]}» ↔ «{tb[j][0]}»")
+                for name, b in tb:
+                    if b[0] < -1 or b[2] > s.w + 1 or b[1] < -1 or b[3] > s.h + 1:
+                        err(where, f"글자가 그림 밖으로 나갔다: «{name}»")
+                bx = [box(b["x"], b["y"], b["w"], b["h"]) for b in s.boxes]
+                for i in range(len(bx)):
+                    for j in range(i + 1, len(bx)):
+                        if hit(bx[i], bx[j], pad=2):
+                            err(where, "상자끼리 겹친다")
+    return n
+
+
 def main():
     found = []
     check_all = lambda s, m: found.append(f"[{s}] {m}")     # noqa: E731
     for stage in L.STAGES:
         check(stage, check_all)
+    n = check_docs(lambda w, m: found.append(f"[{w}] {m}"))
     if found:
         print("구성도 검사 — 겹침 발견")
         for f in found:
             print("  " + f)
         return 1
     sizes = ", ".join(f"{s} {T.layout(s)['w']}x{T.layout(s)['h']}" for s in ("m1", "m10"))
-    print(f"구성도 {len(L.STAGES)}단계 겹침 없음 ({sizes})")
+    print(f"토폴로지 {len(L.STAGES)}단계 겹침 없음 ({sizes}) · 교재 구성도 {n}개 겹침 없음")
     return 0
 
 

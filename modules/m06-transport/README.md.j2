@@ -57,9 +57,14 @@ M1 부터 지금까지 배운 주소를 한 줄로 정리하면 이렇습니다.
 | **IP** | 엔드투엔드 (호스트까지) | "어느 장비?" | M2 |
 | **포트** | 호스트 안 | **"그 장비 안의 어느 프로그램?"** | 지금 |
 
-```
-{{ ip.pc1 }}:41234   ──────>   {{ ip.web }}:80
-└─── 어느 장비 ───┘ └ 어느 프로그램 ┘
+```labdiagram
+kind: spans
+parts:
+  - { text: "{{ ip.pc1 }}", under: 어느 장비 }
+  - { text: ":41234", under: 어느 프로그램 }
+  - { text: "   ───▶   " }
+  - { text: "{{ ip.web }}", under: 어느 장비 }
+  - { text: ":80", under: 어느 프로그램 }
 ```
 
 > **진단은 이 순서로 좁힙니다.**
@@ -118,10 +123,15 @@ sudo ss -ltnp    # 프로세스 이름까지 (root 필요)
 
 **하나의 TCP 세션은 네 개의 값으로 유일하게 식별됩니다.**
 
-```
-출발지 IP : 출발지 포트  ↔  목적지 IP : 목적지 포트
-{{ ip.pc1 }} :   41234    ↔  {{ ip.web }} :    80
-└──────────────── 4-tuple ────────────────┘
+```labdiagram
+kind: spans
+parts:
+  - { text: "{{ ip.pc1 }}", under: 출발지 IP }
+  - { text: ":41234", under: 출발지 포트 }
+  - { text: "   ↔   " }
+  - { text: "{{ ip.web }}", under: 목적지 IP }
+  - { text: ":80", under: 목적지 포트 }
+note: 이 넷이 연결 하나를 가리킨다 (4-tuple)
 ```
 
 여기에 프로토콜을 더하면 **5-tuple** 입니다.
@@ -136,13 +146,25 @@ sudo ss -ltnp    # 프로세스 이름까지 (root 필요)
 
 ### 2.5 3-way / 4-way 와 상태 (E5)
 
+```labdiagram
+kind: seq
+actors: [A, B]
+steps:
+  - { from: A, to: B, label: SYN }
+  - { from: B, to: A, label: SYN-ACK }
+  - { from: A, to: B, label: ACK, note: 여기서 ESTABLISHED }
 ```
-연결                                끊기
-  A ──── SYN ────────> B              A ──── FIN ───────> B
-  A <─── SYN-ACK ───── B              A <─── ACK ──────── B
-  A ──── ACK ────────> B              A <─── FIN ──────── B
-        ESTABLISHED                   A ──── ACK ───────> B
-                                            TIME-WAIT
+
+**끊기**
+
+```labdiagram
+kind: seq
+actors: [A, B]
+steps:
+  - { from: A, to: B, label: FIN }
+  - { from: B, to: A, label: ACK }
+  - { from: B, to: A, label: FIN }
+  - { from: A, to: B, label: ACK, note: 보낸 쪽이 TIME-WAIT 로 남는다 }
 ```
 
 **왜 연결은 3번이고 끊기는 4번인가?** 끊기는 **양쪽이 각자** 끝내기 때문입니다.

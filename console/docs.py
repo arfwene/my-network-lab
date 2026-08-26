@@ -10,6 +10,7 @@ import markdown as md
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import labdesign as L
 import topology_svg  # noqa: E402  (console 패키지 내부)
+import diagramsvg  # noqa: E402  (tools/)
 
 # tools/render-labmap.py 는 하이픈이 있어 import 문으로 부를 수 없다.
 # CLI(make docs)와 웹 콘솔이 **같은 코드**로 지도를 만들게 하려고 그대로 불러온다.
@@ -20,6 +21,7 @@ _spec.loader.exec_module(_labmap)
 
 SRC = L.ROOT / "modules"
 MERMAID_FENCE = re.compile(r"```mermaid\n(.*?)```", re.S)
+DIAGRAM_FENCE = re.compile(r"```labdiagram\n(.*?)```", re.S)
 STAGE_MARK = re.compile(r"^%%\s*lab-stage:\s*(m\d+)\s*$", re.M)
 
 
@@ -95,6 +97,12 @@ def render_markdown(module, lab_id, kind="README"):
     return env.get_template(src.name).render(**ctx)
 
 
+def diagram_specs(module, lab_id):
+    """그 모듈 교재에 든 구성도 스펙을 나온 순서대로. 내려받기가 n 번째를 찾는다."""
+    md = render_markdown(module, lab_id) or ""
+    return DIAGRAM_FENCE.findall(md)
+
+
 def to_html(text, module=None):
     """마크다운 -> HTML. ```mermaid 블록은 서버에서 그린 SVG 로 바꾼다 (CDN 불필요).
 
@@ -115,5 +123,22 @@ def to_html(text, module=None):
                 f'{topology_svg.render(stage)}</div>')
 
     text = MERMAID_FENCE.sub(swap, text)
+
+    # 교재 안의 작은 구성도. 글자 그림(ASCII)으로는 한글 폭 때문에 상자가
+    # 기울어져서, 설계값에서 그리도록 바꿨다 — 스펙이 틀리면 그림 대신
+    # 무엇이 틀렸는지를 그 자리에 적는다. 교재 한 장이 통째로 죽는 것보다 낫다.
+    seq = [0]
+
+    def draw(m):
+        i = seq[0]
+        seq[0] += 1
+        mid = (module or {}).get("id", "")
+        try:
+            svg = diagramsvg.render(m.group(1))
+        except Exception as e:                       # noqa: BLE001
+            return (f'<p class="flash bad">구성도를 그리지 못했습니다 — {e}</p>')
+        return (f'<div class="dia-wrap" data-dia="{mid}:{i}">{svg}</div>')
+
+    text = DIAGRAM_FENCE.sub(draw, text)
     html = md.markdown(text, extensions=["tables", "fenced_code", "attr_list", "sane_lists"])
     return html

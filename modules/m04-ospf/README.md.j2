@@ -107,9 +107,10 @@ M3 에서 두 가지 한계를 숫자로 봤습니다.
 
 ### 2.4 Neighbor 상태 머신
 
-```
-Down → Init → 2-Way → ExStart → Exchange → Loading → Full
-                        └── DBD 교환 (여기서 MTU 를 확인한다)
+```labdiagram
+kind: steps
+items: [Down, Init, 2-Way, ExStart, Exchange, Loading, Full]
+under: { at: 4, text: DBD 교환 (여기서 MTU 를 확인한다) }
 ```
 
 | 상태 | 무슨 일이 일어나는 중인가 | 여기서 멈추면 |
@@ -170,9 +171,10 @@ r1 → Site-B
 
 **수렴** = 토폴로지가 변한 뒤, 모든 라우터가 **같은 지도를 갖고 각자 계산을 마친 상태**.
 
-```
-변화 발생 → 감지 → LSA 생성·전파 → 각 라우터 SPF 계산 → 테이블 갱신
-   └────────────────── 이 구간이 수렴 시간 = 통신이 끊기는 시간 ──────────┘
+```labdiagram
+kind: steps
+items: [변화 발생, 감지, LSA 생성·전파, 각 라우터 SPF 계산, 테이블 갱신]
+span: { from: 0, to: 4, text: 이 구간이 수렴 시간 = 통신이 끊기는 시간 }
 ```
 
 **감지 방법이 두 가지**라는 것이 중요합니다.

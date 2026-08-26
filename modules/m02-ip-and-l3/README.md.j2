@@ -56,10 +56,13 @@ M1 에서 pc1 과 pc2 는 **같은 대역**에 있었고, 그래서 라우터 �
 
 IP 주소 하나만 보면 아무것도 알 수 없습니다. **마스크와 짝**이어야 의미가 생깁니다.
 
-```
-{{ ipc.pc1 }}
-└──────┬─────┘└┬┘
-   네트워크 부분  호스트 부분     ← 어디까지가 어느 쪽인지 정하는 것이 마스크다
+```labdiagram
+kind: spans
+parts:
+  - { text: "{{ ip.pc1.rsplit('.', 1)[0] }}.", under: 네트워크 부분 }
+  - { text: "{{ ip.pc1.rsplit('.', 1)[1] }}", under: 호스트 부분 }
+  - { text: "/{{ cidr.vlan10.split('/')[1] }}" }
+note: 어디까지가 어느 쪽인지 정하는 것이 마스크다
 ```
 
 | 표기 | 뜻 |
@@ -176,10 +179,14 @@ M1 의 결론은 "스위치를 늘려도 브로드캐스트 도메인은 하나"
 실무는 **둘을 같이 씁니다.** VLAN 으로 쪼개고, 그 VLAN 들을 라우터 하나에 태그로 몰아넣습니다.
 이 랩의 구성이 정확히 그것입니다 — **router-on-a-stick**.
 
-```
-pc1 ─(untagged)─ eth1 ┐                        ┌ eth1.10  {{ gw.vlan10 }}
-                       sw1 ─ eth3 ══trunk══ eth1 r1
-pc2 ─(untagged)─ eth2 ┘  (VLAN {{ vlans[10].id }},{{ vlans[20].id }} 태그)   └ eth1.20  {{ gw.vlan20 }}
+```labdiagram
+kind: mini
+cols: [[pc1, pc2], sw1, r1]
+links:
+  - { label: untagged, sub: "eth1 · eth2" }
+  - { label: "트렁크  eth3 ↔ eth1", sub: "VLAN {{ vlans[10].id }},{{ vlans[20].id }} 태그", tone: warn }
+marks:
+  r1: ["eth1.10  {{ gw.vlan10 }}", "eth1.20  {{ gw.vlan20 }}"]
 ```
 
 **포트의 세 가지 성격**
@@ -192,11 +199,15 @@ pc2 ─(untagged)─ eth2 ┘  (VLAN {{ vlans[10].id }},{{ vlans[20].id }} 태�
 
 **802.1Q 태그**는 이더넷 프레임 안에 4바이트를 끼워 넣습니다.
 
-```
-┌──────────┬──────────┬─────────────────┬───────┬─────────┐
-│ 목적지MAC │ 출발지MAC │ 802.1Q (4바이트) │ 타입   │ 데이터   │
-└──────────┴──────────┴────────┬────────┴───────┴─────────┘
-                                └ 여기에 VLAN 번호(12비트) → 최대 4094개
+```labdiagram
+kind: fields
+cells:
+  - { label: 목적지 MAC }
+  - { label: 출발지 MAC }
+  - { label: 802.1Q, sub: 4바이트, tone: warn }
+  - { label: 타입 }
+  - { label: 데이터, grow: 2, tone: soft }
+callout: { at: 2, text: "여기에 VLAN 번호(12비트) → 최대 4094개" }
 ```
 
 > **Native VLAN 은 왜 미사용 번호로 두는가?**
@@ -209,10 +220,13 @@ pc2 ─(untagged)─ eth2 ┘  (VLAN {{ vlans[10].id }},{{ vlans[20].id }} 태�
 
 PC 는 패킷을 보내기 전에 **자기 안에서** 판단합니다. 아무에게도 묻지 않습니다.
 
-```
-목적지가 내 대역인가?  (내 IP & 마스크  ==  목적지 IP & 마스크)
-   ├─ 예    → 목적지에게 직접. ARP 로 목적지 MAC 을 구한다
-   └─ 아니오 → 게이트웨이에게. ARP 로 **게이트웨이의** MAC 을 구한다
+```labdiagram
+kind: branch
+root: 목적지가 내 대역인가?
+sub: "(내 IP & 마스크  ==  목적지 IP & 마스크)"
+items:
+  - { label: 예, lines: ["목적지에게 직접. ARP 로 목적지 MAC 을 구한다"] }
+  - { label: 아니오, lines: ["게이트웨이에게. ARP 로 **게이트웨이의** MAC 을 구한다"] }
 ```
 
 그래서 **마스크가 틀리면 판단부터 틀어집니다.** 이것이 M2 장애의 절반입니다.
@@ -238,10 +252,15 @@ default via {{ gw.vlan10 }} dev eth1  ← 그 외 전부: 게이트웨이로
 | ARP 상대 | 상대 PC | **게이트웨이** |
 | `ip neigh` 에 남는 것 | 상대 PC | **게이트웨이만** |
 
-```
-pc1 ──────────────── r1 ──────────────── pc2
-   dst MAC = r1          dst MAC = pc2        ← MAC 은 홉마다 새로 쓰인다
-   dst IP  = pc2         dst IP  = pc2        ← IP 는 끝까지 그대로
+```labdiagram
+kind: mini
+cols: [pc1, r1, pc2]
+links:
+  - { label: "dst MAC = r1", sub: "dst IP = pc2" }
+  - { label: "dst MAC = pc2", sub: "dst IP = pc2" }
+notes:
+  - MAC 은 홉마다 새로 쓰인다
+  - IP 는 끝까지 그대로
 ```
 
 - **IP 주소는 엔드투엔드** — 최종 목적지를 가리킵니다. 경로 내내 바뀌지 않습니다
@@ -266,9 +285,12 @@ pc1 ──────────────── r1 ────────
 
 **① 과 ③ 이 브로드캐스트입니다.** 그리고 브로드캐스트는 **라우터를 넘지 못합니다**(M1).
 
-```
-[VLAN{{ vlans[10].id }} 사용자]  ──X──  라우터  ──────  [서버망의 DHCP 서버]
-        Discover 가 여기서 멈춘다
+```labdiagram
+kind: mini
+cols: ["VLAN{{ vlans[10].id }} 사용자", 라우터, 서버망 DHCP]
+links:
+  - { label: "✗ 여기서 막힌다", sub: Discover 가 넘어가지 못한다, tone: warn }
+  - {}
 ```
 
 그래서 라우터가 대신 전달해 줍니다. 이것이 **DHCP 릴레이**(Cisco 에서는 `ip helper-address`)다.

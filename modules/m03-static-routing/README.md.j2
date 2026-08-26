@@ -178,10 +178,18 @@ AD 를 일부러 높게 준 정적 경로를 **floating static** 이라 합니�
 
 **M3 에서 가장 중요한 개념입니다.**
 
-```
-pc1 ──①──> r1 ──②──> r2 ──③──> r4 ──④──> web
-                                              │
-web ──⑤──> r4 ──⑥──> r2 ──⑦──> r1 ──⑧──> pc1
+```labdiagram
+kind: seq
+actors: [pc1, r1, r2, r4, web]
+steps:
+  - { n: "①", from: pc1, to: r1 }
+  - { n: "②", from: r1, to: r2 }
+  - { n: "③", from: r2, to: r4 }
+  - { n: "④", from: r4, to: web, note: 여기까지가 가는 길 }
+  - { n: "⑤", from: web, to: r4 }
+  - { n: "⑥", from: r4, to: r2 }
+  - { n: "⑦", from: r2, to: r1 }
+  - { n: "⑧", from: r1, to: pc1, note: 여기까지가 오는 길 }
 ```
 
 ①~④ 만 설정하면 **요청은 도착합니다.** 그런데 응답이 돌아오지 못합니다.

@@ -7,6 +7,7 @@
 
 usage:  python3 tools/render-modules.py [--lab 1] [--module m01]
 """
+import re
 import shutil
 import sys
 import yaml
@@ -15,6 +16,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import labdesign as L
+import diagramsvg
 
 SRC = L.ROOT / "modules"
 OUT = L.ROOT / "dist/modules"
@@ -30,6 +32,29 @@ def _protect(path):
         path.chmod(0o600 if path.name in SECRET else 0o644)
     except OSError:
         pass
+
+
+DIAGRAM = re.compile(r"```labdiagram\n(.*?)```", re.S)
+
+
+def _diagrams(text, dst):
+    """```labdiagram 블록을 SVG 파일로 빼고 그림 링크만 남긴다.
+
+    화면에서는 콘솔이 같은 코드로 인라인 SVG 를 그린다. 오프라인 문서에는
+    YAML 덩어리를 남길 수 없고, 인라인 SVG 를 넣으면 마크다운 뷰어가 대부분
+    지워 버린다 — 파일로 빼서 그림으로 거는 것이 어디서나 보인다.
+    """
+    seq = [0]
+
+    def swap(m):
+        i = seq[0]
+        seq[0] += 1
+        d = dst / "diagrams"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{i}.svg").write_text(diagramsvg.render(m.group(1)), encoding="utf-8")
+        return f"![구성도](diagrams/{i}.svg)"
+
+    return DIAGRAM.sub(swap, text)
 
 
 def module_dirs():
@@ -52,7 +77,8 @@ def render(lab_id=1, only=None):
         for f in sorted(d.iterdir()):
             if f.suffix == ".j2":
                 out = dst / f.stem
-                out.write_text(env.get_template(f.name).render(**ctx), encoding="utf-8")
+                out.write_text(_diagrams(env.get_template(f.name).render(**ctx), dst),
+                               encoding="utf-8")
                 _protect(out)
             elif f.name != "meta.yml":
                 shutil.copy2(f, dst / f.name)

@@ -37,7 +37,7 @@ sys.path.insert(0, str(HERE.parent / "tools"))
 import labdesign as L          # noqa: E402
 import preflight              # noqa: E402  (tools/ — make doctor 와 같은 검사)
 import assess, auth, autokey, db, docs, exam, jobs, passwords, pve, sshkeys, state, topology_svg  # noqa: E402
-import topodrawio  # noqa: E402  (tools/ — topology_svg 가 경로를 먼저 넣는다)
+import topodrawio, diagramdrawio  # noqa: E402  (tools/ — topology_svg 가 경로를 먼저 넣는다)
 
 db.init()   # 스키마 생성 + (있다면) 예전 YAML 계정 이관
 pve.sync()  # DB 에 저장된 Proxmox 접속 정보를 var/runtime.yml 로 다시 내보낸다
@@ -754,6 +754,30 @@ async def topology(request: Request, stage: str = "m10"):
     if stage not in L.STAGES:
         stage = "m10"
     return HTMLResponse(topology_svg.render(stage), media_type="image/svg+xml")
+
+
+@app.get("/diagram.drawio")
+async def diagram_drawio(request: Request, module: str = "", n: int = 0):
+    """교재 안의 구성도 하나를 draw.io 파일로 내려준다.
+
+    화면에 뜬 SVG 와 같은 배치에서 나온다 (tools/diagram.py). 어느 그림인지는
+    모듈 + 그 안에서 몇 번째인가로 가리킨다 — 그림에 이름을 따로 붙이면
+    교재를 고칠 때마다 이름도 맞춰야 한다.
+    """
+    user, redir = require(request)
+    if redir:
+        return redir
+    mod = docs.get(module)
+    if not mod:
+        return PlainTextResponse("없는 모듈입니다", status_code=404)
+    specs = docs.diagram_specs(mod, pick_lab(user, None) or 1)
+    if not 0 <= n < len(specs):
+        return PlainTextResponse("없는 구성도입니다", status_code=404)
+    return PlainTextResponse(
+        diagramdrawio.drawio(specs[n], f"{mod['id'].upper()} 구성도 {n + 1}"),
+        media_type="application/xml",
+        headers={"Content-Disposition":
+                 f'attachment; filename="{mod["id"]}-diagram-{n + 1}.drawio"'})
 
 
 @app.get("/topology.drawio")

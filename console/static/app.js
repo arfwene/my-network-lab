@@ -159,18 +159,24 @@
   //  토폴로지 SVG 는 선이 가늘어 작게 나오면 읽을 수 없다. 원본을 복제해 띄운다 —
   //  옮기면 원래 자리가 비고, 닫을 때 되돌려 놓는 일이 남는다.
   const lb = $('#lightbox');
-  function zoom(el, stage) {
+  function zoom(el, href) {
     if (!lb) return;
     const inner = lb.querySelector('.lb-inner');
     inner.innerHTML = '';
     inner.appendChild(el.cloneNode(true));
-    // 토폴로지일 때만 내려받기를 연다. 교재 안의 일반 그림은 받을 것이 없다.
+    // 우리가 그린 그림에만 내려받기를 연다. 교재에 끼워 넣은 일반 그림은 받을 것이 없다.
     const dl = lb.querySelector('.lb-dl');
-    if (dl) {
-      if (stage) dl.href = '/topology.drawio?stage=' + encodeURIComponent(stage);
-      dl.hidden = !stage;
-    }
+    if (dl) { if (href) dl.href = href; dl.hidden = !href; }
     lb.hidden = false;
+  }
+  //  토폴로지는 단계로, 교재 구성도는 '모듈:몇 번째' 로 가리킨다.
+  function diaHref(el) {
+    if (el.dataset.stage) return '/topology.drawio?stage=' + encodeURIComponent(el.dataset.stage);
+    if (el.dataset.dia) {
+      const [m, n] = el.dataset.dia.split(':');
+      return '/diagram.drawio?module=' + encodeURIComponent(m) + '&n=' + encodeURIComponent(n);
+    }
+    return '';
   }
   function unzoom() { if (lb) { lb.hidden = true; lb.querySelector('.lb-inner').innerHTML = ''; } }
   document.addEventListener('click', e => {
@@ -181,9 +187,8 @@
       if (!e.target.closest('.lb-inner') || e.target.closest('.lb-close')) unzoom();
       return;
     }
-    const pic = e.target.closest('.topo-wrap, .topo-box, .doc img');
-    if (pic) zoom(pic.matches('img') ? pic : (pic.querySelector('svg') || pic),
-                  pic.dataset.stage || '');
+    const pic = e.target.closest('.topo-wrap, .topo-box, .dia-wrap, .doc img');
+    if (pic) zoom(pic.matches('img') ? pic : (pic.querySelector('svg') || pic), diaHref(pic));
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') unzoom(); });
 

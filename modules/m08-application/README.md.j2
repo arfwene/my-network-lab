@@ -225,20 +225,27 @@ FTP 는 **제어 채널과 데이터 채널이 분리**돼 있습니다. 이것�
 
 **Active 모드**
 
-```
-①  pc1 ────── 제어 21 ──────> ftp        클라이언트가 건다 (정상)
-②  pc1 ── "PORT 나 41500" ──> ftp        내 포트를 알려 준다
-③  pc1 <────── 데이터 ──────── ftp        **서버가 클라이언트로 건다** ← 역방향!
-                                          (서버의 출발지 포트는 20)
+```labdiagram
+kind: seq
+actors: [pc1, ftp]
+steps:
+  - { n: "①", from: pc1, to: ftp, label: 제어 21, note: 클라이언트가 건다 (정상) }
+  - { n: "②", from: pc1, to: ftp, label: '"PORT 나 41500"', note: 내 포트를 알려 준다 }
+  - { n: "③", from: ftp, to: pc1, label: 데이터, tone: warn,
+      note: 서버가 클라이언트로 건다 — 역방향 (서버의 출발지 포트는 20) }
 ```
 
 **Passive 모드**
 
-```
-①  pc1 ────── 제어 21 ──────> ftp        클라이언트가 건다
-②  pc1 ─────── "PASV" ──────> ftp
-③  pc1 <── "227 (…,195,80)" ─ ftp        "{{ services.ftp.passive_range.split('-')[0] }} 번으로 오세요"
-④  pc1 ────── 데이터 ───────> ftp        **클라이언트가 건다** (정상 방향)
+```labdiagram
+kind: seq
+actors: [pc1, ftp]
+steps:
+  - { n: "①", from: pc1, to: ftp, label: 제어 21, note: 클라이언트가 건다 }
+  - { n: "②", from: pc1, to: ftp, label: '"PASV"' }
+  - { n: "③", from: ftp, to: pc1, label: '"227 (…,195,80)"',
+      note: '"{{ services.ftp.passive_range.split("-")[0] }} 번으로 오세요"' }
+  - { n: "④", from: pc1, to: ftp, label: 데이터, note: 클라이언트가 건다 (정상 방향) }
 ```
 
 > **`227` 응답의 괄호 안 숫자 읽는 법**
@@ -292,20 +299,15 @@ curl http://web.{{ dns.zone }}/
 | ④ | 연결 수립 | 전송 | SYN → SYN-ACK → ACK | M6 |
 | ⑤ | 요청·응답 | 응용 | `GET / HTTP/1.1` + `Host:` → `200 OK` | M8 |
 
-```
- curl http://web.lab.local/
-      │
-      ├─① DNS 질의 ─────────────▶ {{ ip.dns }}    "이름이 뭐라고?"
-      │   ◀──────────────────── {{ ip.web }}
-      │
-      ├─② 라우팅 결정            "내 대역 밖이네 → 게이트웨이로"
-      │
-      ├─③ ARP ──브로드캐스트──▶  "{{ gw.vlan10 }} 누구?"
-      │   ◀──유니캐스트────────  "나야, MAC 은 …"
-      │
-      ├─④ TCP  SYN ─▶ ◀─ SYN-ACK  ─▶ ACK
-      │
-      └─⑤ HTTP GET ─▶ ◀─ 200 OK
+```labdiagram
+kind: branch
+root: curl http://web.lab.local/
+items:
+  - { label: "① DNS 질의", lines: ["→ {{ ip.dns }}   \"이름이 뭐라고?\"", "← {{ ip.web }}"] }
+  - { label: "② 라우팅 결정", lines: ["\"내 대역 밖이네 → 게이트웨이로\""] }
+  - { label: "③ ARP", lines: ["→ 브로드캐스트  \"{{ gw.vlan10 }} 누구?\"", "← 유니캐스트    \"나야, MAC 은 …\""] }
+  - { label: "④ TCP", lines: ["SYN → · ← SYN-ACK · ACK →"] }
+  - { label: "⑤ HTTP", lines: ["GET → · ← 200 OK"] }
 ```
 
 **진단에서 이 순서가 하는 일**

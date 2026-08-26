@@ -132,15 +132,15 @@ pc2 → web  됨        ← 이 한 줄이 지운 것:
 
 **아래가 깨져 있으면 위는 볼 필요조차 없습니다.** 순서를 지킵니다.
 
-```
-① 링크        살아 있는가          ip -br link · ip -br addr
-      │        아니면 → 물리·설정 문제. 여기서 끝.
-      ▼
-② L3 도달     상대까지 가는가       ping · traceroute · ip route
-      │        아니면 → 경로 문제. 어느 홉에서 끊기는지 본다.
-      ▼
-③ 서비스      포트가 응답하는가      telnet · curl · ss · dig
-               아니면 → 서비스·정책 문제. M6 감별표로 넘어간다.
+```labdiagram
+kind: checks
+items:
+  - { n: "①", title: 링크, ask: 살아 있는가, tool: "ip -br link · ip -br addr",
+      fail: 물리·설정 문제. 여기서 끝. }
+  - { n: "②", title: L3 도달, ask: 상대까지 가는가, tool: "ping · traceroute · ip route",
+      fail: 경로 문제. 어느 홉에서 끊기는지 본다. }
+  - { n: "③", title: 서비스, ask: 포트가 응답하는가, tool: "telnet · curl · ss · dig",
+      fail: 서비스·정책 문제. M6 감별표로 넘어간다. }
 ```
 
 **각 단계에서 무엇을 보는가**

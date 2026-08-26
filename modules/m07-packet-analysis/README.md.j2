@@ -179,9 +179,10 @@ tcpdump -i eth1 -e -nn 'icmp'               # access 포트
 
 **패킷이 사라지는 구간을 특정하는 유일한 방법입니다.**
 
-```
-pc1 ──── r1 ──── r2 ──── r4 ──── web
- ①              ②              ③
+```labdiagram
+kind: mini
+cols: [pc1, r1, r2, r4, web]
+marks: { pc1: ["①"], r2: ["②"], web: ["③"] }
 ```
 
 세 곳에서 **동시에** 뜨고, 같은 패킷을 찾아 대조합니다.
