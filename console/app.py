@@ -204,7 +204,8 @@ def base_ctx(request, user, lab_id):
         "unlocked": unlocked,
         "lab_state": st,
         "busy": runner.busy(lab_id),
-        "scenarios": jobs.scenario_ids(),
+        # 코드만 나열하면 무엇을 고를지 알 수 없다 — 증상과 단계를 함께 싣는다.
+        "scenarios": jobs.scenario_menu(st.get("stage")),
         "site_name": L.SITE["site"]["name"],
         "health": pve.last(),          # 마지막 점검 결과. 화면은 즉시 뜨고 JS 가 갱신한다
         "pve": pve.public(),
@@ -871,6 +872,19 @@ async def action(request: Request, lab: int = Form(...), action: str = Form(...)
         except ValueError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
         secret = True          # 로그에 시나리오 이름이 찍힌다. 응시자에게는 가린다.
+    # 랩 단계보다 위의 시나리오는 없는 장비를 대상으로 돌아 그냥 실패한다.
+    # 화면은 잠가 두지만 그건 화면일 뿐이므로 여기서도 막는다.
+    if action in ("break", "fix") and scenario:
+        st0 = state.load(lab)
+        want = next((s for s in jobs.scenario_menu(st0.get("stage"))
+                     if s["id"] == scenario), None)
+        if want and want["locked"]:
+            return JSONResponse(
+                # 조사는 시나리오 번호에 붙이지 않는다 — -01 은 "일"(은), -05 는 "오"(는)라
+                # 끝자리마다 달라진다. 고정된 명사 뒤에 붙인다.
+                {"error": f"{scenario} 시나리오는 랩이 {want['stage'].upper()} 단계여야 돌아갑니다. "
+                          f"먼저 그 모듈에서 [이 모듈 적용] 을 눌러 주세요."},
+                status_code=400)
     if action == "drill-check":
         # 어느 모듈의 검사로 판정할지는 **서버가 정한다.** 화면이 보내는 값을 믿으면
         # 검사 항목이 적은 모듈을 골라 통과시킬 수 있다.

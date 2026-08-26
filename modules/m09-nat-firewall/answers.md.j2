@@ -222,7 +222,7 @@ IPv4 에서 NAT 가 막아 주던 것은 **부작용**이었고, IPv6 에서는 
   - 처방을 물으면 재기동이 아니라 **keepalive** 라고 답해야 한다
   - 캡스톤 풀에는 넣지 않았다 — 검사가 짧은 요청뿐이라 이 장애를 감지하지 못한다
 
-> 복구: `make fix LAB=<N> SCENARIO=m09-0X`.
+> 복구: **[장애 연습]** 에서 그 시나리오를 골라 **[복구]**.
 > 경계가 꼬이면 edge 에서 `sudo nft -f /etc/nftables.conf` (파일 첫 줄이 `flush ruleset`).
 
 ---

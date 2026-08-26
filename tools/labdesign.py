@@ -714,4 +714,9 @@ def doc_context(lab_id=1, stage="m10"):
         "bcast": {k: str(ipaddress.ip_network(v["cidr"]).broadcast_address)
                   for k, v in segs.items()},
         "fake_mac": "52:54:00:de:ad:01",
+        # 중간 점검이 놓인 단계. 교재가 "M3 · M6" 을 손으로 적지 않게 한다 —
+        # config/site.yml 에서 지점을 옮기면 교재도 따라 바뀌어야 하기 때문.
+        "checkpoints": [c["stage"].upper()
+                        for c in SITE.get("console", {}).get("drill", {})
+                        .get("checkpoints", [])],
     }

@@ -217,6 +217,10 @@ a.mod{text-decoration:none;color:var(--ink)}
 .doc hr{border:0;border-top:1px solid var(--line);margin:2em 0}
 .notice{padding:14px;background:var(--code-bg);border-radius:var(--r-md);color:var(--muted)}
 
+/* 장애 연습 — 고르기 전에 무엇을 고르는 것인지 알려 주는 줄 */
+.note.pick{margin:2px 0 6px}
+#scenario option:disabled{color:var(--faint)}
+
 /* ---------- 토폴로지 SVG ----------
    글자 크기는 캔버스가 아니라 "화면에 보이는 크기" 기준으로 잡는다.
    교재 칸은 700~860px 인데 캔버스가 그보다 넓으면 그만큼 줄어들어,

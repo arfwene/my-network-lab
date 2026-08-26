@@ -402,8 +402,8 @@ sudo vtysh -c 'show running-config' | diff /tmp/r1-before.conf - && echo "원상
 둘 다 백업 경로 인접이 서지 않고, 통신은 정상입니다.
 
 ```bash
-# 교육 담당자가 둘 중 하나를 주입한다 (무엇인지 알려주지 않는다)
-# 체크리스트를 순서대로 밟아 구분해 볼 것:
+# [장애 연습] 에서 m04-01 과 m04-04 를 차례로 주입해 본다.
+# 어느 쪽인지 알고 시작해도 된다 — 여기서 익히는 것은 답이 아니라 가르는 순서다.
 
 sudo vtysh -c 'show ip ospf interface eth3'
 #   ① Area 번호가 상대와 같은가          -> Area

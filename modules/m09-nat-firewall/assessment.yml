@@ -333,7 +333,7 @@ checks:
       expect: "1"
       hint: |
         이 줄이 없으면 227 응답에 **사설 IP** 가 실려 나가 외부 클라이언트가 데이터 채널을 못 엽니다.
-        make fix LAB=<N> SCENARIO=m09-04  또는  make config LAB=<N> STAGE=m9
+        [장애 연습] 에서 m09-04 를 골라 [복구], 또는 [이 모듈 적용].
 
 written:
   items:

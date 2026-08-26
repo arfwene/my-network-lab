@@ -213,7 +213,7 @@ checks:
       expect: "0"
       hint: |
         sudo nft delete table inet labtest
-        (장애 주입이면 make fix LAB=<N> SCENARIO=m06-01)
+        (장애 주입이면 [장애 연습] 에서 m06-01 을 골라 [복구])
         규칙이 남으면 다음 모듈 내내 "가끔 안 되는" 상태가 됩니다.
 
     - id: no-temp-listeners
@@ -245,7 +245,7 @@ checks:
       expect: "0"
       hint: |
         장애 주입 m06-03 은 프로세스를 죽이지 않고 **멈춰** 둡니다 (연결은 되는데 응답이 없습니다).
-        sudo pkill -CONT -x nginx  또는  make fix LAB=<N> SCENARIO=m06-03
+        sudo pkill -CONT -x nginx  또는  [장애 연습] 에서 m06-03 을 골라 [복구]
 
 written:
   items:

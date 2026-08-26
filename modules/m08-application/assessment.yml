@@ -171,7 +171,7 @@ checks:
       expect_all: ["{{ dns.server }}", "{{ dns.zone }}"]
       hint: |
         M8 부터 이름 해석이 켜집니다. 없으면 이 단계 설정이 안 올라온 것입니다.
-        make config LAB=<N> STAGE=m8
+        [이 모듈 적용] 을 누르면 들어갑니다.
 
     - id: dns-a-record
       kind: connectivity
@@ -243,7 +243,7 @@ checks:
       expect: "1"
       hint: |
         장애 주입 m08-04 를 복구하지 않았을 수 있습니다.
-        make fix LAB=<N> SCENARIO=m08-04  또는  make config LAB=<N> STAGE=m8
+        [장애 연습] 에서 m08-04 를 골라 [복구], 또는 [이 모듈 적용].
 
 written:
   items:

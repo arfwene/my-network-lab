@@ -120,6 +120,29 @@ def scenario_ids():
 _DOC_KEY = re.compile(r"^#\s{2,}(증상|정답|노림수)\s*:\s*(.*)$")
 
 
+def scenario_menu(lab_stage=None):
+    """시나리오 목록 + 증상 한 줄 + 지금 랩에서 쓸 수 있는가.
+
+    화면에는 `m03-01` 같은 코드만 나왔다. 그 코드가 무슨 증상인지는 교재 5장에만
+    있어서, 실행 패널만 보는 사람은 무엇을 고를지 알 길이 없었다. 증상은 시나리오
+    파일 머리말이 이미 갖고 있다 — **증상만** 꺼내 온다 (정답은 같은 머리말에 있지만
+    가져오지 않는다).
+
+    단계도 함께 본다. 랩이 M1 인데 목록에 m09-01 이 보이면 고를 수 있고, 고르면
+    edge 도 inet 도 없는 인벤토리에 대고 돌아 그냥 실패한다.
+    """
+    out = []
+    for sid in scenario_ids():
+        mod = sid.split("-")[0]                     # m03-01 -> m03
+        stage = "m" + str(int(mod[1:]))             # m03 -> m3
+        sym = re.sub(r"\*\*", "", scenario_doc(sid).get("증상", ""))
+        if len(sym) > 52:
+            sym = sym[:51].rstrip(" ,.") + "…"
+        out.append({"id": sid, "module": mod, "stage": stage, "symptom": sym,
+                    "locked": not (lab_stage and L.stage_le(stage, lab_stage))})
+    return out
+
+
 def scenario_doc(sid):
     """{'증상': ..., '정답': ..., '노림수': ...}. 없으면 빈 dict."""
     f = L.ROOT / "scenarios" / f"{sid}.yml"
