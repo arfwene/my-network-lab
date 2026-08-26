@@ -14,7 +14,7 @@
   --ok:#0070f3;
   --code-bg:#f2f2f2; --log-bg:#171717; --log-ink:#ededed;
   --n-host:#dbeafe; --n-switch:#dcfce7; --n-router:#fef3c7; --n-server:#ede9fe; --n-edge:#fee2e2;
-  --zone:#00000006; --zone-line:#00000012;
+  --zone:#00000006; --zone-line:#00000024; --n-line:#0000004d; --topo-link:#00000059;
   /* --- 모서리. 기능 크롬은 6px, 콘텐츠 카드는 12px --- */
   --r-sm:6px; --r-md:12px; --r-lg:16px;
   --shadow-1:0 1px 1px rgba(0,0,0,.04);
@@ -34,7 +34,7 @@
     --ok:#3291ff;
     --code-bg:#171717; --log-bg:#0a0a0a; --log-ink:#ededed;
     --n-host:#1e3a5f; --n-switch:#14532d; --n-router:#5c4813; --n-server:#3b2f63; --n-edge:#5b2222;
-    --zone:#ffffff08; --zone-line:#ffffff14;
+    --zone:#ffffff08; --zone-line:#ffffff26; --n-line:#ffffff59; --topo-link:#ffffff66;
     --shadow-1:0 1px 1px rgba(0,0,0,.3);
     --shadow-2:0 2px 2px rgba(0,0,0,.3),0 8px 16px -4px rgba(0,0,0,.5);
   }
@@ -217,23 +217,43 @@ a.mod{text-decoration:none;color:var(--ink)}
 .doc hr{border:0;border-top:1px solid var(--line);margin:2em 0}
 .notice{padding:14px;background:var(--code-bg);border-radius:var(--r-md);color:var(--muted)}
 
-/* ---------- 토폴로지 SVG ---------- */
+/* ---------- 토폴로지 SVG ----------
+   글자 크기는 캔버스가 아니라 "화면에 보이는 크기" 기준으로 잡는다.
+   교재 칸은 700~860px 인데 캔버스가 그보다 넓으면 그만큼 줄어들어,
+   10px 로 적어도 화면에서는 6px 이 된다. min-width 로 바닥을 두고
+   그 아래로는 줄이는 대신 가로로 넘긴다 — 찌그러뜨리는 것보다 낫다. */
 .topo-box{background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);padding:8px}
 .topo-wrap{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--r-md);
-  padding:10px;margin:1.2em 0;overflow-x:auto}
-svg.topo{width:100%;height:auto;display:block}
-svg.topo .zone{fill:var(--zone);stroke:var(--zone-line)}
-svg.topo .zone-label{fill:var(--muted);font-size:9px;font-family:inherit}
-svg.topo .link{fill:none;stroke:var(--muted);stroke-width:1.4;opacity:.65}
-svg.topo .if{fill:var(--muted);font-size:7.5px;font-family:ui-monospace,monospace}
-svg.topo .if-r{text-anchor:end}
-svg.topo .node rect{stroke:var(--line);stroke-width:1}
-svg.topo .node.hl rect{stroke:var(--accent);stroke-width:2.5}
-svg.topo .n-name{text-anchor:middle;dominant-baseline:middle;fill:#16191d;
-  font-size:12px;font-weight:600;font-family:inherit}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]) svg.topo .n-name{fill:#e6eaf0}
-}
+  padding:14px 12px;margin:1.4em 0;overflow-x:auto}
+svg.topo{display:block;font-family:inherit}
+.topo-wrap svg.topo{width:auto;height:auto;max-width:none}   /* 원본 크기 유지 */
+.topo-box svg.topo{width:100%;height:auto;max-width:100%}    /* 옆 칸은 축소판 */
+
+svg.topo .zone{fill:var(--zone);stroke:var(--zone-line);stroke-dasharray:5 4}
+svg.topo .zone-label{fill:var(--muted);font-size:12px;font-weight:600;letter-spacing:-.01em}
+svg.topo .zone-cidr{fill:var(--faint);font-size:11px;
+  font-family:ui-monospace,SFMono-Regular,monospace}
+
+svg.topo .link{fill:none;stroke:var(--topo-link);stroke-width:1.6;
+  stroke-linejoin:round;stroke-linecap:round}
+/* 대역 이름은 선 위에 올라가므로 배경색 테두리로 선을 지우고 앉는다 */
+svg.topo .seg{fill:var(--body);font-size:10.5px;text-anchor:middle;
+  font-family:ui-monospace,SFMono-Regular,monospace;
+  paint-order:stroke;stroke:var(--code-bg);stroke-width:3.5px;stroke-linejoin:round}
+svg.topo .if{fill:var(--faint);font-size:10px;font-family:ui-monospace,SFMono-Regular,monospace}
+svg.topo .n-name{text-anchor:middle;fill:var(--ink);font-size:12.5px;font-weight:600}
+/* 단말 아래에 붙는 액세스 구간 설명 (VLAN · 대역) */
+svg.topo .n-cap{text-anchor:middle;fill:var(--muted);font-size:10.5px;
+  font-family:ui-monospace,SFMono-Regular,monospace}
+
+/* 장비 그림 — 본체는 역할색, 안쪽 장식은 테두리색 */
+svg.topo .node>g>*{fill:var(--f);stroke:var(--n-line);stroke-width:1.2;stroke-linejoin:round}
+svg.topo .node>g>.sub{fill:var(--n-line);stroke:none}
+svg.topo .node>g>.ico{fill:none;stroke:var(--n-line);stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+svg.topo .node>g>.brick{fill:none;stroke:var(--n-line);stroke-width:.9;opacity:.6}
+svg.topo .node.hl>g>*{stroke:var(--accent);stroke-width:2.4}
+svg.topo .node.hl .n-name{fill:var(--accent)}
 
 /* ---------- 상태 · 실행 ---------- */
 .status-grid{display:flex;flex-direction:column;gap:7px;font-size:12px}
@@ -546,6 +566,9 @@ pre.code{background:var(--code-bg);padding:14px 16px;border-radius:var(--r-md);o
              border: 1px solid #ccc; background: #fafafa; color: #000; }
   .doc h2 { page-break-before: auto; }
   .doc h2, .doc h3 { page-break-after: avoid; }
+  /* 종이는 넘길 수 없다. 인쇄할 때만 폭에 맞춰 줄인다. */
+  .topo-wrap { overflow: visible; page-break-inside: avoid; }
+  .topo-wrap svg.topo { width: 100%; height: auto; max-width: 100%; }
   a[href^="/"]::after { content: ""; }   /* 내부 링크 주소는 인쇄에 필요 없다 */
 }
 

@@ -1,122 +1,134 @@
 """
-토폴로지를 인라인 SVG 로 그린다.
+토폴로지를 인라인 SVG 로 그린다. 배치는 tools/topolayout.py 가 계산한다.
 
 Mermaid.js 를 쓰지 않는 이유: 랩 서버는 폐쇄망일 수 있고, CDN 에 의존하면 그림이 안 뜬다.
-설계 데이터(labdesign)에서 직접 그리면 의존성이 0 이 된다.
+설계 데이터에서 직접 그리면 의존성이 0 이 된다.
+
+▸ 왜 장비마다 모양이 다른가
+  예전에는 전부 같은 둥근 사각형이었고 채움색만 달랐다. 그러면 인쇄하거나
+  색약이면 라우터와 PC 가 같은 그림이 된다. 실루엣으로 구분하면 색이 없어도 읽힌다.
+
+▸ 색은 CSS 변수로 둔다
+  화면이 밝은 모드 · 어두운 모드를 오가기 때문. 색을 SVG 에 박으면 어두운 모드에서
+  흰 상자가 뜬다.
 """
 import sys
-from collections import deque
 from pathlib import Path
 from xml.sax.saxutils import escape
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
-import labdesign as L
+import topolayout as T
 
-ROLE_STYLE = {
-    "host":   {"fill": "var(--n-host)",   "shape": "round", "label": "PC"},
-    "switch": {"fill": "var(--n-switch)", "shape": "rect",  "label": "SW"},
-    "router": {"fill": "var(--n-router)", "shape": "circle", "label": "R"},
-    "server": {"fill": "var(--n-server)", "shape": "round", "label": "SRV"},
-    "edge":   {"fill": "var(--n-edge)",   "shape": "hex",   "label": "FW"},
-}
-ZONE_LABEL = {"site-a": "Site-A · 지사", "core": "Core · 백본",
-              "site-b": "Site-B · 데이터센터", "edge": "Edge · 인터넷 경계"}
-
-COL_W, ROW_H, PAD_X, PAD_Y = 150, 74, 70, 54
-BOX_W, BOX_H = 84, 34
+FILL = {"host": "var(--n-host)", "switch": "var(--n-switch)", "router": "var(--n-router)",
+        "server": "var(--n-server)", "edge": "var(--n-edge)"}
 
 
-def _layout(stage):
-    """왼쪽(사용자) → 오른쪽(외부) 흐름으로 열을 잡는다. 열 = 시작점으로부터의 홉 수."""
-    nodes = [n for n in L.TOPO["nodes"] if L.stage_le(n["stage"], stage)]
-    names = {n["name"] for n in nodes}
-    adj = {n: set() for n in names}
-    for br, (a, _), (b, _) in L.links_at(1, stage):
-        adj[a].add(b)
-        adj[b].add(a)
+# --------------------------------------------------------------- 장비 그림
+#  각 함수는 (0,0) 기준 gw x gh 안에 그린다. 채움 · 선은 바깥에서 group 이 준다.
+def _pc(w, h):
+    sc, nk, bs = h - 10, 5, 5          # 화면 / 목 / 받침
+    return (f'<rect x="0" y="0" width="{w}" height="{sc}" rx="2.5"/>'
+            f'<rect x="{w/2-5:.1f}" y="{sc}" width="10" height="{nk}" class="sub"/>'
+            f'<rect x="{w/2-15:.1f}" y="{sc+nk}" width="30" height="{bs}" rx="2" class="sub"/>')
 
-    starts = [n["name"] for n in nodes if n["zone"] == "site-a" and n["role"] == "host"] \
-        or [nodes[0]["name"]]
-    depth = {s: 0 for s in starts}
-    q = deque(starts)
-    while q:
-        cur = q.popleft()
-        for nb in sorted(adj[cur]):
-            if nb not in depth:
-                depth[nb] = depth[cur] + 1
-                q.append(nb)
-    for n in names:                      # 고립 노드
-        depth.setdefault(n, 0)
 
-    cols = {}
-    for n in sorted(names, key=lambda x: (depth[x], x)):
-        cols.setdefault(depth[n], []).append(n)
+def _switch(w, h):
+    body, port = h - 10, 7
+    ports = "".join(f'<rect x="{2+i*11}" y="{body+3}" width="7" height="{port}" rx="1" class="sub"/>'
+                    for i in range(6))
+    return f'<rect x="0" y="0" width="{w}" height="{body}" rx="3"/>{ports}'
 
-    pos, maxrows = {}, max((len(v) for v in cols.values()), default=1)
-    for c, members in cols.items():
-        for i, n in enumerate(members):
-            y = PAD_Y + (maxrows - len(members)) * ROW_H / 2 + i * ROW_H
-            pos[n] = (PAD_X + c * COL_W, y)
-    w = PAD_X * 2 + max(cols) * COL_W + BOX_W
-    h = PAD_Y * 2 + (maxrows - 1) * ROW_H + BOX_H
-    return nodes, pos, w, h
+
+def _router(w, h):
+    r, c = w / 2, w / 2
+    return (f'<circle cx="{c}" cy="{c}" r="{r}"/>'
+            f'<path class="ico" d="M{c-11},{c-6} H{c+7} M{c+3},{c-10} L{c+9},{c-6} L{c+3},{c-2}"/>'
+            f'<path class="ico" d="M{c+11},{c+6} H{c-7} M{c-3},{c+2} L{c-9},{c+6} L{c-3},{c+10}"/>')
+
+
+def _server(w, h):
+    slots = "".join(f'<rect x="6" y="{7+i*8}" width="{w-12}" height="4" rx="1" class="sub"/>'
+                    for i in range(3))
+    return (f'<rect x="0" y="0" width="{w}" height="{h}" rx="3"/>{slots}'
+            f'<circle cx="11" cy="{h-8}" r="2" class="sub"/>'
+            f'<circle cx="19" cy="{h-8}" r="2" class="sub"/>')
+
+
+def _firewall(w, h):
+    rows = h / 3
+    out = [f'<rect x="0" y="0" width="{w}" height="{h}" rx="3"/>']
+    for i in (1, 2):
+        out.append(f'<path class="brick" d="M0,{rows*i:.1f} H{w}"/>')
+    for i in range(3):
+        xs = (w / 3, w * 2 / 3) if i % 2 == 0 else (w / 6, w / 2, w * 5 / 6)
+        for x in xs:
+            out.append(f'<path class="brick" d="M{x:.1f},{rows*i:.1f} V{rows*(i+1):.1f}"/>')
+    return "".join(out)
+
+
+def _cloud(w, h):
+    return ('<path d="M8,33 C1,33 0,23 8,21 C8,10 22,6 28,14 '
+            'C33,7 45,9 45,18 C55,17 58,28 52,33 Z"/>')
+
+
+GLYPH_FN = {"pc": _pc, "switch": _switch, "router": _router,
+            "server": _server, "firewall": _firewall, "cloud": _cloud}
 
 
 def render(stage="m10", highlight=None, show_labels=True):
-    nodes, pos, w, h = _layout(stage)
-    by_name = {n["name"]: n for n in nodes}
-    out = [f'<svg viewBox="0 0 {w:.0f} {h:.0f}" class="topo" '
-           f'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="랩 토폴로지">']
+    d = T.layout(stage)
+    hl = set(highlight or ())
+    # 원본 크기를 그대로 들고 나간다. 칸이 좁다고 줄이면 글자가 못 읽는 크기가
+    # 되므로, 줄이는 대신 감싼 상자가 가로로 넘긴다 (눌러서 크게도 볼 수 있다).
+    out = [f'<svg viewBox="0 0 {d["w"]} {d["h"]}" width="{d["w"]}" height="{d["h"]}" '
+           f'class="topo" xmlns="http://www.w3.org/2000/svg" role="img" '
+           f'aria-label="랩 토폴로지 ({stage.upper()} 단계)">']
 
-    # 구역 배경
-    zones = {}
-    for n in nodes:
-        x, y = pos[n["name"]]
-        z = zones.setdefault(n["zone"], [x, y, x, y])
-        z[0], z[1] = min(z[0], x), min(z[1], y)
-        z[2], z[3] = max(z[2], x), max(z[3], y)
-    for zone, (x0, y0, x1, y1) in zones.items():
-        out.append(
-            f'<rect class="zone" x="{x0-24:.0f}" y="{y0-30:.0f}" '
-            f'width="{x1-x0+BOX_W+48:.0f}" height="{y1-y0+BOX_H+44:.0f}" rx="10"/>'
-            f'<text class="zone-label" x="{x0-16:.0f}" y="{y0-14:.0f}">'
-            f'{escape(ZONE_LABEL.get(zone, zone))}</text>')
+    # ---- 구역 상자. 제목은 링크가 지나가지 않는 쪽에 붙는다.
+    for z in d["zones"]:
+        # 좁은 구역(core)은 이름과 요약 대역이 한 줄에 못 들어가 위아래로 쌓인다.
+        ly = z["title_y"] - (13 if z["stacked"] else 0)
+        out.append(f'<rect class="zone" x="{z["x"]:.0f}" y="{z["y"]:.0f}" '
+                   f'width="{z["w"]:.0f}" height="{z["h"]:.0f}" rx="10"/>'
+                   f'<text class="zone-label" x="{z["x"]+14:.0f}" y="{ly:.0f}">'
+                   f'{escape(z["label"])}</text>')
+        if z["cidr"]:
+            anchor = "start" if z["stacked"] else "end"
+            cx = z["x"] + 14 if z["stacked"] else z["x"] + z["w"] - 14
+            out.append(f'<text class="zone-cidr" x="{cx:.0f}" y="{z["title_y"]:.0f}" '
+                       f'text-anchor="{anchor}">{escape(z["cidr"])}</text>')
 
-    # 링크
-    for br, (a, ai), (b, bi) in L.links_at(1, stage):
-        if a not in pos or b not in pos:
+    # ---- 링크. 직선과 직각으로만 꺾는다 — 곡선은 어디서 갈라지는지 안 보인다.
+    for lk in d["links"]:
+        path = "M" + " L".join(f"{x:.0f},{y:.0f}" for x, y in lk["points"])
+        out.append(f'<path class="link" d="{path}"/>')
+        if not show_labels:
             continue
-        ax, ay = pos[a]
-        bx, by = pos[b]
-        x1, y1 = ax + BOX_W, ay + BOX_H / 2
-        x2, y2 = bx, by + BOX_H / 2
-        if bx < ax:
-            x1, x2 = ax, bx + BOX_W
-        mid = (x1 + x2) / 2
-        out.append(f'<path class="link" d="M{x1:.0f},{y1:.0f} C{mid:.0f},{y1:.0f} '
-                   f'{mid:.0f},{y2:.0f} {x2:.0f},{y2:.0f}"/>')
-        if show_labels:
-            out.append(f'<text class="if" x="{x1+6:.0f}" y="{y1-5:.0f}">{escape(ai)}</text>'
-                       f'<text class="if if-r" x="{x2-6:.0f}" y="{y2-5:.0f}">{escape(bi)}</text>')
+        for i, line in enumerate(reversed(lk["label"])):      # 선 위로 쌓아 올린다
+            out.append(f'<text class="seg" x="{lk["lx"]:.0f}" '
+                       f'y="{lk["ly"] - 7 - i * 12:.0f}">{escape(line)}</text>')
+        for e in lk["ends"]:
+            out.append(f'<text class="if" x="{e["tx"]:.0f}" y="{e["ty"]:.0f}" '
+                       f'text-anchor="{e["anchor"]}">{escape(e["if"])}</text>')
 
-    # 노드
-    for n in nodes:
-        name = n["name"]
-        x, y = pos[name]
-        st = ROLE_STYLE[n["role"]]
-        cls = "node" + (" hl" if highlight and name in highlight else "")
-        rx = 17 if st["shape"] in ("round", "circle") else 6
+    # ---- 장비
+    for n in d["nodes"]:
+        cls = "node" + (" hl" if n["name"] in hl else "")
+        body = GLYPH_FN[n["shape"]](n["gw"], n["gh"])
         out.append(
-            f'<g class="{cls}" data-node="{escape(name)}">'
-            f'<rect x="{x:.0f}" y="{y:.0f}" width="{BOX_W}" height="{BOX_H}" rx="{rx}" '
-            f'style="fill:{st["fill"]}"/>'
-            f'<text class="n-name" x="{x+BOX_W/2:.0f}" y="{y+BOX_H/2+1:.0f}">{escape(name)}</text>'
-            f'<title>{escape(name)} — {escape(n.get("desc", ""))}</title></g>')
+            f'<g class="{cls}" data-node="{escape(n["name"])}" '
+            f'style="--f:{FILL[n["role"]]}">'
+            f'<g transform="translate({n["gx"]:.0f},{n["gy"]:.0f})">{body}</g>'
+            f'<text class="n-name" x="{n["cx"]:.0f}" y="{n["y"]+T.GLYPH_H+13:.0f}">'
+            f'{escape(n["name"])}</text>'
+            + "".join(f'<text class="n-cap" x="{n["cx"]:.0f}" '
+                      f'y="{n["y"]+T.GLYPH_H+28+i*12:.0f}">{escape(line)}</text>'
+                      for i, line in enumerate(n["caption"]))
+            + f'<title>{escape(n["name"])} — {escape(n["desc"])}</title></g>')
 
     out.append("</svg>")
     return "\n".join(out)
 
 
 if __name__ == "__main__":
-    st = sys.argv[1] if len(sys.argv) > 1 else "m10"
-    print(render(st))
+    print(render(sys.argv[1] if len(sys.argv) > 1 else "m10"))
