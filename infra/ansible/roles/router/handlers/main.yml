@@ -1,5 +1,23 @@
 ---
-- name: restart frr
+# FRR 유닛은 3분에 3번까지만 시작을 허용한다 (StartLimitBurst=3, 간격 3분).
+# 그런데 이 랩은 [이 모듈 적용] 을 몇 번이고 누르라고 권한다 — 단계를 옮길
+# 때마다, 망가뜨린 것을 되돌릴 때마다 여기가 돈다. 3분 안에 네 번째가 되면
+#
+#   Unable to restart service frr: Job for frr.service failed ... start-limit-hit
+#
+# 으로 거부당하고 그 노드만 라우팅 없이 남는다. 실제로 M3 → M4 → M5 를 이어서
+# 돌렸더니 r2·r4 가 그렇게 죽었고, 화면에는 "적용 실패" 만 떴다.
+#
+# 이 카운터는 **크래시 루프**를 막으려는 것이지, 사람이 일부러 누른 재시작을
+# 막으려는 것이 아니다. 그래서 다시 시작하기 전에 지운다.
+- name: frr 시작 제한 카운터 지우기
+  listen: restart frr
+  ansible.builtin.command: systemctl reset-failed frr
+  changed_when: false
+  failed_when: false
+
+- name: frr 다시 시작
+  listen: restart frr
   ansible.builtin.systemd:
     name: frr
     state: restarted
