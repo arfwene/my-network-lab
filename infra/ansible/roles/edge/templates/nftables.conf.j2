@@ -12,8 +12,28 @@ flush ruleset
 
 table inet filter {
     chain input {
-        type filter hook input priority 0; policy accept;
-        # 랩 노드 자신에 대한 접근은 열어둔다 (관리망 접속 유지)
+        # 경계 장비 **자신**에게 오는 것. 여기를 accept 로 열어 두면 공인 주소의
+        # 22번이 그대로 응답한다 — DNAT 대상이 아닌 포트는 edge 자신에게 오기
+        # 때문이다. 인터넷에서 경계 장비의 SSH 가 열려 있는 상태이고, 실무라면
+        # 그것 하나로 사고다.
+        type filter hook input priority 0; policy drop;
+
+        iif lo accept
+        ct state established,related accept
+        ct state invalid drop
+
+        # 관리망(OOB)은 통째로 연다. 여기를 막으면 Ansible 이 못 들어와
+        # 랩을 되돌릴 수단이 사라진다 — 이 랩의 전제가 깨진다.
+        iifname "{{ mgmt_interface }}" accept
+
+        # 내부(사설) 쪽에서 오는 것은 연다. 교육생이 r4 를 거쳐 경계 장비를
+        # 들여다보는 실습이 있다.
+        iifname "eth1" accept
+
+        # 바깥에서 자신에게 오는 것은 ping 만 받는다. 경로 확인은 되어야 하고,
+        # 그 밖에는 조용히 버린다(reject 가 아니라 drop — M6 감별표 ②).
+        iifname "eth2" icmp type echo-request limit rate 5/second accept
+        iifname "eth2" icmpv6 type echo-request limit rate 5/second accept
     }
 
     chain forward {
