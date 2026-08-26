@@ -50,7 +50,15 @@ TimeoutStopSec=30
 #  실제로 그래서 --service 로 설치한 서버에서는 점프 계정 버튼이 한 번도
 #  나온 적이 없었다. 권한 축소는 sudoers 쪽에서 한다 — 거기가 정확하다.
 PrivateTmp=yes
-ProtectSystem=full
+#  ProtectSystem 은 full 이 아니라 true 다. full 은 /etc 까지 읽기 전용으로 만드는데,
+#  그 마운트 네임스페이스는 sudo 로 띄운 자식에게도 그대로 상속된다. 그래서 root
+#  헬퍼가 root 인데도 파일을 못 쓴다:
+#      OSError: [Errno 30] Read-only file system: '/etc/netplan/60-lab-mgmt.yaml'
+#  두 헬퍼가 쓰는 곳이 전부 /etc 다 — netplan · sshd_config.d · useradd(passwd·shadow).
+#  /usr 와 /boot 는 계속 읽기 전용으로 둔다.
+#  덧붙여, /etc 를 잠그는 것은 여기서 별 뜻이 없다. 콘솔은 일반 계정으로 돌기 때문에
+#  애초에 /etc 를 못 쓴다. 실제로 권한을 가르는 것은 sudoers 쪽이다.
+ProtectSystem=true
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
