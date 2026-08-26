@@ -625,6 +625,15 @@ REQUIRED_PRIVS = [
     ("/vms",          "VM.Clone",                "골든 템플릿 복제"),
     ("/vms",          "VM.Config.Network",       "NIC·VLAN 태그 설정"),
     ("/vms",          "VM.Config.Cloudinit",     "관리망 주소·SSH 키 주입"),
+    # cloud-init 드라이브는 ide2 에 붙고, Proxmox 는 그것을 CDROM 으로 친다.
+    # 이 한 줄이 없어서 검사는 "권한 10개 모두 있다" 라고 했는데 배포는
+    # VM 13대가 전부 403 (VM.Config.CDROM) 으로 죽었다. 검사가 통과시킨 것을
+    # 배포가 거부하면, 검사는 없느니만 못하다.
+    ("/vms",          "VM.Config.CDROM",         "cloud-init 드라이브(ide2)"),
+    ("/vms",          "VM.Config.Disk",          "디스크 크기·연결"),
+    ("/vms",          "VM.Config.CPU",           "vCPU 수"),
+    ("/vms",          "VM.Config.Memory",        "메모리 크기"),
+    ("/vms",          "VM.Config.Options",       "부팅 순서·게스트 에이전트"),
     ("/vms",          "VM.PowerMgmt",            "VM 기동·정지"),
     ("/vms",          "VM.Audit",                "VM 상태 조회"),
 ]

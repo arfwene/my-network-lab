@@ -48,8 +48,11 @@ NODE=$(hostname -s)
 # 이 랩이 쓰는 권한. console/pve.py 의 REQUIRED_PRIVS 와 짝을 이룬다.
 #   Sys.Modify        리눅스 브리지 생성 ← 이게 없으면 VM 은 생겨도 랜선이 안 생긴다
 #   VM.Config.Cloudinit  관리망 주소·SSH 키 주입
+#   VM.Config.CDROM   cloud-init 드라이브가 ide2 에 붙는다. Proxmox 는 그걸
+#                     CDROM 으로 친다 — 없으면 VM 13대가 전부 403 으로 실패한다
 PRIVS="VM.Allocate,VM.Clone,VM.Config.CPU,VM.Config.Disk,VM.Config.Memory,\
-VM.Config.Network,VM.Config.Options,VM.Config.Cloudinit,VM.Monitor,VM.PowerMgmt,\
+VM.Config.Network,VM.Config.Options,VM.Config.Cloudinit,VM.Config.CDROM,\
+VM.Monitor,VM.PowerMgmt,\
 VM.Audit,Datastore.Allocate,Datastore.AllocateSpace,Datastore.Audit,\
 Sys.Audit,Sys.Console,Sys.Modify,SDN.Use"
 
@@ -66,7 +69,8 @@ verify() {
               "/nodes/$NODE|Sys.Audit|노드 상태 조회" \
               "/vms|VM.Allocate|VM 생성" \
               "/vms|VM.Clone|템플릿 복제" \
-              "/vms|VM.Config.Cloudinit|관리망·SSH 키 주입"; do
+              "/vms|VM.Config.Cloudinit|관리망·SSH 키 주입" \
+              "/vms|VM.Config.CDROM|cloud-init 드라이브(ide2)"; do
     IFS='|' read -r path priv why <<< "$pair"
     if has_priv "$path" "$priv"; then
       ok "$path  $priv  ($why)"
