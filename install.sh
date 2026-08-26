@@ -198,12 +198,16 @@ fi
 if [ "$DO_JUMP" = 1 ]; then
   step "점프 계정 적용 권한"
   HELPER=/usr/local/sbin/lab-access-apply
+  MHELPER=/usr/local/sbin/lab-mgmt-apply
   POLDIR=/etc/my-network-lab
   SUDOERS=/etc/sudoers.d/my-network-lab
   ME="$(id -un)"
 
   $SUDO install -o root -g root -m 0755 "$ROOT/deploy/lab-access-apply.py" "$HELPER"
   ok "$HELPER  (root:root 0755)"
+
+  $SUDO install -o root -g root -m 0755 "$ROOT/deploy/lab-mgmt-apply.py" "$MHELPER"
+  ok "$MHELPER  (root:root 0755)"
 
   $SUDO install -d -o root -g root -m 0755 "$POLDIR"
   python3 "$ROOT/tools/gen-policy.py" | $SUDO tee "$POLDIR/policy.json" >/dev/null
@@ -217,6 +221,8 @@ if [ "$DO_JUMP" = 1 ]; then
   printf '# 두 가지 실행만 허용한다: 인자 없이(적용), 그리고 --probe(권한 확인).\n' >> "$TMPS"
   printf '# sudoers 에서 인자를 안 적으면 **모든 인자가 허용된다** — 그래서 ""(빈 인자)로 못 박는다.\n' >> "$TMPS"
   printf '%s ALL=(root) NOPASSWD: %s "", %s --probe\n' "$ME" "$HELPER" "$HELPER" >> "$TMPS"
+  printf '# 관리망 연결도 같은 방식이다 — netplan 을 쓰는 부분만 root 로 넘긴다.\n' >> "$TMPS"
+  printf '%s ALL=(root) NOPASSWD: %s "", %s --probe, %s --show\n' "$ME" "$MHELPER" "$MHELPER" "$MHELPER" >> "$TMPS"
 
   # requiretty 는 sudo 1.9.17 에서 아예 사라졌다 (Ubuntu 26.04 이상).
   # 그 버전에서는 "unknown setting" 으로 파일 전체가 문법 오류가 된다.
@@ -224,6 +230,7 @@ if [ "$DO_JUMP" = 1 ]; then
   TMPT=$(mktemp)
   cat "$TMPS" > "$TMPT"
   printf 'Defaults!%s !requiretty\n' "$HELPER" >> "$TMPT"
+  printf 'Defaults!%s !requiretty\n' "$MHELPER" >> "$TMPT"
   if $SUDO visudo -cf "$TMPT" >/dev/null 2>&1; then
     cat "$TMPT" > "$TMPS"
   fi
@@ -246,6 +253,11 @@ if [ "$DO_JUMP" = 1 ]; then
     ok "콘솔이 점프 계정을 직접 적용한다 — 교육생이 키를 넣으면 자동으로 반영된다"
   else
     warn "sudo -n 확인에 실패했다 — 콘솔은 계속 '복사할 명령' 으로 안내한다"
+  fi
+  if sudo -n "$MHELPER" --probe >/dev/null 2>&1; then
+    ok "콘솔에 [관리망 연결] 버튼이 생긴다 — 서버에 들어와 make 를 칠 일이 없다"
+  else
+    warn "sudo -n 확인에 실패했다 — 관리망 연결은 계속 'make mgmt-net' 안내로 남는다"
   fi
 fi
 

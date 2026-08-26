@@ -35,6 +35,24 @@ sys.path.insert(0, str(ROOT / "console"))
 import labdesign as L      # noqa: E402
 
 NETPLAN = "/etc/netplan/60-lab-mgmt.yaml"
+# root 가 필요한 부분(netplan 기록·apply)만 떼어 둔 프로그램.
+# install.sh 가 설치하면 콘솔 버튼도 이 경로를 부른다 — 화면과 셸이 같은 길을 쓴다.
+MGMT_HELPER = "/usr/local/sbin/lab-mgmt-apply"
+
+
+def helper_ready():
+    """비밀번호 없이 헬퍼를 부를 수 있는가.
+
+    `sudo -n -l` 로 묻지 않는다 — 그건 권한 목록을 달라는 요청이라
+    verifypw 기본값(all) 아래에서 비밀번호를 요구한다. 실제로 한 번 부른다.
+    """
+    if not Path(MGMT_HELPER).exists():
+        return False
+    try:
+        return subprocess.run(["sudo", "-n", MGMT_HELPER, "--probe"],
+                              capture_output=True, timeout=5).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 G, Y, R, B, N = "\033[32m", "\033[33m", "\033[31m", "\033[34m", "\033[0m"
 
 
@@ -274,6 +292,24 @@ def main(a):
     step(f"VLAN 서브인터페이스 {len(labs)}개")
     for m in labs:
         say(f"{m['iface']:<8s} VLAN {m['vlan']}  {m['ops_ip']}/{m['prefixlen']}  (lab{m['lab_id']})")
+    # netplan 부터는 root 다. 헬퍼가 깔려 있으면 그쪽에 넘긴다 —
+    # 헬퍼는 인터페이스를 MAC 으로 **자기가** 찾고 주소도 root 소유 정책에서 읽으므로,
+    # 여기서 무엇을 넘기든 root 가 하는 일은 달라지지 않는다.
+    if helper_ready():
+        if a.dry_run:
+            say(f"(dry-run) sudo -n {MGMT_HELPER} --show")
+            subprocess.run(["sudo", "-n", MGMT_HELPER, "--show"], check=False)
+            print("dry-run 이므로 아무것도 바꾸지 않았다.")
+            return 0
+        say(f"root 헬퍼에 넘긴다: {MGMT_HELPER}")
+        r = subprocess.run(["sudo", "-n", MGMT_HELPER])
+        if r.returncode:
+            die("관리망 적용에 실패했다",
+                f"되돌리려면:  sudo rm {NETPLAN} && sudo netplan apply")
+        print(f"{G}관리망 연결 완료.{N} 이후 랩을 만들고 지워도 여기는 건드리지 않는다.")
+        return 0
+
+    # 헬퍼가 없는 서버(예전 설치)는 예전 길로 간다.
     body = build_netplan(iface, labs)
     if Path(NETPLAN).exists() and not a.dry_run:
         subprocess.run(["sudo", "cp", NETPLAN, NETPLAN + ".bak"], check=False)

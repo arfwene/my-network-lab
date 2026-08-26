@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import labdesign as L      # noqa: E402
 
 SNIPPET = "/etc/ssh/sshd_config.d/60-lab-jump.conf"
+NETPLAN = "/etc/netplan/60-lab-mgmt.yaml"
 
 
 def build():
@@ -33,6 +34,14 @@ def build():
         "sshd_snippet": SNIPPET,
         # 랩별 관리망 노드 주소. sshd 의 PermitOpen 에 그대로 들어간다.
         "labs": {str(n): [L.mgmt_ip(n, x["name"]) for x in L.TOPO["nodes"]] for n in labs},
+        # 관리망 연결(netplan). lab-mgmt-apply 가 읽는다.
+        #   인터페이스 **이름**을 넣지 않는다 — 이름은 부팅 순서에 따라 바뀌고,
+        #   무엇보다 콘솔이 고를 수 있는 값이면 안 된다. root 헬퍼가 MAC 으로 직접 찾는다.
+        "mgmt": {
+            "netplan": NETPLAN,
+            "trunk_mac": L.ops_trunk_mac(),
+            "vlans": L.mgmt_labs(),
+        },
     }
 
 

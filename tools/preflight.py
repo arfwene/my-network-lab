@@ -37,6 +37,34 @@ G, Y, R, B, N = "\033[32m", "\033[33m", "\033[31m", "\033[34m", "\033[0m"
 RESULTS = []
 
 
+
+MGMT_HELPER = "/usr/local/sbin/lab-mgmt-apply"
+
+
+def _mgmt_button_ready():
+    """콘솔에 [이 서버를 관리망에 연결] 버튼이 떠 있는가.
+
+    떠 있으면 "make 를 치라" 고 안내하면 안 된다 — 화면에 버튼이 있는데
+    셸 명령을 시키는 것은 그 자체로 틀린 안내다.
+    """
+    if not Path(MGMT_HELPER).exists():
+        return False
+    try:
+        return subprocess.run(["sudo", "-n", MGMT_HELPER, "--probe"],
+                              capture_output=True, timeout=5).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _mgmt_net_hint():
+    if _mgmt_button_ready():
+        return ("아래 [이 서버를 관리망에 연결] 버튼 한 번이면 됩니다 (최초 1회).\n"
+                "  이 서버가 어느 VM 인지 찾아 트렁크 NIC 을 붙이고 VLAN 까지 설정합니다.")
+    return ("한 명령으로 끝납니다 (1회):  make mgmt-net\n"
+            "  이 서버가 어느 VM 인지 찾아 트렁크 NIC 을 붙이고 VLAN 까지 설정합니다.\n"
+            "  먼저 볼 것:  make mgmt-net-dry   (무엇을 할지만 보여줍니다)\n"
+            "  ./install.sh --no-apt 를 한 번 돌리면 이 일이 콘솔 버튼이 됩니다.")
+
 def add(status, title, detail="", hint=""):
     RESULTS.append((status, title, detail, hint))
 
@@ -306,9 +334,7 @@ def check_mgmt(lab_id):
                  "dist/ops-server.md 의 netplan 을 그대로 쓰면 이름이 랩 번호와 맞습니다")
     else:
         warn("이 서버의 관리망 주소", f"{ops} ({ifname}, VLAN {vlan}) 가 없습니다",
-             "한 명령으로 끝납니다 (1회):  make mgmt-net\n"
-             "  이 서버가 어느 VM 인지 찾아 트렁크 NIC 을 붙이고 VLAN 까지 설정합니다.\n"
-             "  먼저 볼 것:  make mgmt-net-dry   (무엇을 할지만 보여줍니다)")
+             _mgmt_net_hint())
 
     # 이 서버에서 관리망으로 나가는 경로가 있는가. 없으면 Ansible 은 한 대도 못 만진다.
     good, line = run(["ip", "route", "get", gw], timeout=5)
@@ -321,9 +347,11 @@ def check_mgmt(lab_id):
         via = re.search(r" via (\S+)", line)
         detail = f"{cidr} → {dev.group(1) if dev else '?'}" + (f" via {via.group(1)}" if via else " (직결)")
         if via:
+            how = ("아래 [이 서버를 관리망에 연결] 버튼" if _mgmt_button_ready()
+                   else "`make mgmt-net`")
             warn("경로", detail,
                  f"직결이 아닙니다. 중간 장비가 포워딩해 줘야 합니다 — "
-                 f"`make mgmt-net` 으로 {br} 트렁크에 물리는 편이 확실합니다")
+                 f"{how} 으로 {br} 트렁크에 물리는 편이 확실합니다")
         else:
             ok("경로", detail)
 

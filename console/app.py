@@ -993,7 +993,13 @@ async def job_info(request: Request, job_id: str):
     """
     user = current_user(request)
     job = runner.jobs.get(job_id)
-    if not user or not job or job.lab_id not in auth.allowed_labs(user):
+    # 설치 작업(lab 0)은 배정된 랩이 아니다 — 아래 스트림과 **같은 기준**으로 연다.
+    # 전에는 여기만 빠져 있어서, 관리자가 로그는 볼 수 있는데 진행 상태는
+    # 403 을 받았다. 두 경로가 다른 답을 하면 안 된다.
+    allowed = bool(job) and (
+        (job.lab_id == jobs.SETUP_LAB and auth.can(user, "user.manage"))
+        or job.lab_id in auth.allowed_labs(user))
+    if not user or not allowed:
         return JSONResponse({"error": "권한 없음"}, status_code=403)
     return JSONResponse(job.as_dict(reveal=False))
 
@@ -1246,9 +1252,18 @@ async def exam_op(request: Request, exam_id: int, op: str, minutes: str = Form("
 #  "설치하고 GUI 열면 그냥 쓸 수 있어야 한다" — 맞는 말이다.
 #  남은 준비 작업을 화면 하나에 모으고, 콘솔이 스스로 할 수 있는 것은 버튼으로 만든다.
 #  root 나 다른 호스트가 필요한 것만 명령으로 보여 준다 (복사 버튼과 함께).
-def _setup_buttons(jump_ready):
+def _setup_buttons(jump_ready, mgmt_ready=False):
     b = [{**x, "what": _access_what(jump_ready) if x["action"] == "setup-access" else x["what"]}
          for x in SETUP_BUTTONS]
+    if mgmt_ready:
+        # 브리지 만들기 **바로 다음** 자리다. 순서가 곧 절차다 —
+        # 브리지를 만들고 나면 이 서버를 거기에 붙이는 것이 다음 일이다.
+        b.insert(1, {
+            "action": "setup-mgmt-net", "label": "이 서버를 관리망에 연결",
+            "what": ("이 서버가 Proxmox 위의 어느 VM 인지 찾아 관리망 트렁크 NIC 을 붙이고, "
+                     "랩별 VLAN 주소를 올립니다. 전 랩 공용이라 최초 1회면 됩니다. "
+                     "이게 없으면 랩은 만들어져도 [이 모듈 적용]·[연결 확인] 이 노드에 닿지 못합니다."),
+            "need": "Proxmox 연결 · install.sh 가 설치하는 root 헬퍼"})
     if jump_ready:
         b.insert(0, {
             "action": "setup-jump-apply", "label": "점프 계정 적용",
@@ -1287,8 +1302,8 @@ SETUP_BUTTONS = [
 ]
 
 
-_JUMP_READY = {"at": 0.0, "val": False}
-_JUMP_READY_TTL = 60.0
+_HELPER_READY = {}
+_HELPER_READY_TTL = 60.0
 
 
 def _jump_apply_ready(force=False):
@@ -1303,22 +1318,32 @@ def _jump_apply_ready(force=False):
     --probe 는 헬퍼가 아무것도 읽지 않고 바로 끝내는 길이다. 화면을 그릴 때마다
     부르므로 결과를 잠깐 들고 있는다.
     """
+    return _helper_ready(jobs.JUMP_HELPER, force)
+
+
+def _mgmt_apply_ready(force=False):
+    """콘솔이 관리망 netplan 을 직접 적용할 수 있는가. 같은 방식이다."""
+    return _helper_ready(jobs.MGMT_HELPER, force)
+
+
+def _helper_ready(helper, force=False):
     now = time.time()
-    if not force and now - _JUMP_READY["at"] < _JUMP_READY_TTL:
-        return _JUMP_READY["val"]
+    c = _HELPER_READY.get(helper)
+    if c and not force and now - c["at"] < _HELPER_READY_TTL:
+        return c["val"]
     val = False
-    if Path(jobs.JUMP_HELPER).exists():
+    if Path(helper).exists():
         try:
-            r = subprocess.run(["sudo", "-n", jobs.JUMP_HELPER, "--probe"],
+            r = subprocess.run(["sudo", "-n", helper, "--probe"],
                                capture_output=True, text=True, timeout=5)
             val = r.returncode == 0
         except (OSError, subprocess.SubprocessError):
             val = False
-    _JUMP_READY.update(at=now, val=val)
+    _HELPER_READY[helper] = {"at": now, "val": val}
     return val
 
 
-def _setup_manual(jump_ready=False):
+def _setup_manual(jump_ready=False, mgmt_ready=False):
     """콘솔이 대신 할 수 없는 절차. 왜 못 하는지까지 같이 적는다."""
     root = str(L.ROOT)
     node = L.SITE["access"]["proxmox"].get("node_name", "<노드>")
@@ -1331,10 +1356,13 @@ def _setup_manual(jump_ready=False):
          "where": f"Proxmox 호스트({node}) 에서 root",
          "why": "디스크 이미지를 내려받아 가공합니다. 최초 1회.",
          "cmd": "./infra/template/build-golden-template.sh --storage local-lvm"},
-        {"title": "이 서버를 관리망에 연결",
-         "where": "이 운영 서버, sudo",
-         "why": "netplan 을 쓰는 데 root 가 필요합니다. 콘솔은 root 로 돌지 않습니다. 최초 1회.",
-         "cmd": f"cd {root} && make mgmt-net"},
+        *([] if mgmt_ready else [
+            {"title": "이 서버를 관리망에 연결",
+             "where": "이 운영 서버, sudo",
+             "why": ("netplan 을 쓰는 데 root 가 필요합니다. 콘솔은 root 로 돌지 않습니다. 최초 1회. "
+                     "아래 한 줄을 한 번 실행해 두면 이 일이 위쪽 버튼으로 바뀝니다 — "
+                     f"cd {root} && ./install.sh --no-apt"),
+             "cmd": f"cd {root} && make mgmt-net"}]),
         *([] if jump_ready else [
             {"title": "점프 계정 적용",
              "where": "이 운영 서버, sudo",
@@ -1367,6 +1395,7 @@ async def admin_setup(request: Request, lab: int = 1, fresh: int = 0):
     # [다시 검사] 는 ?fresh=1 로 온다.
     checks = await asyncio.to_thread(preflight.collect, lab, False, bool(fresh))
     jump_ready = await asyncio.to_thread(_jump_apply_ready, bool(fresh))
+    mgmt_ready = await asyncio.to_thread(_mgmt_apply_ready, bool(fresh))
     n = {"ok": 0, "warn": 0, "error": 0, "skip": 0}
     for c in checks:
         if c["status"] in n:
@@ -1376,9 +1405,9 @@ async def admin_setup(request: Request, lab: int = 1, fresh: int = 0):
         "user": user, "site_name": L.SITE["site"]["name"],
         "health": pve.last(), "pending": db.count_pending(),
         "checks": checks, "counts": n, "lab": lab,
-        "buttons": _setup_buttons(jump_ready),
+        "buttons": _setup_buttons(jump_ready, mgmt_ready),
         "jump_stale": db.jump_stale_users(),
-        "manual": _setup_manual(jump_ready), "jump_ready": jump_ready,
+        "manual": _setup_manual(jump_ready, mgmt_ready), "jump_ready": jump_ready,
         "busy": runner.busy(jobs.SETUP_LAB),
     })
 

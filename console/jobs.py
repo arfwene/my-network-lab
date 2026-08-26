@@ -57,6 +57,7 @@ def tf_cmd(sub, *extra):
     return cmd
 ANSIBLE = L.ROOT / "infra/ansible"
 JUMP_HELPER = "/usr/local/sbin/lab-access-apply"
+MGMT_HELPER = "/usr/local/sbin/lab-mgmt-apply"
 
 
 def tf_env(lab_id):
@@ -64,7 +65,8 @@ def tf_env(lab_id):
 # 설치·준비 작업. 랩이 아니라 **환경**을 만드는 것이라 lab_id 0 (가상의 랩)에서 돈다.
 #   전에는 이것들이 전부 `make ...` 였다. 관리자가 서버에 SSH 로 들어가
 #   저장소 경로를 찾아 명령을 외워야 한다는 뜻이었고, 그게 배포를 어렵게 만든 주범이다.
-SETUP_ACTIONS = {"setup-mgmt", "setup-docs", "setup-access", "setup-jump-apply"}
+SETUP_ACTIONS = {"setup-mgmt", "setup-mgmt-net", "setup-docs", "setup-access",
+                 "setup-jump-apply"}
 SETUP_LAB = 0
 ACTIONS = {"deploy", "destroy", "apply", "keys", "verify", "reset", "break", "fix",
            "check", "exam", "drill", "drill-end", "drill-check"} | SETUP_ACTIONS
@@ -206,6 +208,10 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
         return [(L.ROOT, [PY, "tools/gen-mgmt.py", "--labs", str(n)]),
                 (env, tf_cmd("init")),
                 (env, tf_cmd("apply", "-auto-approve"))]
+    if action == "setup-mgmt-net":
+        # 이 서버를 관리망에 붙인다. 앞부분(Proxmox API)은 이 계정으로 하고,
+        # netplan 부터는 스크립트가 root 헬퍼에 넘긴다 — `make mgmt-net` 과 같은 길이다.
+        return [(L.ROOT, [PY, "tools/setup-mgmt-net.py"])]
 
     if action == "deploy":
         # 브리지 + VM 생성. 배선은 항상 전체 토폴로지로 만든다 (설정만 단계별).
