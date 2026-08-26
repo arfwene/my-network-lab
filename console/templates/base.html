@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ site_name }}{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
-  {# 고른 테마를 **그리기 전에** 박는다. 나중에 적용하면 밝은 화면이 한 번
-     번쩍인 뒤 어두워진다. 고른 적이 없으면 아무것도 하지 않는다 —
-     그러면 CSS 의 prefers-color-scheme 이 시스템 설정을 따라간다. #}
+  {# 지난번에 고른 모드를 **그리기 전에** 박는다. 나중에 적용하면 화이트 화면이
+     한 번 번쩍인 뒤 어두워진다. 고른 적이 없으면 아무것도 하지 않고, 그러면
+     CSS 의 기본값인 화이트로 열린다. #}
   <script>
     try { var t = localStorage.getItem('theme');
           if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; }

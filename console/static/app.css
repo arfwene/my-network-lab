@@ -24,79 +24,36 @@
   --shadow-1:0 1px 1px rgba(0,0,0,.04);
   --shadow-2:0 2px 2px rgba(0,0,0,.04),0 8px 16px -4px rgba(0,0,0,.08);
   color-scheme:light;   /* 스크롤바 · select · 기본 폼이 테마를 따라간다 */
-/* --- 어두운 팔레트. **값은 여기 한 곳에만 적는다.**
-   아래 두 경우가 같은 값을 꽂아 쓴다 — 시스템이 어두울 때, 그리고 사용자가
-   직접 어둡게 고를 때. 값을 두 벌 두면 반드시 한쪽만 고치는 날이 온다. --- */
-  --d-ink:#ededed; --d-body:#a1a1a1;
-  --d-muted:#8f8f8f; --d-faint:#7a7a7a;
-  --d-bg:#000000; --d-panel:#0a0a0a;
-  --d-sunken:#171717; --d-line:#2e2e2e;
-  --d-accent:#3291ff; --d-accent-deep:#0070f3;
-  --d-accent-soft:#10293f; --d-danger:#ff4d4d;
-  --d-danger-deep:#ff6161; --d-warn:#f5a623;
-  --d-warn-line:#8f6424; --d-ok:#3291ff;
-  --d-code-bg:#171717; --d-log-bg:#0a0a0a;
-  --d-log-ink:#ededed; --d-n-host:#1e3a5f;
-  --d-n-switch:#14532d; --d-n-router:#5c4813;
-  --d-n-server:#3b2f63; --d-n-edge:#5b2222;
-  --d-zone:#ffffff08; --d-zone-line:#ffffff26;
-  --d-n-line:#ffffff59; --d-topo-link:#ffffff66;
-  --d-shadow-1:0 1px 1px rgba(0,0,0,.3); --d-shadow-2:0 2px 2px rgba(0,0,0,.3),0 8px 16px -4px rgba(0,0,0,.5);
-  --d-tag-ok-bg:#10291a;   --d-tag-ok-ink:#6ee7a8;
-  --d-tag-warn-bg:#2b2110; --d-tag-warn-ink:#f5c86a;
-  --d-tag-bad-bg:#2c1414;  --d-tag-bad-ink:#ff8b7a;
+  /* 여기까지가 **기본값**이다. 시스템이 어두운 모드여도 화이트로 연다 —
+     교재를 인쇄하고 화면에 띄워 놓고 보는 자리라 밝은 쪽을 기준으로 잡았다.
+     다크는 헤더에서 직접 고를 때만 켜지고, 그 선택은 브라우저에 남는다. */
 }
 /* Geist 는 한글 글리프가 없다. 어떤 경우에도 한글 폰트가 뒤를 받아야 하므로
    시스템 스택을 남겨 둔다 — 이 콘솔은 인터넷이 닫힌 운영 서버에서 돌기 때문에
    웹폰트를 불러올 수도 없다. 대신 자간·굵기 규칙을 그대로 따른다. */
 
-/* 아무것도 고르지 않았으면 시스템을 따른다 (JS 없이도 동작한다) */
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    color-scheme:dark;
-    --ink:var(--d-ink); --body:var(--d-body);
-    --muted:var(--d-muted); --faint:var(--d-faint);
-    --bg:var(--d-bg); --panel:var(--d-panel);
-    --sunken:var(--d-sunken); --line:var(--d-line);
-    --accent:var(--d-accent); --accent-deep:var(--d-accent-deep);
-    --accent-soft:var(--d-accent-soft); --danger:var(--d-danger);
-    --danger-deep:var(--d-danger-deep); --warn:var(--d-warn);
-    --warn-line:var(--d-warn-line); --ok:var(--d-ok);
-    --code-bg:var(--d-code-bg); --log-bg:var(--d-log-bg);
-    --log-ink:var(--d-log-ink); --n-host:var(--d-n-host);
-    --n-switch:var(--d-n-switch); --n-router:var(--d-n-router);
-    --n-server:var(--d-n-server); --n-edge:var(--d-n-edge);
-    --zone:var(--d-zone); --zone-line:var(--d-zone-line);
-    --n-line:var(--d-n-line); --topo-link:var(--d-topo-link);
-    --shadow-1:var(--d-shadow-1); --shadow-2:var(--d-shadow-2);
-    --tag-ok-bg:var(--d-tag-ok-bg); --tag-ok-ink:var(--d-tag-ok-ink);
-    --tag-warn-bg:var(--d-tag-warn-bg); --tag-warn-ink:var(--d-tag-warn-ink);
-    --tag-bad-bg:var(--d-tag-bad-bg); --tag-bad-ink:var(--d-tag-bad-ink);
-  }
-}
-/* 헤더의 [다크모드 / 화이트모드] 로 직접 고른 경우. html 에 data-theme 이 박힌다. */
+/* 다크모드. 헤더에서 직접 고를 때만 켜진다 — html 에 data-theme="dark" 가 박힌다. */
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --ink:var(--d-ink); --body:var(--d-body);
-  --muted:var(--d-muted); --faint:var(--d-faint);
-  --bg:var(--d-bg); --panel:var(--d-panel);
-  --sunken:var(--d-sunken); --line:var(--d-line);
-  --accent:var(--d-accent); --accent-deep:var(--d-accent-deep);
-  --accent-soft:var(--d-accent-soft); --danger:var(--d-danger);
-  --danger-deep:var(--d-danger-deep); --warn:var(--d-warn);
-  --warn-line:var(--d-warn-line); --ok:var(--d-ok);
-  --code-bg:var(--d-code-bg); --log-bg:var(--d-log-bg);
-  --log-ink:var(--d-log-ink); --n-host:var(--d-n-host);
-  --n-switch:var(--d-n-switch); --n-router:var(--d-n-router);
-  --n-server:var(--d-n-server); --n-edge:var(--d-n-edge);
-  --zone:var(--d-zone); --zone-line:var(--d-zone-line);
-  --n-line:var(--d-n-line); --topo-link:var(--d-topo-link);
-  --shadow-1:var(--d-shadow-1); --shadow-2:var(--d-shadow-2);
-  --tag-ok-bg:var(--d-tag-ok-bg); --tag-ok-ink:var(--d-tag-ok-ink);
-  --tag-warn-bg:var(--d-tag-warn-bg); --tag-warn-ink:var(--d-tag-warn-ink);
-  --tag-bad-bg:var(--d-tag-bad-bg); --tag-bad-ink:var(--d-tag-bad-ink);
+  --ink:#ededed; --body:#a1a1a1;
+  --muted:#8f8f8f; --faint:#7a7a7a;
+  --bg:#000000; --panel:#0a0a0a;
+  --sunken:#171717; --line:#2e2e2e;
+  --accent:#3291ff; --accent-deep:#0070f3;
+  --accent-soft:#10293f; --danger:#ff4d4d;
+  --danger-deep:#ff6161; --warn:#f5a623;
+  --warn-line:#8f6424; --ok:#3291ff;
+  --code-bg:#171717; --log-bg:#0a0a0a;
+  --log-ink:#ededed; --n-host:#1e3a5f;
+  --n-switch:#14532d; --n-router:#5c4813;
+  --n-server:#3b2f63; --n-edge:#5b2222;
+  --zone:#ffffff08; --zone-line:#ffffff26;
+  --n-line:#ffffff59; --topo-link:#ffffff66;
+  --shadow-1:0 1px 1px rgba(0,0,0,.3); --shadow-2:0 2px 2px rgba(0,0,0,.3),0 8px 16px -4px rgba(0,0,0,.5);
+  --tag-ok-bg:#10291a; --tag-ok-ink:#6ee7a8;
+  --tag-warn-bg:#2b2110; --tag-warn-ink:#f5c86a;
+  --tag-bad-bg:#2c1414; --tag-bad-ink:#ff8b7a;
 }
-:root[data-theme="light"]{ color-scheme:light }
 *{box-sizing:border-box}
 /* hidden 속성이 display 지정보다 먼저다.
    브라우저 기본 [hidden]{display:none} 은 작성자 CSS 에 밀리므로
@@ -296,10 +253,6 @@ a.mod{text-decoration:none;color:var(--ink)}
 .theme .tdot.on{background:linear-gradient(90deg,transparent 0 50%,var(--ink) 50%)}
 
 .theme .t-l{display:inline-flex}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]) .theme .t-l{display:none}
-  :root:not([data-theme="light"]) .theme .t-d{display:inline-flex}
-}
 :root[data-theme="dark"] .theme .t-l{display:none}
 :root[data-theme="dark"] .theme .t-d{display:inline-flex}
 :root[data-theme="light"] .theme .t-l{display:inline-flex}

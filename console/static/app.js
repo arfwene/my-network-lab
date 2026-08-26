@@ -150,10 +150,8 @@
   const themebtn = $('#themebtn');
   if (themebtn) themebtn.onclick = () => {
     const root = document.documentElement;
-    const dark = root.dataset.theme
-      ? root.dataset.theme === 'dark'
-      : matchMedia('(prefers-color-scheme: dark)').matches;
-    root.dataset.theme = dark ? 'light' : 'dark';
+    // 기본은 화이트다. 표시가 없으면 화이트로 보고 다크로 넘긴다.
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
     try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
   };
 
