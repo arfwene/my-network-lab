@@ -761,7 +761,13 @@ async def submit(request: Request, module_id: str):
 
 
 @app.get("/m/{module_id}/result", response_class=HTMLResponse)
-async def result(request: Request, module_id: str):
+async def result(request: Request, module_id: str, kind: str = ""):
+    """방금 낸 것의 결과. 어느 탭에서 냈는지(kind)까지 받는다.
+
+    이 값이 없으면 "다음에 무엇을 하라" 를 고를 수 없다. 실제로 그래서 퀴즈를
+    100% 로 통과하고도 "통과하면 다음 모듈이 열립니다. 고친 뒤 다시 제출해
+    주세요" 가 떴다 — 방금 통과한 사람에게 고치라고 한 것이다.
+    """
     user, redir = require(request)
     if redir:
         return redir
@@ -769,6 +775,7 @@ async def result(request: Request, module_id: str):
     lab_id = pick_lab(user, None)
     ctx = base_ctx(request, user, lab_id)
     ctx["module"] = module
+    ctx["kind"] = kind
     ctx.update(_assess_ctx(user, lab_id, module))
     ctx.update(_tab_ctx(user, module))
     ctx["checks_result"] = assess.read_checks_result(lab_id, module_id)

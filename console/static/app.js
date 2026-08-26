@@ -228,7 +228,10 @@
       jobinfo.textContent = `검사 · ${j.job_id}`;
       await stream(j.job_id);
     }
-    const r = await fetch(`/m/${mid}/result?lab=${labId()}`);
+    // 어느 탭에서 냈는지 함께 보낸다 — 결과 화면이 '다음 한 걸음' 을 그것으로 고른다.
+    // 이 값이 없으면 퀴즈를 100% 로 통과하고도 "고친 뒤 다시 제출해 주세요" 가 뜬다.
+    const kind = $('.tab.on')?.dataset.kind || form.dataset.phase || '';
+    const r = await fetch(`/m/${mid}/result?lab=${labId()}&kind=${encodeURIComponent(kind)}`);
     $('#assessresult').innerHTML = await r.text();
     $$('[data-goto]').forEach(b => b.onclick = () => loadModule(b.dataset.goto));
     // 모듈 목록의 잠금·진도 갱신
