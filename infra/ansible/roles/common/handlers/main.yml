@@ -1,12 +1,31 @@
 ---
 - name: netplan apply
   ansible.builtin.command: netplan apply
-  async: 30
+  async: 60
   poll: 0
   changed_when: true
+  register: netplan_job
   # 인터페이스 이름이 바뀌는 경우가 있어 비동기로 던지고 재접속을 기다린다
 
 - name: wait for reconnect
   ansible.builtin.wait_for_connection:
     delay: 5
     timeout: 120
+
+- name: netplan 적용이 끝나기를 기다린다
+  # 재접속만 기다리면 안 된다. 관리망(mgmt0)은 먼저 살아나지만 netplan 은
+  # 아직 나머지 인터페이스를 만지는 중일 수 있다. 그 사이에 다음 handler 가
+  # 돌면 이런 일이 벌어진다:
+  #
+  #   restart lab-switch  →  br0 에 eth1~3 을 꽂는다
+  #   (뒤늦게) netplan 끝  →  networkd 가 eth1~3 을 도로 가져간다
+  #   결과                →  브리지는 있는데 포트가 없다. 오류는 어디에도 안 뜬다
+  #
+  # 실제로 M2 검증이 "트렁크가 VLAN 을 실어 나르는가" 에서 그렇게 떨어졌다.
+  ansible.builtin.async_status:
+    jid: "{{ netplan_job.ansible_job_id }}"
+  register: netplan_done
+  until: netplan_done.finished
+  retries: 30
+  delay: 2
+  when: netplan_job.ansible_job_id is defined

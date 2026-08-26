@@ -103,15 +103,28 @@
     # -----------------------------------------------------------------------
     - name: 주소 다시 올리기 (netplan)
       ansible.builtin.command: netplan apply
-      async: 30
+      async: 60
       poll: 0
       changed_when: true
       failed_when: false
+      register: reset_netplan
 
     - name: 재접속 대기
       ansible.builtin.wait_for_connection:
         delay: 3
         timeout: 120
+
+    - name: netplan 이 끝나기를 기다린다
+      # 아래에서 스위치를 다시 세우기 전에 netplan 이 끝나 있어야 한다.
+      # 아니면 방금 꽂은 포트를 netplan 이 도로 떼어 간다.
+      ansible.builtin.async_status:
+        jid: "{{ reset_netplan.ansible_job_id }}"
+      register: reset_np_done
+      until: reset_np_done.finished
+      retries: 30
+      delay: 2
+      failed_when: false
+      when: reset_netplan.ansible_job_id is defined
 
     # 아직 이 단계에 등장하지 않은 장비에는 서비스도 파일도 없다.
     # sw2 는 m1 에서 스위치 역할을 받지 않는다 — 그런데도 재시작을 걸면
