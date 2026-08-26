@@ -103,6 +103,8 @@
   function stop(text) { msg.textContent = text; skip.hidden = false;
                         bar.parentElement.classList.add('stopped'); pct.textContent = '멈춤'; }
 
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
   // 이미 만들어져 있으면 아무것도 하지 않는다.
   if (box.dataset.ready) { done('랩은 이미 준비돼 있습니다.'); return; }
   // Proxmox 에 물어보지 못했다. 여기서 붙잡아 두지 않는다 — 키 등록은 랩과 무관하다.
@@ -127,7 +129,7 @@
     const until = Date.now() + 15 * 60 * 1000;
     while (Date.now() < until) {
       const r = await fetch(`/jobs/${id}`);
-      if (!r.ok) { stop('작업 상태를 읽지 못했습니다.'); return; }
+      if (!r.ok) { stop('작업 상태를 읽지 못했습니다.'); return 'stopped'; }
       const j = await r.json();
       if (j.pct === null) {
         msg.textContent = `계획을 세우는 중입니다 · ${Math.round(j.elapsed)}초`;
@@ -138,25 +140,44 @@
         // 그대로 보여 주면 "가상 장비 13대" 라고 해 놓고 26대가 지나간다.
         msg.textContent = `장비 ${j.vm}/${TOTAL}대 · ${Math.round(j.elapsed)}초`;
       }
-      if (j.status === 'ok') { done(`장비 ${TOTAL}대가 준비됐습니다.`); return; }
-      if (j.status === 'failed') {
+      if (j.status === 'ok') return 'ok';
+      if (j.status === 'failed') return 'failed';
+      await sleep(1500);
+    }
+    return 'timeout';
+  }
+
+  // 한 번 묻고 마는 대신 **끝날 때까지 계속 묻는다.** [랩 삭제] 직후 이 화면이
+  // 열리면 그 순간에는 아직 삭제가 돌고 있고, 예전에는 그것을 배포로 착각해
+  // 0% 에 멈춘 채 아무것도 시작하지 않았다. 다른 화면에서 [랩 생성] 을 눌러도
+  // 이 화면은 그 사실을 몰랐다 — 이제 서버에 다시 물어 붙잡는다.
+  (async () => {
+    if (box.dataset.job) {
+      const r0 = await watch(box.dataset.job);
+      if (r0 === 'ok') { done(`장비 ${TOTAL}대가 준비됐습니다.`); return; }
+    }
+    const until = Date.now() + 20 * 60 * 1000;
+    while (Date.now() < until) {
+      const r = await fetch('/onboard/deploy', { method: 'POST' });
+      const j = await r.json().catch(() => ({}));
+      if (j.ready) { done('랩이 준비됐습니다.'); return; }
+      if (j.busy) {
+        msg.textContent = `${j.what} 작업이 끝나기를 기다립니다…`;   // 조사는 고정된 명사 뒤에
+        await sleep(3000);
+        continue;
+      }
+      if (!r.ok || !j.job_id) { stop(j.error || '랩 만들기를 시작하지 못했습니다.'); return; }
+      if (j.joined) msg.textContent = '같은 랩의 다른 사람이 이미 시작했습니다 — 함께 기다립니다.';
+      const res = await watch(j.job_id);
+      if (res === 'ok') { done(`장비 ${TOTAL}대가 준비됐습니다.`); return; }
+      if (res === 'failed') {
         stop('랩을 만들지 못했습니다. 위 [자세히 보기] 의 마지막 줄을 교육 담당자에게 알려 주세요.');
         logbox.open = true;
         return;
       }
-      await new Promise(r => setTimeout(r, 1500));
+      if (res === 'stopped') return;
     }
     stop('너무 오래 걸립니다. 교육 담당자에게 알려 주세요.');
-  }
-
-  (async () => {
-    if (box.dataset.job) { watch(box.dataset.job); return; }
-    const r = await fetch('/onboard/deploy', { method: 'POST' });
-    const j = await r.json().catch(() => ({}));
-    if (j.ready) { done('랩은 이미 준비돼 있습니다.'); return; }
-    if (!r.ok || !j.job_id) { stop(j.error || '랩 만들기를 시작하지 못했습니다.'); return; }
-    if (j.joined) msg.textContent = '같은 랩의 다른 사람이 이미 시작했습니다 — 함께 기다립니다.';
-    watch(j.job_id);
   })();
 })();
 </script>

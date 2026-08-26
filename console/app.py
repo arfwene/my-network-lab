@@ -345,6 +345,25 @@ def _sshkey_ctx(request, user, errors=(), saved="", onboard=False):
 
 
 # ------------------------------------------------------------------ 첫 로그인 마법사
+# 화면에 보여 줄 작업 이름. 무엇을 기다리는지 말해 주기 위한 것뿐이다.
+ACTION_LABEL = {"deploy": "랩 생성", "destroy": "랩 삭제", "reset": "이 모듈 적용",
+                "apply": "설정 적용", "verify": "연결 확인", "keys": "접속 키 반영",
+                "break": "장애 주입", "fix": "장애 복구", "exam": "시험 준비",
+                "drill": "중간 점검 준비", "drill-end": "중간 점검 정리"}
+
+
+def _running(lab_id):
+    """(job_id, action) — 그 랩에서 지금 도는 작업. 없으면 (None, None)."""
+    jid = runner.active.get(lab_id)
+    job = runner.jobs.get(jid) if jid else None
+    return (jid, job.action) if job else (None, None)
+
+
+def _deploy_job(lab_id):
+    jid, action = _running(lab_id)
+    return jid if action == "deploy" else None
+
+
 def _onboard_ctx(request, user, step, err=""):
     lab_id = pick_lab(user)
     have, total = (None, 0)
@@ -362,7 +381,9 @@ def _onboard_ctx(request, user, step, err=""):
         "lab_ready": have is not None and total and have >= total,
         "lab_unknown": have is None,
         "busy": runner.busy(lab_id) if lab_id else True,
-        "active_job": runner.active.get(lab_id) if lab_id else None,
+        # **배포 작업일 때만** 붙잡는다. 예전에는 그 랩에서 도는 것이면 무엇이든
+        # 붙잡아서, [랩 삭제] 직후 이 화면이 삭제 작업을 지켜보며 0% 에 멈춰 있었다.
+        "active_job": _deploy_job(lab_id) if lab_id else None,
         "has_key": bool((user or {}).get("ssh_key")),
     }
 
@@ -408,9 +429,13 @@ async def onboard_deploy(request: Request):
     if not lab_id:
         return JSONResponse({"error": "배정된 랩이 없습니다. 교육 담당자에게 문의해 주세요"},
                             status_code=400)
-    running = runner.active.get(lab_id)
-    if running:
-        return JSONResponse({"job_id": running, "joined": True})
+    jid, action = _running(lab_id)
+    if action == "deploy":
+        return JSONResponse({"job_id": jid, "joined": True})
+    if jid:
+        # 삭제나 설정 적용이 도는 중이다. 그것을 배포인 척 넘겨주면 화면이
+        # 엉뚱한 작업의 진행률을 그린다 — 기다리라고만 말하고 화면이 다시 묻는다.
+        return JSONResponse({"busy": True, "what": ACTION_LABEL.get(action, action)})
     have, total = await asyncio.to_thread(pve.lab_vms, lab_id)
     if have is not None and total and have >= total:
         return JSONResponse({"ready": True})
