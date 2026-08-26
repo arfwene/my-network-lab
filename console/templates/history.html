@@ -4,12 +4,38 @@
 {% include "_topbar.html" %}
 
 <main class="admin">
+  {# 누구의 것을 보고 있는지 · 무엇으로 좁혔는지를 늘 위에 둔다.
+     관리자가 남의 이력을 보는 화면이므로, 지금 누구를 보고 있는지가
+     화면 어디에도 없으면 엉뚱한 사람의 기록을 자기 것으로 읽는다. #}
+  <form class="histpick" method="get" action="/history">
+    {% if is_admin %}
+    <label>교육생
+      <select name="who" onchange="this.form.submit()">
+        <option value="">{{ user.name | default(user.username) }} (나)</option>
+        {% for p in people %}
+        <option value="{{ p.username }}" {{ 'selected' if p.username == target }}>
+          {{ p.name | default(p.username) }} · {{ p.username }}{% if p.lab_id %} · lab{{ p.lab_id }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <label>모듈
+      <select name="module" onchange="this.form.submit()">
+        <option value="">전체</option>
+        {% for mid, m in modules.items() %}
+        <option value="{{ mid }}" {{ 'selected' if mid == module_filter }}>{{ mid | upper }}. {{ m.title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <span class="who-now">지금 보는 이력 — <b>{{ target }}</b>{% if module_filter %} · {{ module_filter | upper }}{% endif %}</span>
+  </form>
+
   <section class="card">
     <h3>진도 <small>{{ target }}</small></h3>
     <table class="users">
       <thead><tr><th>모듈</th><th>퀴즈</th><th>검사</th><th>최고 점수</th><th>시도</th><th>통과 시각</th></tr></thead>
       <tbody>
-      {% for mid, m in modules.items() %}
+      {% for mid, m in modules.items() if not module_filter or mid == module_filter %}
         {% set p = progress.get(mid) %}
         <tr>
           <td><b>{{ mid | upper }}</b> {{ m.title }}</td>
@@ -24,7 +50,12 @@
     </table>
   </section>
 
-  {% if submissions %}
+  {% if not submissions %}
+  <section class="card">
+    <h3>서술 과제</h3>
+    <p class="muted">낸 서술 과제가 없습니다.{% if module_filter %} ({{ module_filter | upper }} 기준){% endif %}</p>
+  </section>
+  {% else %}
   <section class="card">
     <h3>서술 과제 <small>{{ submissions | length }}건</small></h3>
     <table class="users">

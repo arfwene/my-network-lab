@@ -798,3 +798,12 @@ table.users td b,table.users td strong{color:var(--ink)}
   border-radius:0 var(--r-sm) var(--r-sm) 0;color:var(--body)}
 .hint b{display:block;font-weight:600;color:var(--ink);margin:0 0 2px;
   font-size:11px;letter-spacing:.02em}
+
+/* 이력 화면의 고르는 줄. 누구의 것을 보고 있는지가 늘 보여야 한다 — 관리자가
+   남의 기록을 자기 것으로 읽는 사고는 화면이 말해 주지 않아서 생긴다. */
+.histpick{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+.histpick label{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.histpick select{padding:6px 10px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel);color:var(--ink);font-size:13px;max-width:340px}
+.histpick .who-now{margin-left:auto;font-size:13px;color:var(--muted)}
+.histpick .who-now b{color:var(--ink)}

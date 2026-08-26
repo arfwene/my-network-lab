@@ -793,14 +793,22 @@ async def history(request: Request, who: str = "", module: str = ""):
         if not auth.can(user, "user.manage"):
             return HTMLResponse("본인 이력만 볼 수 있습니다.", status_code=403)
         target = who
+    mods = {m["id"]: m for m in docs.modules()}
+    if module and module not in mods:
+        module = ""
+    is_admin = auth.can(user, "user.manage")
+    # 관리자는 교육생만 고르면 된다. 다른 관리자의 이력은 이 화면의 용도가 아니다.
+    people = [u for u in db.list_users() if u["role"] != "admin"] if is_admin else []
     return tpl.TemplateResponse(request, "history.html", {
         **nav_ctx(user, "history"),
-        "user": user, "target": target,
+        "user": user, "target": target, "module_filter": module,
         "attempts": db.list_attempts(target, module or None, 200),
         "progress": db.get_progress(target),
-        "modules": {m["id"]: m for m in docs.modules()},
-        "all_users": db.list_users() if auth.can(user, "user.manage") else [],
-        "submissions": db.latest_submissions(target),
+        "modules": mods,
+        "is_admin": is_admin, "people": people,
+        # 서술 과제도 같은 필터를 받는다. 한 화면에서 두 표가 서로 다른 범위를
+        # 보여 주면 어느 쪽을 믿어야 할지 알 수 없다.
+        "submissions": db.latest_submissions(target, module or None),
         "health": pve.last(),
         "site_name": L.SITE["site"]["name"],
     })
