@@ -4,7 +4,7 @@
 #  이 파일 하나에서 아래가 전부 생성된다.
 #    - Terraform (Proxmox VM / 브리지)      : infra/terraform/
 #    - Ansible inventory + host_vars        : tools/gen-inventory.py
-#    - 모듈별 Mermaid 토폴로지 다이어그램      : tools/render-diagram.py
+#    - 단계별 구성도 (화면 SVG · draw.io)      : tools/topolayout.py
 #  주소 값은 ipam.yml 이 소유한다. 여기서는 "무엇이 무엇에 연결되는가"만 정의한다.
 # =============================================================================
 
@@ -249,7 +249,7 @@ nodes:
       - {name: lo0,  type: loopback, desc: "외부 웹사이트 흉내 (공인 IP)"}
 
 # -----------------------------------------------------------------------------
-# 모듈별 성장 단계 — render-diagram.py 가 이 정보로 모듈별 토폴로지를 그린다
+# 모듈별 성장 단계 — topolayout.py 가 이 정보로 단계별 구성도를 그린다
 # -----------------------------------------------------------------------------
 stages:
   m1: {nodes: [pc1, pc2, sw1],  desc: "L2 · MAC · ARP · 스위칭"}

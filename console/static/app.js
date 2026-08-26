@@ -147,22 +147,31 @@
   //  토폴로지 SVG 는 선이 가늘어 작게 나오면 읽을 수 없다. 원본을 복제해 띄운다 —
   //  옮기면 원래 자리가 비고, 닫을 때 되돌려 놓는 일이 남는다.
   const lb = $('#lightbox');
-  function zoom(el) {
+  function zoom(el, stage) {
     if (!lb) return;
     const inner = lb.querySelector('.lb-inner');
     inner.innerHTML = '';
     inner.appendChild(el.cloneNode(true));
+    // 토폴로지일 때만 내려받기를 연다. 교재 안의 일반 그림은 받을 것이 없다.
+    const dl = lb.querySelector('.lb-dl');
+    if (dl) {
+      if (stage) dl.href = '/topology.drawio?stage=' + encodeURIComponent(stage);
+      dl.hidden = !stage;
+    }
     lb.hidden = false;
   }
   function unzoom() { if (lb) { lb.hidden = true; lb.querySelector('.lb-inner').innerHTML = ''; } }
   document.addEventListener('click', e => {
     if (lb && !lb.hidden) {
+      // 내려받기는 화면을 닫지 않는다 — 눌렀는데 그림이 사라지면 실패로 보인다.
+      if (e.target.closest('.lb-dl')) return;
       // 그림 자체를 누른 것이 아니면 닫는다 (바깥 · [닫기] 둘 다).
       if (!e.target.closest('.lb-inner') || e.target.closest('.lb-close')) unzoom();
       return;
     }
     const pic = e.target.closest('.topo-wrap, .topo-box, .doc img');
-    if (pic) zoom(pic.matches('img') ? pic : (pic.querySelector('svg') || pic));
+    if (pic) zoom(pic.matches('img') ? pic : (pic.querySelector('svg') || pic),
+                  pic.dataset.stage || '');
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') unzoom(); });
 

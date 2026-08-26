@@ -13,7 +13,7 @@ VENV := console/.venv
 # 웹 콘솔(jobs.py)도 같은 규칙으로 고르므로, CLI 와 콘솔이 같은 ansible 을 쓴다.
 APB := $(shell test -x $(VENV)/bin/ansible-playbook && echo $(CURDIR)/$(VENV)/bin/ansible-playbook || echo ansible-playbook)
 
-.PHONY: help doctor check gen docs modules appendix opsvm mgmt ipam deploy config verify \
+.PHONY: help doctor check gen docs modules appendix diagrams opsvm mgmt ipam deploy config verify \
         reset break fix scenarios console console-setup service pack users clean jumpaccess \
         mgmt-net mgmt-net-dry consoleaccess policy uninstall uninstall-check
 
@@ -32,6 +32,7 @@ help:
 	@echo "make verify LAB=1 STAGE=m1   단계별 도달성 검증"
 	@echo "make reset  LAB=1 STAGE=m1   랩 초기화"
 	@echo "make modules                 모듈 교재 렌더링 (dist/modules/)"
+	@echo "make diagrams                구성도 draw.io 파일 (dist/diagrams/)"
 	@echo "make appendix                부록 렌더링 (dist/appendix/)"
 	@echo "make mgmt-net                운영 서버를 관리망에 연결 (1회. NIC 부착 + VLAN 설정)"
 	@echo "make opsvm VMID=9100         위를 손으로 할 때의 절차 문서 (dist/ops-server.md)"
@@ -54,6 +55,7 @@ doctor:
 
 check:
 	@$(PY) tools/validate-site.py --publish
+	@$(PY) tools/check-diagram.py
 
 gen: check
 	@mkdir -p dist
@@ -63,7 +65,7 @@ gen: check
 	@echo "generated dist/ssh-config-lab$(LAB)"
 	@$(MAKE) --no-print-directory docs
 
-docs: modules appendix
+docs: modules appendix diagrams
 	@mkdir -p dist
 	@$(PY) tools/render-labmap.py
 	@$(PY) tools/render-access.py
@@ -72,6 +74,14 @@ docs: modules appendix
 
 modules:
 	@$(PY) tools/render-modules.py --lab $(LAB)
+
+# 구성도를 draw.io 파일로 뽑는다. 화면에 뜨는 SVG 와 같은 배치에서 나오므로
+# 손으로 맞출 것이 없다 — 열어서 손보거나 PNG/PDF 로 내보낼 때 쓴다.
+diagrams:
+	@mkdir -p dist/diagrams
+	@for s in $$($(PY) -c "import sys;sys.path.insert(0,'tools');import labdesign as L;print(' '.join(L.STAGES))"); do \
+		$(PY) tools/topodrawio.py $$s > dist/diagrams/lab-topology-$$s.drawio; done
+	@echo "generated dist/diagrams/lab-topology-m*.drawio"
 
 appendix:
 	@$(PY) tools/render-appendix.py --lab $(LAB)

@@ -37,6 +37,7 @@ sys.path.insert(0, str(HERE.parent / "tools"))
 import labdesign as L          # noqa: E402
 import preflight              # noqa: E402  (tools/ — make doctor 와 같은 검사)
 import assess, auth, autokey, db, docs, exam, jobs, passwords, pve, sshkeys, state, topology_svg  # noqa: E402
+import topodrawio  # noqa: E402  (tools/ — topology_svg 가 경로를 먼저 넣는다)
 
 db.init()   # 스키마 생성 + (있다면) 예전 YAML 계정 이관
 pve.sync()  # DB 에 저장된 Proxmox 접속 정보를 var/runtime.yml 로 다시 내보낸다
@@ -752,6 +753,24 @@ async def topology(request: Request, stage: str = "m10"):
     if stage not in L.STAGES:
         stage = "m10"
     return HTMLResponse(topology_svg.render(stage), media_type="image/svg+xml")
+
+
+@app.get("/topology.drawio")
+async def topology_drawio(request: Request, stage: str = "m10"):
+    """구성도를 draw.io 파일로 내려준다 (그림을 크게 본 화면의 내려받기 단추).
+
+    화면에 뜬 SVG 와 같은 배치에서 나온다 — 열어서 손보거나, 발표 자료로
+    PNG · PDF 로 내보내는 데 쓴다. 랩마다 주소가 같으므로 파일도 하나뿐이다.
+    """
+    user, redir = require(request)
+    if redir:
+        return redir
+    if stage not in L.STAGES:
+        stage = "m10"
+    return PlainTextResponse(
+        topodrawio.drawio(stage), media_type="application/xml",
+        headers={"Content-Disposition":
+                 f'attachment; filename="lab-topology-{stage}.drawio"'})
 
 
 @app.get("/status", response_class=HTMLResponse)

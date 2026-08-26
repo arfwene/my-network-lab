@@ -29,7 +29,11 @@
   </div>
 </div>
 {# 그림 크게 보기. 내용은 누를 때 JS 가 복제해 넣는다 — 마크업을 두 벌 두지 않는다. #}
-<div id="lightbox" hidden><button class="btn lb-close" type="button">닫기</button>
+<div id="lightbox" hidden>
+  <div class="lb-acts">
+    <a class="btn lb-dl" download hidden>구성도 내려받기 (.drawio)</a>
+    <button class="btn lb-close" type="button">닫기</button>
+  </div>
   <div class="lb-inner"></div></div>
 <script src="/static/health.js"></script>
 {% endif %}

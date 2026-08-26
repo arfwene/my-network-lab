@@ -702,7 +702,9 @@ table.users td b,table.users td strong{color:var(--ink)}
   overflow:auto;box-shadow:var(--shadow-2);cursor:default}
 #lightbox svg{width:100%;height:auto;min-width:min(1100px,90vw)}
 #lightbox img{max-width:100%;height:auto;display:block}
-#lightbox .lb-close{position:fixed;top:16px;right:20px;z-index:201}
+#lightbox .lb-acts{position:fixed;top:16px;right:20px;z-index:201;
+  display:flex;gap:8px;align-items:center}
+#lightbox .lb-dl{text-decoration:none}
 @media (max-width:640px){#lightbox .lb-inner{padding:10px}
   #lightbox svg{min-width:0}}
 
