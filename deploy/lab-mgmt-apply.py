@@ -28,6 +28,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 POLICY = "/etc/my-network-lab/policy.json"
@@ -36,6 +37,9 @@ IFACE_RE = re.compile(r"^[a-z][a-z0-9]{0,14}$")
 
 
 def die(msg, hint=""):
+    # stderr 로 가기 전에 stdout 을 비운다. 파이프로 받으면 stdout 은 버퍼링되고
+    # stderr 은 안 되므로, 안 비우면 화면에서 오류가 성공 줄보다 **위에** 찍힌다.
+    sys.stdout.flush()
     print(f"✘ {msg}", file=sys.stderr)
     for line in hint.splitlines():
         if line:
@@ -196,13 +200,24 @@ def main(a):
 
     # 실제로 주소가 붙었는지 본다. netplan 은 문법이 맞으면 조용히 성공한다 —
     # 링크가 안 올라와도 그렇다. "적용했다" 와 "붙었다" 는 다른 말이다.
-    got = subprocess.run(["ip", "-o", "-4", "addr", "show"],
-                         capture_output=True, text=True).stdout
-    bad = [v for v in vlans if f"{v['ip']}/" not in got]
+    #
+    # 다만 `netplan apply` 는 **인터페이스가 실제로 서기 전에 돌아온다.**
+    # 곧바로 보면 여섯 개가 전부 "없음" 으로 나오고, 2초 뒤에 보면 전부 있다.
+    # 그래서 한 번 보고 판단하지 않고 잠깐 기다려 준다 — 고정된 sleep 은
+    # 느린 장비에서 또 틀리므로, 다 붙으면 바로 빠져나오는 쪽으로 한다.
+    bad = list(vlans)
+    for _ in range(30):
+        got = subprocess.run(["ip", "-o", "-4", "addr", "show"],
+                             capture_output=True, text=True).stdout
+        bad = [v for v in vlans if f"{v['ip']}/" not in got]
+        if not bad:
+            break
+        time.sleep(0.5)
     for v in vlans:
         (say if v in bad else ok)(
             f"{v['iface']:<8s} {v['ip']}" + ("  없음" if v in bad else ""))
     if bad:
+        sys.stdout.flush()
         print(f"\n{len(bad)}개가 올라오지 않았다. 되돌리려면:\n"
               f"  sudo rm {path} && sudo netplan apply", file=sys.stderr)
         return 1
