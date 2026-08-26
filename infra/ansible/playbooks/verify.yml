@@ -11,8 +11,10 @@
 
   tasks:
     - name: 인터페이스가 전부 up 인가
+      # 인터페이스 자체가 없을 수도 있다 (설정이 아직 안 올라간 노드).
+      # cat 이 그냥 실패하면 모듈 오류로 터져 원인이 안 보인다 — 값으로 말하게 한다.
       ansible.builtin.shell: |
-        cat /sys/class/net/{{ item.name }}/operstate
+        cat /sys/class/net/{{ item.name }}/operstate 2>/dev/null || echo '없음(설정 미적용)'
       register: link_state
       changed_when: false
       failed_when: link_state.stdout != 'up'

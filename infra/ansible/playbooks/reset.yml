@@ -38,9 +38,16 @@
       failed_when: false
 
     - name: 인터페이스 주소 비우기 (임시로 추가한 주소 제거)
+      # 관리망은 **절대** 건드리지 않는다. 이름으로 고르면 안 된다 —
+      # 설정이 아직 안 올라간 노드에서는 관리 NIC 도 eth0 로 보이고,
+      # 그러면 `^eth` 에 걸려 초기화가 랩 전체를 잠가 버린다.
+      # 실제로 그렇게 13대 중 11대가 접속 불능이 된 적이 있다.
+      # 이름은 못 믿으므로 MAC 으로 가려낸다.
       ansible.builtin.shell: |
-        set -e
-        for i in $(ls /sys/class/net | grep -E '^eth|^lo0'); do
+        for d in /sys/class/net/*; do
+          i=$(basename "$d")
+          [ "$i" = lo ] && continue
+          [ "$(cat "$d/address" 2>/dev/null)" = "{{ mgmt_mac }}" ] && continue
           ip addr flush dev "$i" 2>/dev/null || true
         done
       changed_when: true
@@ -59,7 +66,25 @@
 
     - name: 링크 강제 up (교육생이 down 시킨 것 복구)
       ansible.builtin.shell: |
-        for i in $(ls /sys/class/net | grep -E '^eth|^mgmt'); do ip link set "$i" up; done
+        for d in /sys/class/net/*; do
+          i=$(basename "$d")
+          [ "$i" = lo ] || ip link set "$i" up 2>/dev/null || true
+        done
+      changed_when: true
+      failed_when: false
+
+    - name: 관리망 주소 확인 (초기화가 접속 경로를 끊지 않았는지)
+      # 마지막 그물. 위 작업들이 아무리 어긋나도 관리망만은 살아서 나가야 한다 —
+      # "랩이 완전히 죽어도 이 경로로는 항상 접속된다" 가 이 랩의 전제이기 때문.
+      ansible.builtin.shell: |
+        m=""
+        for d in /sys/class/net/*; do
+          [ "$(cat "$d/address" 2>/dev/null)" = "{{ mgmt_mac }}" ] && m=$(basename "$d")
+        done
+        [ -n "$m" ] || exit 0
+        ip link set "$m" up 2>/dev/null || true
+        ip -4 addr show dev "$m" | grep -q "inet {{ mgmt_ip }}/" || \
+          ip addr add {{ mgmt_ip }}/{{ mgmt_prefixlen }} dev "$m"
       changed_when: true
       failed_when: false
 
