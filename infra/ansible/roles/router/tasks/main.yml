@@ -58,6 +58,17 @@
     if [ -n "$rows" ] && printf '%s\n' "$rows" | grep -qv Full; then exit 1; fi
     r6=$(vtysh -c 'show ipv6 ospf6 neighbor' 2>/dev/null | awk '$1 ~ /^[0-9]+\./')
     if [ -n "$r6" ] && printf '%s\n' "$r6" | grep -qv Full; then exit 1; fi
+    # 정적 경로도 RIB 에 올라와 있어야 한다. 설정 파일에 적은 수만큼 보여야
+    # "적용이 끝났다" 고 말할 수 있다. M3 검사가 갓 만든 랩에서만 r2·r4 의
+    # 경로 항목에서 떨어지던 것이 이것이었다 — 두 번째로 돌리면 통과한다.
+    #
+    # 덤으로 **조용히 거부된 설정**도 여기서 걸린다. FRR 은 이해 못 한 줄을
+    # 오류 없이 버리는데(줄 끝 주석이 그랬다), 그러면 이 수가 안 맞는다.
+    want=$(grep -cE '^ip route ' /etc/frr/frr.conf 2>/dev/null || echo 0)
+    if [ "$want" -gt 0 ]; then
+      got=$(vtysh -c 'show ip route static' 2>/dev/null | grep -cE '^S' || echo 0)
+      [ "$got" -ge "$want" ] || exit 1
+    fi
     exit 0
   register: ospf_conv
   until: ospf_conv.rc == 0
