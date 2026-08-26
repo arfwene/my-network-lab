@@ -90,7 +90,27 @@
   loop:
     - {k: net.ipv4.ip_forward,             v: "{{ 1 if node_role in ['router','edge'] else 0 }}"}
     - {k: net.ipv6.conf.all.forwarding,    v: "{{ 1 if node_role in ['router','edge'] else 0 }}"}
+    # 역경로 검사(rp_filter)를 끈다. 우분투 기본값은 2(느슨) 인데, 그 상태에서는
+    # **출발지로 가는 경로가 없는 패킷을 전달하기 전에 버린다.**
+    #
+    # M3 에서 traceroute 의 3번 홉이 * 로만 나오던 원인이 이것이었다. r4 는
+    # ICMP time exceeded 를 분명히 보내는데(캡처로 확인), 돌아오는 길의 r1 이
+    # 그것을 버렸다. r1 에게는 요약 경로(10.10.32.0/19)뿐이라 전송 구간
+    # 10.10.64.8/30 으로 가는 경로가 없기 때문이다.
+    #
+    # rp_filter 는 호스트를 지키는 기능이지 이 교육과정의 주제가 아니다.
+    # 그리고 실장비 라우터는 통과 트래픽에 이런 검사를 기본으로 걸지 않는다.
+    # 켜 두면 진단 트래픽이 아무 말 없이 사라져 교육생이 없는 장애를 쫓는다.
+    - {k: net.ipv4.conf.all.rp_filter,     v: "0"}
+    - {k: net.ipv4.conf.default.rp_filter, v: "0"}
   loop_control: {label: "{{ item.k }}={{ item.v }}"}
+
+- name: 이미 올라온 인터페이스에도 rp_filter 0 을 적용
+  # all·default 를 바꿔도 **이미 만들어진** 인터페이스의 값은 안 바뀐다.
+  # 부팅 때 만들어진 eth* 는 예전 값을 그대로 들고 있다.
+  ansible.builtin.shell: |
+    for f in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 0 > "$f" 2>/dev/null || true; done
+  changed_when: true
 
 - name: lab-whereami 헬퍼 배포 (내 인터페이스가 어느 링크에 붙어 있는가)
   # 접속 키만 올릴 때도 함께 깔린다. 온보딩을 마치면 교육생이 곧바로 SSH 로
