@@ -51,10 +51,13 @@
   #
   # 인접이 아직 하나도 없는 단계(M3 이하 · edge)는 기다릴 것이 없으므로 통과시킨다.
   # 머리글 앞에 빈 줄이 붙어 나오므로 IP 로 시작하는 줄만 본다.
+  # IPv6(OSPFv3)도 함께 본다. M5 부터는 이쪽이 안 서면 IPv6 통신이 통째로 죽는데,
+  # IPv4 만 보고 "수렴했다" 고 넘어가면 검증이 또 이른 판정을 하게 된다.
   ansible.builtin.shell: |
     rows=$(vtysh -c 'show ip ospf neighbor' 2>/dev/null | awk '$1 ~ /^[0-9]+\./')
-    [ -n "$rows" ] || exit 0
-    printf '%s\n' "$rows" | grep -qv Full && exit 1
+    if [ -n "$rows" ] && printf '%s\n' "$rows" | grep -qv Full; then exit 1; fi
+    r6=$(vtysh -c 'show ipv6 ospf6 neighbor' 2>/dev/null | awk '$1 ~ /^[0-9]+\./')
+    if [ -n "$r6" ] && printf '%s\n' "$r6" | grep -qv Full; then exit 1; fi
     exit 0
   register: ospf_conv
   until: ospf_conv.rc == 0
