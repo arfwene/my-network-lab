@@ -91,6 +91,14 @@ def checkpoint_for(stage):
     return None
 
 
+def checkpoint_module(checkpoint):
+    """그 단계의 모듈 id. 중간 점검의 '고쳤는지' 판정을 이 모듈 검사로 한다."""
+    for m in docs.modules():
+        if m["stage"] == checkpoint.get("stage"):
+            return m["id"]
+    return None
+
+
 def drill_pick(checkpoint, all_ids, n=None):
     """중간 점검에 쓸 시나리오. 서버가 고른다 — 고른 것을 알려주지 않는다."""
     known = set(all_ids)

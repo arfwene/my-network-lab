@@ -64,9 +64,9 @@
     'drill-end': {
       title: '정답을 보고 복구합니다',
       body: `<ul>
-        <li>무엇이 주입됐는지 <b>로그에 그대로 나옵니다</b></li>
+        <li>무엇이 주입됐는지 <b>로그에 그대로 나옵니다</b>. 이 회차는 여기서 끝납니다</li>
+        <li>아직 안 눌러 봤다면 <b>[다 고쳤습니다]</b> 와 <b>[힌트]</b> 가 먼저입니다</li>
         <li>이미 손으로 고쳤어도 괜찮습니다 — 복구는 여러 번 돌려도 됩니다</li>
-        <li>먼저 <b>원인을 말로 정리해 본 뒤</b> 누르는 편이 남습니다</li>
       </ul>`,
       ok: '정답을 봅니다'
     },
@@ -307,6 +307,8 @@
       await stream(j.job_id);
       // 중간 점검은 실행 패널 자체가 바뀐다(시작 <-> 끝내기). 부분 갱신으로는 못 맞춘다.
       if (action === 'drill' || action === 'drill-end') { location.reload(); return; }
+      // 검사를 통과했으면 패널 자체가 사라진다. 통과 못 했으면 그대로 두고 로그만 남긴다.
+      if (action === 'drill-check') { await refreshStatus(); if (await drillGone()) location.reload(); return; }
       // 단계가 올라갔으면 배너와 헤더 칩이 거짓말을 하고 있다. 조각을 다시 받아 맞춘다.
       // (퀴즈 제출 경로에서는 하지 않는다 — 채점 결과가 화면에서 날아간다)
       if (curModule()) await loadModule(curModule(), $('.tab.on')?.dataset.kind || 'README');
@@ -320,6 +322,35 @@
   //  잠금의 본체는 서버(exam.gate)다. 여기서 하는 일은 남은 시간을 보여주고
   //  단계가 바뀐 순간 화면을 서버 상태에 맞추는 것뿐이다.
   let lastPhase = $('#exambar')?.dataset.phase || 'none';
+
+  // ------------------------------------------------------------ 중간 점검
+  //  힌트는 서버가 단계별로 내준다. 정답 줄은 창구가 아예 내보내지 않는다.
+  async function drillGone() {
+    const r = await fetch(`/status?lab=${labId()}`);
+    return !(await r.text()).includes('중간 점검 중');
+  }
+
+  $('#hintbtn')?.addEventListener('click', async e => {
+    const btn = e.currentTarget, box = $('#hints');
+    btn.disabled = true;
+    try {
+      const r = await fetch('/drill/hint', {
+        method: 'POST', body: new URLSearchParams({ lab: labId() })
+      });
+      const j = await r.json();
+      if (!r.ok) { paint('!! ' + (j.error || '힌트를 받지 못했습니다')); return; }
+      const el = document.createElement('p');
+      el.className = 'hint';
+      el.innerHTML = j.done
+        ? `<b>더 없습니다</b> ${j.text}`
+        : `<b>힌트 ${j.level} · ${j.title}</b> ${j.text}`;
+      box.appendChild(el);
+      btn.textContent = j.done ? '힌트를 다 봤습니다' : '힌트 하나 더';
+      if (j.done) return;                       // 마지막이면 잠근 채로 둔다
+    } finally {
+      if (btn.textContent !== '힌트를 다 봤습니다') btn.disabled = false;
+    }
+  });
 
   function refreshStatus() {
     return fetch(`/status?lab=${labId()}`).then(r => r.text()).then(h => {

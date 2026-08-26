@@ -30,7 +30,9 @@ def load(lab_id):
             "last_job": None, "broken": [], "provisioned": None,
             # 진단 연습 중에는 무엇이 주입됐는지 화면에 쓰지 않는다.
             # 이 값이 참인 동안 broken 은 있으나 보이지 않는다.
-            "blind": False}
+            "blind": False,
+            # 중간 점검에서 받아 간 힌트 수. 새 회차마다 0 으로 돌아간다.
+            "hints": 0}
 
 
 def save(lab_id, st):
@@ -109,6 +111,7 @@ def record(lab_id, action, stage=None, ok=True, scenario=None, job_id=None):
     if ok and action == "drill" and scenario:
         st["broken"] = [x for x in scenario.split(",") if x]
         st["blind"] = True
+        st["hints"] = 0
     if action in ("drill-end", "reset", "exam"):
         st["blind"] = False
     if action == "drill-end" and ok:
@@ -133,3 +136,24 @@ def module_status(lab_id, module):
     if st.get("stage") and L.STAGES.index(st["stage"]) > L.STAGES.index(stage):
         return "passed"
     return "pending"
+
+
+def take_hint(lab_id):
+    """힌트를 하나 더 받는다. 받은 횟수를 돌려준다 (1 부터)."""
+    st = load(lab_id)
+    st["hints"] = int(st.get("hints") or 0) + 1
+    save(lab_id, st)
+    return st["hints"]
+
+
+def drill_solved(lab_id):
+    """검사를 통과했다 — 정답을 보지 않고 끝냈다.
+
+    시나리오의 fix 를 돌리지 않는다. 교육생이 손으로 고쳐 검사가 통과한 상태라
+    되돌릴 것이 없다. 여기서 fix 를 또 돌리면 교육생이 만든 정상 설정을
+    덮어쓸 수도 있다.
+    """
+    st = load(lab_id)
+    st["broken"] = []
+    st["blind"] = False
+    return save(lab_id, st)

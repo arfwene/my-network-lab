@@ -67,7 +67,7 @@ def tf_env(lab_id):
 SETUP_ACTIONS = {"setup-mgmt", "setup-docs", "setup-access", "setup-jump-apply"}
 SETUP_LAB = 0
 ACTIONS = {"deploy", "destroy", "apply", "keys", "verify", "reset", "break", "fix",
-           "check", "exam", "drill", "drill-end"} | SETUP_ACTIONS
+           "check", "exam", "drill", "drill-end", "drill-check"} | SETUP_ACTIONS
 # 문서·계정 파일 생성은 Proxmox 와 무관하다. 여기에 관문을 두면
 # "Proxmox 가 아직 안 되니 안내 문서도 못 만든다" 는 막다른 길이 생긴다.
 NO_PVE = {"setup-docs", "setup-access", "setup-jump-apply"}
@@ -109,6 +109,36 @@ class NotReady(RuntimeError):
 
 def scenario_ids():
     return sorted(p.stem for p in (L.ROOT / "scenarios").glob("*.yml"))
+
+
+# 시나리오 파일 머리말. 34개가 같은 형식으로 적혀 있다.
+#   #   증상  : ...
+#   #   정답  : ...
+#   #   노림수: ...
+# 중간 점검의 힌트가 여기서 나온다 — 따로 힌트를 쓰지 않는다.
+# 두 곳에 같은 말을 적으면 한쪽이 낡는다.
+_DOC_KEY = re.compile(r"^#\s{2,}(증상|정답|노림수)\s*:\s*(.*)$")
+
+
+def scenario_doc(sid):
+    """{'증상': ..., '정답': ..., '노림수': ...}. 없으면 빈 dict."""
+    f = L.ROOT / "scenarios" / f"{sid}.yml"
+    if not f.exists():
+        return {}
+    out, key = {}, None
+    for line in f.read_text(encoding="utf-8").split("\n"):
+        if not line.startswith("#"):
+            if out:
+                break
+            continue
+        m = _DOC_KEY.match(line)
+        if m:
+            key = m.group(1)
+            out[key] = m.group(2).strip()
+        elif key and line.startswith("#") and line[1:].strip():
+            # 다음 줄로 이어진 설명
+            out[key] = (out[key] + " " + line[1:].strip()).strip()
+    return out
 
 
 def build_steps(action, lab_id, stage, scenario=None, module=None):
@@ -169,7 +199,7 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
     if action == "reset":
         return [gen, (ANSIBLE, [APB, "-i", inv, "playbooks/reset.yml",
                                 "-e", f"lab_stage={stage}"])]
-    if action == "check":
+    if action in ("check", "drill-check"):
         if not module:
             raise ValueError("검사에는 모듈이 필요합니다")
         return [(L.ROOT, [PY, "tools/run-checks.py", "--lab", str(lab_id), "--module", module])]

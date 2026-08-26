@@ -687,5 +687,13 @@ table.users td b,table.users td strong{color:var(--ink)}
    진행 중일 때는 테두리 색으로 "지금 뭔가 숨겨져 있다" 를 말한다. */
 .drill{border:1px solid var(--line);border-radius:var(--r-md);padding:12px;margin:0 0 12px}
 .drill > b{display:block;font-weight:600;font-size:13px;margin:0 0 6px;letter-spacing:-.01em}
-.drill .note{margin:0 0 10px;font-size:12px;line-height:1.55;color:var(--mute)}
+.drill .note{margin:0 0 10px;font-size:12px;line-height:1.55;color:var(--muted)}
 .drill.on{border-color:var(--warn-line);background:color-mix(in srgb,var(--warn) 7%,transparent)}
+.drill .btn{margin:0 0 6px}
+.hints:empty{display:none}
+.hints{margin:2px 0 8px}
+.hint{margin:0 0 6px;padding:8px 10px;font-size:12px;line-height:1.6;
+  border-left:2px solid var(--warn-line);background:var(--sunken);
+  border-radius:0 var(--r-sm) var(--r-sm) 0;color:var(--body)}
+.hint b{display:block;font-weight:600;color:var(--ink);margin:0 0 2px;
+  font-size:11px;letter-spacing:.02em}

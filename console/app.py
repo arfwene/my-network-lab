@@ -215,6 +215,9 @@ def base_ctx(request, user, lab_id):
         "capstone": exam.module_id(),
         # 중간 점검은 **단계마다** 열린다. 지금 보고 있는 모듈이 그 단계면 버튼이 나온다.
         "checkpoints": {c["stage"]: c for c in exam.drill_cfg()["checkpoints"]},
+        # 이미 받아 간 힌트. 새로고침했다고 사라지면 다시 받으러 누르게 된다.
+        "drill_hints": [h for h in (_drill_hint(st, i)
+                                    for i in range(1, int(st.get("hints") or 0) + 1)) if h],
     }
 
 
@@ -760,6 +763,67 @@ async def status(request: Request, lab: int | None = None):
     return tpl.TemplateResponse(request, "_status.html", base_ctx(request, user, lab_id))
 
 
+HINT_LEVELS = {1: ("노림수", "어디를 볼 것인가"),
+               2: ("증상", "되는 것과 안 되는 것")}
+
+
+def _drill_hint(st, level):
+    """단계별 힌트 한 개. 정답 줄은 여기 오지 않는다.
+
+    본문은 교재와 같은 규칙으로 그린다 — `**굵게**` 를 그대로 두면
+    화면에 별표가 보인다 (교재에서 이미 한 번 겪은 일이다).
+    """
+    key, title = HINT_LEVELS.get(level, (None, None))
+    if not key:
+        return None
+    texts = [t for t in (jobs.scenario_doc(x).get(key) for x in (st.get("broken") or [])) if t]
+    return {"title": title,
+            "text": str(_labtext(" / ".join(texts))) if texts
+                    else "이 시나리오에는 힌트가 없습니다."}
+
+
+def _drill_passed(job):
+    """중간 점검 판정. run-checks 는 언제나 0 으로 끝나므로 결과 파일을 읽는다."""
+    if job.action != "drill-check" or job.status != "ok" or not job.module:
+        return False
+    res = assess.read_checks_result(job.lab_id, job.module)
+    return bool(res and res.get("passed"))
+
+
+def _job_done(j):
+    state.record(j.lab_id, j.action, j.stage, j.status == "ok", j.scenario, j.id)
+    # 검사를 전부 통과했다 = 스스로 고쳤다. 정답을 보여 주지 않고 끝낸다.
+    if _drill_passed(j):
+        state.drill_solved(j.lab_id)
+
+
+# ------------------------------------------------------------------ 중간 점검
+@app.post("/drill/hint")
+async def drill_hint(request: Request, lab: int = Form(...)):
+    """힌트를 한 단계씩. **정답 줄은 절대 내보내지 않는다.**
+
+    힌트는 시나리오 파일 머리말에서 온다 — 교재와 따로 관리하면 한쪽이 낡는다.
+      1단계 노림수 : 어디를 어떻게 볼 것인가 (관점)
+      2단계 증상   : 되는 것과 안 되는 것의 대비 (범위)
+    """
+    user = current_user(request)
+    if not user:
+        return JSONResponse({"error": "로그인이 필요합니다"}, status_code=401)
+    if lab not in auth.allowed_labs(user):
+        return JSONResponse({"error": "이 랩에 대한 권한이 없습니다"}, status_code=403)
+    st = state.load(lab)
+    if not (st.get("blind") and st.get("broken")):
+        return JSONResponse({"error": "진행 중인 중간 점검이 없습니다"}, status_code=400)
+
+    level = state.take_hint(lab)
+    got = _drill_hint(st, level)
+    if not got:
+        return JSONResponse({"level": level, "done": True,
+                             "text": "힌트는 여기까지입니다. "
+                                     "[정답 보고 복구] 를 누르면 무엇이었는지 나옵니다."})
+    return JSONResponse({"level": level, "done": False, **got})
+
+
 # ------------------------------------------------------------------ 실행
 @app.post("/action")
 async def action(request: Request, lab: int = Form(...), action: str = Form(...),
@@ -788,12 +852,22 @@ async def action(request: Request, lab: int = Form(...), action: str = Form(...)
         except ValueError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
         secret = True          # 로그에 시나리오 이름이 찍힌다. 응시자에게는 가린다.
+    if action == "drill-check":
+        # 어느 모듈의 검사로 판정할지는 **서버가 정한다.** 화면이 보내는 값을 믿으면
+        # 검사 항목이 적은 모듈을 골라 통과시킬 수 있다.
+        st0 = state.load(lab)
+        if not (st0.get("blind") and st0.get("broken")):
+            return JSONResponse({"error": "진행 중인 중간 점검이 없습니다"}, status_code=400)
+        cp = exam.checkpoint_for(stage) or next(
+            (c for c in exam.drill_cfg()["checkpoints"]), None)
+        module = (exam.checkpoint_module(cp) if cp else None) or module
+        if not module:
+            return JSONResponse({"error": "판정할 모듈을 찾지 못했습니다"}, status_code=400)
+        # 검사 출력에는 실패한 항목 이름이 그대로 나온다 — 그게 곧 답이다. 가린다.
+        secret = True
     try:
         job = await runner.submit(lab, action, stage, scenario or None,
-                                  user.get("username"),
-                                  on_done=lambda j: state.record(
-                                      j.lab_id, j.action, j.stage, j.status == "ok",
-                                      j.scenario, j.id),
+                                  user.get("username"), on_done=_job_done,
                                   module=module or None, secret=secret)
     except jobs.Locked as e:
         # 423 Locked — 실패가 아니라 "지금은 잠겨 있다"는 뜻이다. 화면이 구분해서 보여준다.
@@ -849,18 +923,34 @@ async def job_stream(request: Request, job_id: str):
         # 시험 문제(주입한 시나리오)는 실행 로그에 그대로 찍힌다.
         # 응시자에게는 진행 사실만 알리고 내용은 보내지 않는다 — 관리자는 그대로 본다.
         if job.secret and not reveal:
-            drill = job.action == "drill"
-            yield sse("$ " + ("중간 점검 준비 중" if drill else "시험 준비 중")
-                      + " — 랩을 초기화하고 장애를 주입합니다")
-            yield sse("   (무엇을 주입했는지는 보이지 않습니다)")
-            while job.status not in ("ok", "failed"):
-                await asyncio.sleep(0.5)
-            if job.status != "ok":
-                yield sse("!! 준비 실패 — 교육 담당자에게 알려 주세요")
-            elif drill:
-                yield sse("== 준비 완료. 증상부터 확인해 주세요 — 어디까지 되고 어디부터 안 되는가.")
+            # 판정만 흘린다. 검사 출력에는 실패한 항목 이름이 그대로 나오는데,
+            # 중간 점검에서 그것은 답을 알려 주는 것과 같다.
+            if job.action == "drill-check":
+                yield sse("$ 검사를 돌립니다 — 어느 항목인지는 알려 드리지 않습니다")
+                while job.status not in ("ok", "failed"):
+                    await asyncio.sleep(0.5)
+                res = assess.read_checks_result(job.lab_id, job.module) or {}
+                tot, okc = res.get("total", 0), res.get("ok", 0)
+                if job.status != "ok" or not tot:
+                    yield sse("!! 검사를 돌리지 못했습니다 — 교육 담당자에게 알려 주세요")
+                elif res.get("passed"):
+                    yield sse(f"== {okc}/{tot} 통과. 해결했습니다 — 정답을 보지 않고 끝냈습니다.")
+                else:
+                    yield sse(f"== 아직입니다. {okc}/{tot} 통과.")
+                    yield sse("   막혔으면 [힌트] 를 눌러 주세요. 한 단계씩 나옵니다.")
             else:
-                yield sse("== 준비 완료. 지금부터 시간이 갑니다.")
+                drill = job.action == "drill"
+                yield sse("$ " + ("중간 점검 준비 중" if drill else "시험 준비 중")
+                          + " — 랩을 초기화하고 장애를 주입합니다")
+                yield sse("   (무엇을 주입했는지는 보이지 않습니다)")
+                while job.status not in ("ok", "failed"):
+                    await asyncio.sleep(0.5)
+                if job.status != "ok":
+                    yield sse("!! 준비 실패 — 교육 담당자에게 알려 주세요")
+                elif drill:
+                    yield sse("== 준비 완료. 증상부터 확인해 주세요 — 어디까지 되고 어디부터 안 되는가.")
+                else:
+                    yield sse("== 준비 완료. 지금부터 시간이 갑니다.")
         else:
             async for chunk in runner.stream(job_id):
                 if not chunk:
