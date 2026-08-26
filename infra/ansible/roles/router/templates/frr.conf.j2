@@ -17,12 +17,17 @@ frr defaults traditional
 hostname {{ node }}
 log syslog informational
 service integrated-vtysh-config
+!  ※ 주석은 반드시 **자기 줄**에 둔다. FRR 은 줄 끝의 ! 를 명령의 일부로
+!     읽어서 그 줄 전체를 거부한다 — 조용히, 오류 없이.
+!       % Unknown command: ip route 10.10.32.0/19 10.10.64.2   ! Site-B
+!     그 탓에 M3 정적 라우팅이 한 번도 올라간 적이 없었다.
 !
 {% if si >= m3 and si < m4 and static_routes_m3 %}
 ! ---- M3 : 정적 라우팅 ----------------------------------------------------
 !  ※ 양방향으로 넣어야 통신이 된다. 한쪽만 넣으면 "가는 길은 있는데 오는 길이 없다".
 {% for r in static_routes_m3 %}
-ip route {{ r.prefix }} {{ r.via }}   ! {{ r.desc }}
+! {{ r.desc }}
+ip route {{ r.prefix }} {{ r.via }}
 {% endfor %}
 !
 {% endif %}
@@ -34,7 +39,8 @@ interface {{ i.name }}
 {% endif %}
  ip ospf area {{ routing.ospf.area }}
 {% if i.ospf_cost is defined %}
- ip ospf cost {{ i.ospf_cost }}         ! 주 경로 10 / 백업 100
+! 주 경로 10 / 백업 100
+ ip ospf cost {{ i.ospf_cost }}
 {% endif %}
 {% if v6 and i.ipv6 is defined %}
  ipv6 ospf6 area {{ routing.ospf6.area }}
@@ -46,14 +52,16 @@ interface {{ i.name }}
 {% endfor %}
 router ospf
  ospf router-id {{ loopback_ipv4 }}
+! 사용자·서버망 — Hello 를 보낼 이유가 없다
 {% for p in ospf_passive %}
- passive-interface {{ p }}              ! 사용자/서버망 — Hello 를 보낼 이유가 없다
+ passive-interface {{ p }}
 {% endfor %}
 {% for i in lab_interfaces if i.active and i.role | default('') == 'loopback' %}
  passive-interface {{ i.name }}
 {% endfor %}
 {% if si >= m9 and edge_routing.ospf_default_originate | default(false) %}
- default-information originate          ! 내부 라우터들이 기본 경로를 학습한다
+! 내부 라우터들이 기본 경로를 학습한다
+ default-information originate
 {% endif %}
 !
 {% if v6 %}
@@ -66,7 +74,8 @@ router ospf6
 ! ---- M9 : 인터넷 경계 ----------------------------------------------------
 !  경계는 IGP 로 풀지 않는다. 실무에서도 정적 default 또는 BGP 를 쓴다.
 {% for r in edge_routing.static if r.via %}
-ip route {{ r.prefix }} {{ r.via }}   ! {{ r.desc }}
+! {{ r.desc }}
+ip route {{ r.prefix }} {{ r.via }}
 {% endfor %}
 {% endif %}
 !
