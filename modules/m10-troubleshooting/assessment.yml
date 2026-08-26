@@ -4,7 +4,7 @@
 #   복사하지 않고 참조로 가져오는 이유: 원본 검사를 고쳤을 때 캡스톤만 낡는 것을 막는다.
 #   가져오지 않은 것들과 그 이유는 answers.md 의 「검사 구성」 절에 적어 두었다.
 quiz:
-  pass_score: 80
+  pass_score: 100
   questions:
     - id: q1
       type: single

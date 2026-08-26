@@ -2,7 +2,7 @@
 #   ※ 검사 순서가 중요하다. pc1 의 SNAT 검사가 먼저 돌아야 edge 의 conntrack 검사에
 #      볼 만한 세션이 남는다. 항목 순서를 바꾸지 말 것.
 quiz:
-  pass_score: 80
+  pass_score: 100
   questions:
     - id: q1
       type: single

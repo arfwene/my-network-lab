@@ -1,6 +1,6 @@
 # M2 평가 — 퀴즈(계산·판단) + 검사(설정이 들어갔는가 · 뒷정리를 했는가) + 서술(설계 근거)
 quiz:
-  pass_score: 80
+  pass_score: 100
   questions:
     - id: q1
       type: short

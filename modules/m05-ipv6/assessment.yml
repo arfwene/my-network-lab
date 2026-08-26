@@ -2,7 +2,7 @@
 #   서술 과제는 두지 않는다 (PLAN 6.6). M5 는 대조 학습이 중심이고,
 #   진단 서술은 M6 의 "연결 실패 4종 감별" 에서 받는다.
 quiz:
-  pass_score: 80
+  pass_score: 100
   questions:
     - id: q1
       type: short

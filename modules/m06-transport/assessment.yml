@@ -1,6 +1,6 @@
 # M6 평가 — 퀴즈 비중이 큰 모듈 (PLAN 6.1). 검사는 "서비스가 정상인가 · 뒷정리를 했는가" 중심.
 quiz:
-  pass_score: 80
+  pass_score: 100
   questions:
     - id: q1
       type: single

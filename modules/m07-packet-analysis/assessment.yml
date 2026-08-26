@@ -3,7 +3,7 @@
 #   tcpdump -r 로 파일을 열어 "조건에 맞는 패킷이 들어 있는가" 와
 #   "들어가면 안 되는 것이 안 들어갔는가" 를 함께 본다.
 quiz:
-  pass_score: 80
+  pass_score: 100
   questions:
     - id: q1
       type: single

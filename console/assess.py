@@ -14,6 +14,10 @@ import docs                # noqa: E402
 SRC = L.ROOT / "modules"
 
 
+# 퀴즈 통과 기준. 모듈이 assessment.yml 에 적어 두면 그 값이 이긴다.
+#   100 = 다 맞혀야 넘어간다. 개념 확인 문항이라 "대충 알면 통과" 를 두지 않는다.
+PASS_SCORE = 100
+
 def spec(module):
     f = SRC / module["dir"] / "assessment.yml"
     if not f.exists():
@@ -94,7 +98,7 @@ def quiz_for_client(module, lab_id):
             "text": Template(it["text"]).render(**ctx),
             "choices": [Template(c).render(**ctx) for c in it.get("choices", [])],
         })
-    return {"pass_score": q.get("pass_score", 80), "questions": out}
+    return {"pass_score": q.get("pass_score", PASS_SCORE), "questions": out}
 
 
 def _norm(s):
@@ -131,8 +135,8 @@ def grade_quiz(module, lab_id, answers):
     total = len(q.get("questions", []))
     score = round(correct / total * 100) if total else 100
     return {"score": score, "correct": correct, "total": total,
-            "pass_score": q.get("pass_score", 80),
-            "passed": score >= q.get("pass_score", 80), "items": detail}
+            "pass_score": q.get("pass_score", PASS_SCORE),
+            "passed": score >= q.get("pass_score", PASS_SCORE), "items": detail}
 
 
 def checks_result_path(lab_id, module_id):

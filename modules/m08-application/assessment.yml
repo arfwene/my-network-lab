@@ -1,6 +1,6 @@
 # M8 평가 — 퀴즈(판별·책임 소재·연결 방향) + 검사(이름·HTTP·FTP 가 실제로 되는가)
 quiz:
-  pass_score: 80
+  pass_score: 100
   questions:
     - id: q1
       type: single
