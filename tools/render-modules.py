@@ -17,6 +17,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import labdesign as L
 import diagramsvg
+import mdtoc
 
 SRC = L.ROOT / "modules"
 OUT = L.ROOT / "dist/modules"
@@ -77,8 +78,11 @@ def render(lab_id=1, only=None):
         for f in sorted(d.iterdir()):
             if f.suffix == ".j2":
                 out = dst / f.stem
-                out.write_text(_diagrams(env.get_template(f.name).render(**ctx), dst),
-                               encoding="utf-8")
+                body = env.get_template(f.name).render(**ctx)
+                # 콘솔과 같은 목차를 넣는다. 두 곳이 다른 문서를 내면 안 된다.
+                if f.stem == "README.md":
+                    body = mdtoc.insert(body)
+                out.write_text(_diagrams(body, dst), encoding="utf-8")
                 _protect(out)
             elif f.name != "meta.yml":
                 shutil.copy2(f, dst / f.name)

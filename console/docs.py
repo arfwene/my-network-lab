@@ -9,6 +9,7 @@ import markdown as md
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import labdesign as L
+import mdtoc  # noqa: E402  (tools/)
 import topology_svg  # noqa: E402  (console 패키지 내부)
 import diagramsvg  # noqa: E402  (tools/)
 
@@ -94,7 +95,9 @@ def render_markdown(module, lab_id, kind="README"):
                       keep_trailing_newline=True)
     ctx = {**L.doc_context(lab_id, module["stage"]), "meta": module}
     ctx["topology_full"] = L.mermaid(lab_id, "m10")
-    return env.get_template(src.name).render(**ctx)
+    out = env.get_template(src.name).render(**ctx)
+    # 목차는 교재(README)에만. 과제·검증은 짧아서 필요 없다.
+    return mdtoc.insert(out) if kind == "README" else out
 
 
 def diagram_specs(module, lab_id):
@@ -140,5 +143,11 @@ def to_html(text, module=None):
         return (f'<div class="dia-wrap" data-dia="{mid}:{i}">{svg}</div>')
 
     text = DIAGRAM_FENCE.sub(draw, text)
-    html = md.markdown(text, extensions=["tables", "fenced_code", "attr_list", "sane_lists"])
+    # toc 확장이 제목마다 id 를 붙인다. 기본 slugify 는 한글을 통째로 버려서
+    # id 가 전부 빈 문자열이 되고, 목차의 모든 줄이 같은 곳을 가리킨다.
+    # mdtoc 이 목차를 만들 때 쓴 규칙을 그대로 넘긴다.
+    html = md.markdown(text, extensions=["tables", "fenced_code", "attr_list",
+                                         "sane_lists", "toc"],
+                       extension_configs={"toc": {"slugify": lambda s, sep: mdtoc.slug(s),
+                                                  "permalink": False}})
     return html
