@@ -25,7 +25,9 @@
       ansible.builtin.command: "ip link del {{ bridge_name_local }}"
       changed_when: true
       failed_when: false
-      when: node_role == 'switch' and bridge_name_local
+      # 조건은 반드시 참/거짓이어야 한다. `and <문자열>` 은 그 문자열을
+      # 돌려주므로 ansible-core 2.19 부터 거부당한다 — 길이로 비교한다.
+      when: node_role == 'switch' and (bridge_name_local | default('', true) | length) > 0
 
     - name: 손으로 등록한 ARP/NDP 항목 제거
       # M1 실습과 m01-03 시나리오가 정적 ARP 를 남긴다. 이게 남으면 초기화가 무의미하다.
