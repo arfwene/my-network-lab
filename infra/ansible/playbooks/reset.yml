@@ -113,11 +113,21 @@
         delay: 3
         timeout: 120
 
+    # 아직 이 단계에 등장하지 않은 장비에는 서비스도 파일도 없다.
+    # sw2 는 m1 에서 스위치 역할을 받지 않는다 — 그런데도 재시작을 걸면
+    # "Could not find the requested service" 로 초기화 전체가 멈춘다.
+    - name: 되살릴 것이 깔려 있는가
+      ansible.builtin.stat: {path: "{{ item }}"}
+      register: reset_files
+      loop:
+        - /etc/systemd/system/lab-switch.service
+        - /etc/nftables.conf
+
     - name: 스위치 브리지 다시 만들기
       # 위에서 브리지를 통째로 지웠다. 스크립트가 그대로면 site.yml 은
       # 아무것도 하지 않는다 — 포트 없는 랩이 그대로 남는다.
       ansible.builtin.systemd: {name: lab-switch, state: restarted}
-      when: node_role == 'switch'
+      when: node_role == 'switch' and reset_files.results[0].stat.exists
 
     - name: 방화벽 규칙 다시 넣기
       # 위에서 `nft flush ruleset` 을 했다. nftables.conf 가 그대로면
@@ -125,7 +135,7 @@
       ansible.builtin.command: nft -f /etc/nftables.conf
       changed_when: true
       failed_when: false
-      when: node_role == 'edge'
+      when: node_role == 'edge' and reset_files.results[1].stat.exists
 
 - name: 설정 재적용
   ansible.builtin.import_playbook: site.yml
