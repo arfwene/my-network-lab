@@ -15,30 +15,88 @@
   --code-bg:#f2f2f2; --log-bg:#171717; --log-ink:#ededed;
   --n-host:#dbeafe; --n-switch:#dcfce7; --n-router:#fef3c7; --n-server:#ede9fe; --n-edge:#fee2e2;
   --zone:#00000006; --zone-line:#00000024; --n-line:#0000004d; --topo-link:#00000059;
+  /* 설치 화면의 상태 딱지 — 값을 박아 두면 어두운 화면에서만 튄다 */
+  --tag-ok-bg:#e7f6ec;   --tag-ok-ink:#186a3b;
+  --tag-warn-bg:#fdf3e0; --tag-warn-ink:#8a5a00;
+  --tag-bad-bg:#fdeaea;  --tag-bad-ink:#a12a2a;
   /* --- 모서리. 기능 크롬은 6px, 콘텐츠 카드는 12px --- */
   --r-sm:6px; --r-md:12px; --r-lg:16px;
   --shadow-1:0 1px 1px rgba(0,0,0,.04);
   --shadow-2:0 2px 2px rgba(0,0,0,.04),0 8px 16px -4px rgba(0,0,0,.08);
+  color-scheme:light;   /* 스크롤바 · select · 기본 폼이 테마를 따라간다 */
+/* --- 어두운 팔레트. **값은 여기 한 곳에만 적는다.**
+   아래 두 경우가 같은 값을 꽂아 쓴다 — 시스템이 어두울 때, 그리고 사용자가
+   직접 어둡게 고를 때. 값을 두 벌 두면 반드시 한쪽만 고치는 날이 온다. --- */
+  --d-ink:#ededed; --d-body:#a1a1a1;
+  --d-muted:#8f8f8f; --d-faint:#7a7a7a;
+  --d-bg:#000000; --d-panel:#0a0a0a;
+  --d-sunken:#171717; --d-line:#2e2e2e;
+  --d-accent:#3291ff; --d-accent-deep:#0070f3;
+  --d-accent-soft:#10293f; --d-danger:#ff4d4d;
+  --d-danger-deep:#ff6161; --d-warn:#f5a623;
+  --d-warn-line:#8f6424; --d-ok:#3291ff;
+  --d-code-bg:#171717; --d-log-bg:#0a0a0a;
+  --d-log-ink:#ededed; --d-n-host:#1e3a5f;
+  --d-n-switch:#14532d; --d-n-router:#5c4813;
+  --d-n-server:#3b2f63; --d-n-edge:#5b2222;
+  --d-zone:#ffffff08; --d-zone-line:#ffffff26;
+  --d-n-line:#ffffff59; --d-topo-link:#ffffff66;
+  --d-shadow-1:0 1px 1px rgba(0,0,0,.3); --d-shadow-2:0 2px 2px rgba(0,0,0,.3),0 8px 16px -4px rgba(0,0,0,.5);
+  --d-tag-ok-bg:#10291a;   --d-tag-ok-ink:#6ee7a8;
+  --d-tag-warn-bg:#2b2110; --d-tag-warn-ink:#f5c86a;
+  --d-tag-bad-bg:#2c1414;  --d-tag-bad-ink:#ff8b7a;
 }
 /* Geist 는 한글 글리프가 없다. 어떤 경우에도 한글 폰트가 뒤를 받아야 하므로
    시스템 스택을 남겨 둔다 — 이 콘솔은 인터넷이 닫힌 운영 서버에서 돌기 때문에
    웹폰트를 불러올 수도 없다. 대신 자간·굵기 규칙을 그대로 따른다. */
+
+/* 아무것도 고르지 않았으면 시스템을 따른다 (JS 없이도 동작한다) */
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --ink:#ededed; --body:#a1a1a1; --muted:#8f8f8f; --faint:#7a7a7a;
-    --bg:#000000; --panel:#0a0a0a; --sunken:#171717;
-    --line:#2e2e2e;
-    --accent:#3291ff; --accent-deep:#0070f3; --accent-soft:#10293f;
-    --danger:#ff4d4d; --danger-deep:#ff6161;
-    --warn:#f5a623; --warn-line:#8f6424;
-    --ok:#3291ff;
-    --code-bg:#171717; --log-bg:#0a0a0a; --log-ink:#ededed;
-    --n-host:#1e3a5f; --n-switch:#14532d; --n-router:#5c4813; --n-server:#3b2f63; --n-edge:#5b2222;
-    --zone:#ffffff08; --zone-line:#ffffff26; --n-line:#ffffff59; --topo-link:#ffffff66;
-    --shadow-1:0 1px 1px rgba(0,0,0,.3);
-    --shadow-2:0 2px 2px rgba(0,0,0,.3),0 8px 16px -4px rgba(0,0,0,.5);
+    color-scheme:dark;
+    --ink:var(--d-ink); --body:var(--d-body);
+    --muted:var(--d-muted); --faint:var(--d-faint);
+    --bg:var(--d-bg); --panel:var(--d-panel);
+    --sunken:var(--d-sunken); --line:var(--d-line);
+    --accent:var(--d-accent); --accent-deep:var(--d-accent-deep);
+    --accent-soft:var(--d-accent-soft); --danger:var(--d-danger);
+    --danger-deep:var(--d-danger-deep); --warn:var(--d-warn);
+    --warn-line:var(--d-warn-line); --ok:var(--d-ok);
+    --code-bg:var(--d-code-bg); --log-bg:var(--d-log-bg);
+    --log-ink:var(--d-log-ink); --n-host:var(--d-n-host);
+    --n-switch:var(--d-n-switch); --n-router:var(--d-n-router);
+    --n-server:var(--d-n-server); --n-edge:var(--d-n-edge);
+    --zone:var(--d-zone); --zone-line:var(--d-zone-line);
+    --n-line:var(--d-n-line); --topo-link:var(--d-topo-link);
+    --shadow-1:var(--d-shadow-1); --shadow-2:var(--d-shadow-2);
+    --tag-ok-bg:var(--d-tag-ok-bg); --tag-ok-ink:var(--d-tag-ok-ink);
+    --tag-warn-bg:var(--d-tag-warn-bg); --tag-warn-ink:var(--d-tag-warn-ink);
+    --tag-bad-bg:var(--d-tag-bad-bg); --tag-bad-ink:var(--d-tag-bad-ink);
   }
 }
+/* 헤더의 [밝게 / 어둡게] 로 직접 고른 경우. html 에 data-theme 이 박힌다. */
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ink:var(--d-ink); --body:var(--d-body);
+  --muted:var(--d-muted); --faint:var(--d-faint);
+  --bg:var(--d-bg); --panel:var(--d-panel);
+  --sunken:var(--d-sunken); --line:var(--d-line);
+  --accent:var(--d-accent); --accent-deep:var(--d-accent-deep);
+  --accent-soft:var(--d-accent-soft); --danger:var(--d-danger);
+  --danger-deep:var(--d-danger-deep); --warn:var(--d-warn);
+  --warn-line:var(--d-warn-line); --ok:var(--d-ok);
+  --code-bg:var(--d-code-bg); --log-bg:var(--d-log-bg);
+  --log-ink:var(--d-log-ink); --n-host:var(--d-n-host);
+  --n-switch:var(--d-n-switch); --n-router:var(--d-n-router);
+  --n-server:var(--d-n-server); --n-edge:var(--d-n-edge);
+  --zone:var(--d-zone); --zone-line:var(--d-zone-line);
+  --n-line:var(--d-n-line); --topo-link:var(--d-topo-link);
+  --shadow-1:var(--d-shadow-1); --shadow-2:var(--d-shadow-2);
+  --tag-ok-bg:var(--d-tag-ok-bg); --tag-ok-ink:var(--d-tag-ok-ink);
+  --tag-warn-bg:var(--d-tag-warn-bg); --tag-warn-ink:var(--d-tag-warn-ink);
+  --tag-bad-bg:var(--d-tag-bad-bg); --tag-bad-ink:var(--d-tag-bad-ink);
+}
+:root[data-theme="light"]{ color-scheme:light }
 *{box-sizing:border-box}
 /* hidden 속성이 display 지정보다 먼저다.
    브라우저 기본 [hidden]{display:none} 은 작성자 CSS 에 밀리므로
@@ -216,6 +274,20 @@ a.mod{text-decoration:none;color:var(--ink)}
 .doc blockquote p{margin:.35em 0}
 .doc hr{border:0;border-top:1px solid var(--line);margin:2em 0}
 .notice{padding:14px;background:var(--code-bg);border-radius:var(--r-md);color:var(--muted)}
+
+/* 밝게 / 어둡게 단추. 헤더의 상태 칩들과 같은 높이로 앉는다.
+   단추에는 **바뀔 모습**을 적는다 — 지금 모습을 적으면 누를 때마다 헷갈린다.
+   두 글자를 다 심어 두고 여기서 고른다. 그래야 JS 를 기다리지 않는다. */
+.btn.sm.theme{min-width:52px;text-align:center}
+.theme .t-d{display:none}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .theme .t-l{display:none}
+  :root:not([data-theme="light"]) .theme .t-d{display:inline}
+}
+:root[data-theme="dark"] .theme .t-l{display:none}
+:root[data-theme="dark"] .theme .t-d{display:inline}
+:root[data-theme="light"] .theme .t-l{display:inline}
+:root[data-theme="light"] .theme .t-d{display:none}
 
 /* 장애 연습 — 고르기 전에 무엇을 고르는 것인지 알려 주는 줄 */
 .note.pick{margin:2px 0 6px}
@@ -579,23 +651,23 @@ pre.code{background:var(--code-bg);padding:14px 16px;border-radius:var(--r-md);o
 /* ---------------------------------------------------------------- 설치 화면 */
 .setup-sum{display:flex;gap:8px;align-items:center;margin:10px 0}
 .setup-sum .tag{padding:2px 9px;border-radius:var(--r-md);font-size:12px;font-weight:600}
-.setup-sum .tag.ok{background:#e7f6ec;color:#186a3b}
-.setup-sum .tag.warn{background:#fdf3e0;color:#8a5a00}
-.setup-sum .tag.bad{background:#fdeaea;color:#a12a2a}
+.setup-sum .tag.ok{background:var(--tag-ok-bg);color:var(--tag-ok-ink)}
+.setup-sum .tag.warn{background:var(--tag-warn-bg);color:var(--tag-warn-ink)}
+.setup-sum .tag.bad{background:var(--tag-bad-bg);color:var(--tag-bad-ink)}
 .setup-checks td.m{width:1.4em;text-align:center;font-weight:700}
-.setup-checks tr.ok td.m{color:#186a3b}
-.setup-checks tr.warn td.m{color:#8a5a00}
-.setup-checks tr.error td.m{color:#a12a2a}
-.setup-checks tr.skip td.m{color:#8a8f98}
+.setup-checks tr.ok td.m{color:var(--tag-ok-ink)}
+.setup-checks tr.warn td.m{color:var(--tag-warn-ink)}
+.setup-checks tr.error td.m{color:var(--tag-bad-ink)}
+.setup-checks tr.skip td.m{color:var(--faint)}
 .setup-checks tr.sec th{padding-top:14px;font-size:12px;letter-spacing:.04em;
-  text-transform:uppercase;color:#5a6068;border-bottom:1px solid #e3e6ea}
+  text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line)}
 .setup-acts{display:grid;gap:12px}
 .setup-acts .act{display:grid;grid-template-columns:220px 1fr;gap:12px;align-items:start}
-.setup-acts .act .what{font-size:14px;color:#4a5058;line-height:1.55}
+.setup-acts .act .what{font-size:14px;color:var(--body);line-height:1.55}
 .joblog{margin-top:14px}
-.joblog pre{max-height:340px;overflow:auto;background:#12151a;color:#dfe4ea;
+.joblog pre{max-height:340px;overflow:auto;background:var(--log-bg);color:var(--log-ink);
   padding:12px;border-radius:var(--r-sm);font-size:12px;line-height:1.5;white-space:pre-wrap}
-.manual{border-top:1px solid #e3e6ea;padding:12px 0}
+.manual{border-top:1px solid var(--line);padding:12px 0}
 .manual .mh{margin-bottom:2px}
 .manual .why{font-size:14px;margin-bottom:8px}
 .manual pre{margin:0 0 6px}

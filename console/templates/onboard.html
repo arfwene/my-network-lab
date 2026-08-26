@@ -14,6 +14,7 @@
     <span class="s {{ 'on' if step == 3 }}">3 끝</span>
   </div>
   <div class="spacer"></div>
+  {% include "_theme.html" %}
   <div class="who"><span class="name">{{ user.name | default(user.username) }}</span>
     <span class="role">lab{{ lab_id }}</span></div>
   <a class="ghost" href="/logout">나가기</a>

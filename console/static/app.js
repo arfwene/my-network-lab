@@ -143,6 +143,20 @@
     if (up) up.onclick = () => run('reset');
   }
 
+  // ------------------------------------------------------------ 밝게 / 어둡게
+  //  값은 이 브라우저에만 남는다. 서버에 저장하지 않는 이유는 _theme.html 에 적어 뒀다.
+  //  <head> 의 짧은 스크립트가 이미 표시를 박아 뒀다 — 여기서는 단추만 맡는다.
+  //  단추 글자는 CSS 가 고른다(_theme.html 참고). 여기서는 표시를 바꾸고 적어 둘 뿐이다.
+  const themebtn = $('#themebtn');
+  if (themebtn) themebtn.onclick = () => {
+    const root = document.documentElement;
+    const dark = root.dataset.theme
+      ? root.dataset.theme === 'dark'
+      : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark';
+    try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+  };
+
   // ------------------------------------------------------------ 그림 크게 보기
   //  토폴로지 SVG 는 선이 가늘어 작게 나오면 읽을 수 없다. 원본을 복제해 띄운다 —
   //  옮기면 원래 자리가 비고, 닫을 때 되돌려 놓는 일이 남는다.
