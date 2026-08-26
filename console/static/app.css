@@ -682,3 +682,10 @@ table.users td b,table.users td strong{color:var(--ink)}
 #lightbox .lb-close{position:fixed;top:16px;right:20px;z-index:201}
 @media (max-width:640px){#lightbox .lb-inner{padding:10px}
   #lightbox svg{min-width:0}}
+
+/* 중간 점검 — 실행 패널 안의 작은 카드.
+   진행 중일 때는 테두리 색으로 "지금 뭔가 숨겨져 있다" 를 말한다. */
+.drill{border:1px solid var(--line);border-radius:var(--r-md);padding:12px;margin:0 0 12px}
+.drill > b{display:block;font-weight:600;font-size:13px;margin:0 0 6px;letter-spacing:-.01em}
+.drill .note{margin:0 0 10px;font-size:12px;line-height:1.55;color:var(--mute)}
+.drill.on{border-color:var(--warn-line);background:color-mix(in srgb,var(--warn) 7%,transparent)}

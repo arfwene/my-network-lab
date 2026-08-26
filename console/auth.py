@@ -36,7 +36,10 @@ CAPABILITIES = {
 }
 ACTION_CAP = {"deploy": "lab.deploy", "destroy": "lab.destroy", "apply": "lab.apply",
               "verify": "lab.verify", "reset": "lab.reset",
-              "break": "lab.break", "fix": "lab.fix"}
+              "break": "lab.break", "fix": "lab.fix",
+              # 진단 연습은 장애 주입/복구와 같은 권한으로 묶는다 —
+              # 하는 일이 정확히 그것이고, 다만 고르는 쪽이 서버일 뿐이다.
+              "drill": "lab.break", "drill-end": "lab.fix"}
 ROLE_LABEL = {"admin": "관리자", "user": "사용자"}
 
 # ---------------------------------------------------------------------- 계정 이름

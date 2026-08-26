@@ -67,7 +67,7 @@ def tf_env(lab_id):
 SETUP_ACTIONS = {"setup-mgmt", "setup-docs", "setup-access", "setup-jump-apply"}
 SETUP_LAB = 0
 ACTIONS = {"deploy", "destroy", "apply", "keys", "verify", "reset", "break", "fix",
-           "check", "exam"} | SETUP_ACTIONS
+           "check", "exam", "drill", "drill-end"} | SETUP_ACTIONS
 # 문서·계정 파일 생성은 Proxmox 와 무관하다. 여기에 관문을 두면
 # "Proxmox 가 아직 안 되니 안내 문서도 못 만든다" 는 막다른 길이 생긴다.
 NO_PVE = {"setup-docs", "setup-access", "setup-jump-apply"}
@@ -173,7 +173,16 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
         if not module:
             raise ValueError("검사에는 모듈이 필요합니다")
         return [(L.ROOT, [PY, "tools/run-checks.py", "--lab", str(lab_id), "--module", module])]
-    if action == "exam":
+    if action == "drill-end":
+        # 진단 연습 끝내기 — 주입돼 있던 것을 그 시나리오 자신의 fix 로 되돌린다.
+        # 이 작업의 로그는 가리지 않는다. **무엇이었는지 보여 주는 것이 정답 공개**다.
+        known = scenario_ids()
+        old_ = [x for x in (state.load(lab_id).get("broken") or []) if x in known]
+        if not old_:
+            raise ValueError("되돌릴 장애가 없습니다")
+        return [gen] + [(ANSIBLE, [APB, "-i", inv, f"../../scenarios/{x}.yml",
+                                   "-e", "scenario_action=fix"]) for x in old_]
+    if action in ("exam", "drill"):
         # 시험 시작 — 깨끗한 랩에서 출발해야 채점이 성립한다.
         #   ① 이미 주입돼 있던 장애를 그 시나리오 자신의 fix 로 되돌리고
         #      (reset 은 템플릿으로 만들어지는 설정만 복구한다. 멈춘 서비스나

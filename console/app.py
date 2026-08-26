@@ -213,6 +213,8 @@ def base_ctx(request, user, lab_id):
         # 시험 상태. 진행 중에는 시나리오가 실려 나가지 않는다 (exam.view 가 걸러낸다).
         "exam": exam.view(lab_id, user),
         "capstone": exam.module_id(),
+        # 중간 점검은 **단계마다** 열린다. 지금 보고 있는 모듈이 그 단계면 버튼이 나온다.
+        "checkpoints": {c["stage"]: c for c in exam.drill_cfg()["checkpoints"]},
     }
 
 
@@ -773,13 +775,26 @@ async def action(request: Request, lab: int = Form(...), action: str = Form(...)
         return JSONResponse({"error": f"'{action}' 권한이 없습니다"}, status_code=403)
     if lab not in auth.allowed_labs(user):
         return JSONResponse({"error": "이 랩에 대한 권한이 없습니다"}, status_code=403)
+    # 중간 점검: 무엇을 주입할지 **서버가 고른다.** 교육생이 고르면 답을 아는 채로 시작한다.
+    # 랩은 혼자 하는 것이라 옆 사람에게 문제를 내 달라고 할 수도 없다.
+    secret = False
+    if action == "drill":
+        cp = exam.checkpoint_for(stage)
+        if not cp:
+            return JSONResponse({"error": f"{stage.upper()} 단계에는 중간 점검이 없습니다"},
+                                status_code=400)
+        try:
+            scenario = ",".join(exam.drill_pick(cp, jobs.scenario_ids()))
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        secret = True          # 로그에 시나리오 이름이 찍힌다. 응시자에게는 가린다.
     try:
         job = await runner.submit(lab, action, stage, scenario or None,
                                   user.get("username"),
                                   on_done=lambda j: state.record(
                                       j.lab_id, j.action, j.stage, j.status == "ok",
                                       j.scenario, j.id),
-                                  module=module or None)
+                                  module=module or None, secret=secret)
     except jobs.Locked as e:
         # 423 Locked — 실패가 아니라 "지금은 잠겨 있다"는 뜻이다. 화면이 구분해서 보여준다.
         return JSONResponse({"error": e.message, "locked": True,
@@ -834,12 +849,18 @@ async def job_stream(request: Request, job_id: str):
         # 시험 문제(주입한 시나리오)는 실행 로그에 그대로 찍힌다.
         # 응시자에게는 진행 사실만 알리고 내용은 보내지 않는다 — 관리자는 그대로 본다.
         if job.secret and not reveal:
-            yield sse("$ 시험 준비 중 — 랩을 초기화하고 장애를 주입합니다")
+            drill = job.action == "drill"
+            yield sse("$ " + ("중간 점검 준비 중" if drill else "시험 준비 중")
+                      + " — 랩을 초기화하고 장애를 주입합니다")
             yield sse("   (무엇을 주입했는지는 보이지 않습니다)")
             while job.status not in ("ok", "failed"):
                 await asyncio.sleep(0.5)
-            yield sse("== 준비 완료. 지금부터 시간이 갑니다." if job.status == "ok"
-                      else "!! 준비 실패 — 관리자에게 알릴 것")
+            if job.status != "ok":
+                yield sse("!! 준비 실패 — 교육 담당자에게 알려 주세요")
+            elif drill:
+                yield sse("== 준비 완료. 증상부터 확인해 주세요 — 어디까지 되고 어디부터 안 되는가.")
+            else:
+                yield sse("== 준비 완료. 지금부터 시간이 갑니다.")
         else:
             async for chunk in runner.stream(job_id):
                 if not chunk:

@@ -33,6 +33,9 @@
   <div><span class="k">주입된 장애</span>
     {% if exam.hide_faults %}
     <span class="v warn">시험 중 — 보이지 않음</span>
+    {% elif lab_state.blind and lab_state.broken %}
+    {# 중간 점검 중. 무엇이 들어갔는지 여기에 쓰면 문제가 새어 나간다. #}
+    <span class="v warn">중간 점검 중 — 보이지 않음</span>
     {% else %}
     <span class="v {{ 'warn' if lab_state.broken else '' }}">
       {{ lab_state.broken | join(', ') if lab_state.broken else '없음' }}</span>

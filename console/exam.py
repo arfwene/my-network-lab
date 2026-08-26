@@ -74,6 +74,37 @@ def pool(all_ids):
     return [s for s in all_ids if s in want]
 
 
+# ---------------------------------------------------------------- 중간 점검
+#  캡스톤과 같은 원리(서버가 고르고 가린다)를 쓰지만 시계도 성적도 없다.
+#  랩은 혼자 하는 것이므로, 옆 사람에게 문제를 내 달라고 할 수 없다.
+def drill_cfg():
+    c = (L.SITE.get("console") or {}).get("drill") or {}
+    return {"faults": int(c.get("faults", 1) or 1),
+            "checkpoints": c.get("checkpoints") or []}
+
+
+def checkpoint_for(stage):
+    """이 단계에서 열리는 중간 점검. 없으면 None."""
+    for c in drill_cfg()["checkpoints"]:
+        if c.get("stage") == stage:
+            return c
+    return None
+
+
+def drill_pick(checkpoint, all_ids, n=None):
+    """중간 점검에 쓸 시나리오. 서버가 고른다 — 고른 것을 알려주지 않는다."""
+    known = set(all_ids)
+    cand = [x for x in (checkpoint.get("pool") or []) if x in known]
+    if not cand:
+        raise ValueError(f"'{checkpoint.get('id')}' 에 쓸 시나리오가 없습니다 — "
+                         "config/site.yml 의 console.drill.checkpoints 를 확인해 주세요")
+    n = max(1, min(int(n or drill_cfg()["faults"]), len(cand)))
+    out = []
+    while len(out) < n and cand:
+        out.append(cand.pop(secrets.randbelow(len(cand))))
+    return out
+
+
 def _family(sid):
     """m06-03 -> m06. 같은 계층의 장애를 한 회차에 겹쳐 넣지 않기 위한 묶음."""
     return sid.split("-")[0]

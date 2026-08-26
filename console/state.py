@@ -27,7 +27,10 @@ def load(lab_id):
         except Exception:
             pass
     return {"lab_id": lab_id, "stage": None, "applied": [], "verified": [],
-            "last_job": None, "broken": [], "provisioned": None}
+            "last_job": None, "broken": [], "provisioned": None,
+            # 진단 연습 중에는 무엇이 주입됐는지 화면에 쓰지 않는다.
+            # 이 값이 참인 동안 broken 은 있으나 보이지 않는다.
+            "blind": False}
 
 
 def save(lab_id, st):
@@ -101,6 +104,14 @@ def record(lab_id, action, stage=None, ok=True, scenario=None, job_id=None):
     if action == "fix" and scenario:
         st["broken"] = [b for b in st["broken"] if b != scenario]
     if action == "reset":
+        st["broken"] = []
+    # 진단 연습: 서버가 고르고 화면에서 가린다. 끝내면 다시 보인다.
+    if ok and action == "drill" and scenario:
+        st["broken"] = [x for x in scenario.split(",") if x]
+        st["blind"] = True
+    if action in ("drill-end", "reset", "exam"):
+        st["blind"] = False
+    if action == "drill-end" and ok:
         st["broken"] = []
     # 랩이 생겼는지 없어졌는지. 관문이 요청마다 Proxmox 를 두드리지 않도록
     # 여기서 적어 둔다 — 진실은 아니고, 마지막으로 확인한 값이다.

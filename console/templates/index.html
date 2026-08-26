@@ -61,6 +61,30 @@
       <p class="note">초기화 시에도 사용 가능</p>
 
       <h3>장애 연습</h3>
+      {% set cp = checkpoints.get(module.stage) if module else none %}
+      {% set drilling = lab_state.blind and lab_state.broken %}
+      {# 중간 점검. 랩은 혼자 하는 것이라 문제를 내 줄 사람이 없다 — 서버가 고른다.
+         고른 것은 화면 어디에도 쓰지 않는다.
+         **진행 중이면 어느 모듈을 보고 있든 끝내기가 보여야 한다.** 그러지 않으면
+         다른 모듈을 들춰 보러 간 사이에 빠져나올 길이 사라진다. #}
+      {% if drilling or cp %}
+      <div class="drill {{ 'on' if drilling }}">
+        <b>{{ (cp.label if cp else '중간 점검') if drilling else cp.label }}</b>
+        {% if drilling %}
+        <p class="note">진행 중입니다. <b>증상부터</b> 확인해 주세요 —
+           어디까지 되고 어디부터 안 되는가.<br>
+           랩은 <b>터미널에서</b> 고칩니다. 다 고쳤거나 포기했으면 아래로 정답을 봅니다.</p>
+        {{ act('drill-end', 'block', '끝내기 — 정답 보고 복구',
+               '무엇이 주입됐는지 로그에 나오고, 함께 복구합니다') }}
+        {% else %}
+        <p class="note">서버가 장애 하나를 <b>말없이</b> 주입합니다.
+           증상만 보고 원인을 찾는 연습입니다 — 목표 {{ cp.minutes | default(15) }}분.<br>
+           시계도 성적도 없습니다. 몇 번이든 다시 하면 됩니다.</p>
+        {{ act('drill', 'danger block', '중간 점검 시작',
+               '무엇이 주입되는지 알려주지 않습니다') }}
+        {% endif %}
+      </div>
+      {% endif %}
       <select id="scenario" {{ 'disabled' if allow is not none }}>
         <option value="">시나리오 고르기…</option>
         {% for s in scenarios %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
