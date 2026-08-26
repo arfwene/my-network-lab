@@ -28,9 +28,31 @@
     mode: "0644"
   notify: restart lab-switch
 
-- name: 스위치 서비스 활성화
+- name: 스위치 서비스 등록 (기동은 아래에서)
   ansible.builtin.systemd:
     name: lab-switch
     enabled: true
-    state: started
     daemon_reload: true
+
+# netplan 이 MAC 으로 인터페이스 이름을 바꾸는데(ens19 -> eth1), 그 handler 는
+# common 역할에 있고 **이 역할의 task 보다 뒤에** 돈다. 여기서 바로 기동하면
+# 아직 ens19 인 상태라 포트를 하나도 못 찾는다:
+#
+#   lab-switch-up.sh: 스위치 포트를 찾지 못했다: eth1 eth2
+#
+# 새로 만든 랩에서만 터진다 — 이름이 이미 바뀐 노드는 다시 돌려도 멀쩡하다.
+# 그래서 랩 하나로 시험할 때는 보이지 않다가, 두 번째 랩을 만들 때 나온다.
+- name: 앞선 handler 를 먼저 돌린다 (netplan 이름 변경 포함)
+  ansible.builtin.meta: flush_handlers
+
+- name: 시작 제한 카운터 지우기
+  # 앞서 실패한 적이 있으면 systemd 가 재시작을 거부한다. 카운터는 크래시
+  # 루프를 막으려는 것이지 사람이 고친 뒤의 기동을 막으려는 것이 아니다.
+  ansible.builtin.command: systemctl reset-failed lab-switch
+  changed_when: false
+  failed_when: false
+
+- name: 스위치 기동 (이름이 바뀐 뒤)
+  ansible.builtin.systemd:
+    name: lab-switch
+    state: started
