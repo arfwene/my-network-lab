@@ -215,9 +215,16 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
 
     if action == "deploy":
         # 브리지 + VM 생성. 배선은 항상 전체 토폴로지로 만든다 (설정만 단계별).
+        #
+        # terraform 이 끝났다는 것은 "VM 을 만들었다" 는 뜻이지 "쓸 수 있다" 는
+        # 뜻이 아니다. 게스트는 그때부터 부팅한다. 여기서 기다리지 않으면 바로
+        # 이어지는 [이 모듈 적용] 이 아직 sshd 가 안 뜬 노드에서 UNREACHABLE 로
+        # 떨어진다 — 어느 노드가 걸릴지는 매번 달라서 증상이 들쭉날쭉하다.
         return [gen_tf,
                 (tf_env(lab_id), tf_cmd("init")),
-                (tf_env(lab_id), tf_cmd("apply", "-auto-approve"))]
+                (tf_env(lab_id), tf_cmd("apply", "-auto-approve")),
+                gen,
+                (ANSIBLE, [APB, "-i", inv, "playbooks/wait.yml"])]
     if action == "destroy":
         # -refresh=false: 지우기 전에 현재 상태를 다시 읽지 않는다.
         #   VM 자원은 QEMU 게스트 에이전트가 주소를 알려 줄 때까지 기다리는데,

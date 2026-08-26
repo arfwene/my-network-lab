@@ -1,0 +1,20 @@
+---
+# 노드가 SSH 를 받을 때까지 기다린다.
+#
+#  terraform 이 끝났다는 것은 "VM 을 만들었다" 는 뜻이지 "쓸 수 있다" 는 뜻이 아니다.
+#  게스트는 그때부터 부팅한다. 랩 생성 직후 [이 모듈 적용] 을 누르면 아직 sshd 가
+#  안 뜬 노드에서 이렇게 떨어진다:
+#
+#    fatal: [edge]: UNREACHABLE! ... connect to host 172.30.2.35 port 22: Connection refused
+#
+#  어느 노드가 걸릴지는 매번 다르다. 그래서 증상이 들쭉날쭉해 원인을 찾기 어렵다.
+#  "준비됐습니다" 라고 말하기 전에 여기서 기다린다.
+- name: "my-network-lab :: 노드 기동 대기"
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: SSH 응답 대기
+      ansible.builtin.wait_for_connection:
+        delay: 3
+        sleep: 5
+        timeout: 420
