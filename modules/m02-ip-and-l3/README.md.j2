@@ -626,11 +626,99 @@ ping -c 1 -M dont -s 1472 {{ ip.pc2 }}
 > `Frag needed` 통지가 오지 않으면 송신자는 계속 1500 으로 보내고, 패킷은 조용히 버려집니다.
 > 증상은 **"ping 은 되는데 파일 전송만 멈춤"** — 원인을 찾는 데 며칠이 걸리는 종류의 장애입니다.
 
+**④ ★ 블랙홀을 직접 만들어 본다**
+
+말로만 듣지 말고 만들어 봅니다. r1 이 **자기가 보내려던 통지를** 못 보내게 막습니다.
+
+```bash
+# r1 — MTU 는 아직 1400 인 상태에서, frag-needed 통지만 차단한다
+sudo nft add table ip blackhole
+sudo nft add chain ip blackhole output '{ type filter hook output priority 0; }'
+sudo nft add rule ip blackhole output icmp type destination-unreachable drop
+```
+
+```bash
+# pc1 — 캐시에 남은 PMTU 를 지워야 방금 배운 것을 잊는다
+sudo ip route flush cache
+ping -c 2 {{ ip.pc2 }}                    # 작은 것은 여전히 잘 된다
+```
+
+이제 **큰 전송**을 해 봅니다. TCP 라야 합니다.
+
+```bash
+# pc2 (터미널 2) — 받는 쪽
+nc -l 9000 > /dev/null
+```
+
+```bash
+# pc1 — 3MB 를 보낸다
+head -c 3M /dev/zero | nc -w 10 {{ ip.pc2 }} 9000 ; echo "종료 코드 = $?"
+```
+
+**멈춥니다.** `ping` 은 되고, TCP 연결도 맺어지는데(작은 패킷) **데이터만 안 갑니다.**
+
+```bash
+# pc1 — 무엇이 반복되고 있나
+sudo tcpdump -i eth1 -nn "tcp port 9000" -c 10
+```
+
+같은 세그먼트가 **계속 재전송**되고 응답이 없습니다. 알려 주는 사람이 없으니 영원히 1500 으로 보냅니다.
+
+**⑤ 응급 처방 — MSS clamp**
+
+근본 처방은 **ICMP 를 다시 열어 주는 것**입니다. 그런데 그 방화벽이 남의 것이라 못 열 때가 있습니다.
+그때 쓰는 것이 **MSS clamp** 입니다 — 지나가는 SYN 의 MSS 값을 경로 MTU 에 맞춰 **라우터가 대신 깎아** 줍니다.
+
+```bash
+# r1 — SYN 이 지나갈 때 MSS 를 이 경로의 MTU 로 맞춘다
+sudo nft add table ip mangle
+sudo nft add chain ip mangle forward '{ type filter hook forward priority -150; }'
+sudo nft add rule ip mangle forward tcp flags syn tcp option maxseg size set rt mtu
+```
+
+```bash
+# pc2 — 다시 받는다
+nc -l 9000 > /dev/null
+```
+
+```bash
+# pc1 — 같은 전송을 다시
+head -c 3M /dev/zero | nc -w 10 {{ ip.pc2 }} 9000 ; echo "종료 코드 = $?"
+```
+
+**이번에는 갑니다.** SYN 을 잡아 보면 값이 바뀌어 있습니다.
+
+```bash
+# pc2 — handshake 만 본다
+sudo tcpdump -i eth1 -nn "tcp[tcpflags] & tcp-syn != 0" -c 2
+```
+
+```
+Flags [S], ... options [mss 1360, ...]        ← 1460 이 아니라 1360 (1400 - 40)
+```
+
+> **두 처방의 차이를 분명히 해 둡니다.**
+>
+> | | ICMP 허용 | MSS clamp |
+> |---|---|---|
+> | 성격 | **근본 처방** | 응급 처방 |
+> | 적용 범위 | 모든 프로토콜 | **TCP 만** |
+> | 고치는 곳 | 통지를 막던 장비 | 경로 위의 라우터 |
+> | 남는 문제 | 없음 | UDP·터널은 여전히 깨집니다 |
+>
+> VPN·터널 구간의 라우터에 MSS clamp 가 걸려 있는 것을 보게 될 텐데, 이유가 이것입니다.
+
 **정리 (반드시 할 것)**
 
 ```bash
-# r1
+# r1 — 넣은 것을 순서대로 되돌린다
+sudo nft delete table ip mangle
+sudo nft delete table ip blackhole
 sudo ip link set eth1.20 mtu 1500
+nft list ruleset | grep -cE "mangle|blackhole"     # 0 이어야 한다
+```
+
+```bash
 # pc1 — 캐시된 PMTU 를 지운다
 sudo ip route flush cache
 ```

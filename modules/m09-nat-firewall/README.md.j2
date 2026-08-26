@@ -235,6 +235,59 @@ M6 의 감별표가 **경계 장비 앞에서 그대로 쓰입니다.**
 > 그리고 그 방화벽이 **어디에 있는지**(경계인가 서버 자신인가)는
 > 경계 장비 안쪽에서 캡처해 보면 즉시 갈립니다 (M7 의 이등분).
 
+### 2.7 ★★ 헤어핀 — "밖에서는 되는데 안에서는 안 돼요"
+
+공개 서비스는 잘 돕니다. 그런데 **사내에서** 그 공개 주소로 접속하면 안 됩니다.
+이 신고가 들어오면 헤어핀부터 의심합니다.
+
+```
+밖에서  : inet → edge(DNAT) → web → edge(역번역) → inet          ✓ 왕복이 edge 를 지난다
+
+안에서  : pc1 → edge(DNAT) → web ─┐
+              ✗ ←────────────────┘  web 은 pc1 의 사설 주소를 보고
+                                    "이건 사내 주소네" → edge 를 안 거치고 돌아간다
+```
+
+**DNAT 은 목적지만 바꿉니다**(2.1). 출발지는 `{{ ip.pc1 }}` 그대로 web 에 도착합니다.
+web 입장에서 그 주소로 돌아가는 길은 r4 → r2 → r1 이고, **거기에 edge 는 없습니다.**
+
+pc1 은 `{{ dweb.public }}:80` 에 걸었는데 `{{ ip.web }}:80` 에서 답이 옵니다.
+**접속한 적 없는 상대**이므로 커널이 버리고 RST 를 보냅니다.
+
+| | 실습 3 (stateful) | 여기 (헤어핀) |
+|---|---|---|
+| 무엇이 문제 | 리턴이 **정책에 막힘** | 리턴이 번역기를 **건너뜀** |
+| 한 문장 | ​ | **번역이 낀 세션의 왕복은 같은 번역기를 지나야 합니다** |
+
+**처방은 셋입니다.**
+
+| 처방 | 방법 | 대가 |
+|---|---|---|
+| **헤어핀 SNAT** | 그 구간만 출발지도 edge 로 바꿔 리턴을 강제로 끌어옵니다 | 서버가 **진짜 클라이언트 IP 를 못 봅니다** (로그가 전부 edge) |
+| **스플릿 DNS** | 사내 DNS 는 같은 이름에 **사설 IP** 를 돌려줍니다 (M8) | DNS 를 안팎 두 벌 관리해야 합니다 |
+| 그냥 사설 IP 로 | 사내에서는 `{{ ip.web }}` 로 접속 | 주소를 두 개 외워야 하고, 문서가 갈립니다 |
+
+> 실무에서는 **스플릿 DNS 를 더 선호합니다.** 출발지 IP 가 보존되기 때문입니다.
+> 접속 로그·감사·차단이 전부 출발지 IP 에 걸려 있는데, 헤어핀 SNAT 은 그걸 통째로 지웁니다.
+
+### 2.8 ★ 기억은 영원하지 않다 — 만료와 고갈
+
+Stateful 장비의 "기억"(2.2)은 공짜가 아닙니다. 표에는 크기가 있고, 항목에는 **수명**이 있습니다.
+
+```
+conntrack 항목 = 원방향(누가 어디로) + 응답방향(어디서 누구에게) + 상태 + 남은 시간
+                                                                   └─ 조용하면 줄어든다
+```
+
+- **만료(idle timeout)**: 한동안 아무 패킷도 없으면 항목을 지웁니다.
+  문제는 **양 끝의 소켓은 그 사실을 모른다**는 것입니다. 애플리케이션에는 연결이 살아 있는데
+  중간 장비의 기억만 사라져서, 다음에 보낸 데이터가 조용히 버려집니다.
+- **고갈**: 표가 가득 차면 **새 연결만** 실패합니다. 기존 연결은 멀쩡합니다.
+
+> **"어제까지 되던 게 오늘 갑자기 죽었다"** 와 **"기존 연결은 되는데 새 연결만 안 된다"** —
+> 이 두 문장이 나오면 상태 테이블을 먼저 봅니다.
+> 커넥션 풀 · DB 연결 · 오래 열어 두는 세션이 단골 피해자입니다 (M6 의 keepalive 가 여기서 회수됩니다).
+
 ---
 
 ## 3. 실습
@@ -570,6 +623,189 @@ sudo nft -f /etc/nftables.conf
 sudo nft list ruleset | grep -c "{{ public.transit.addresses.inet }}"      # 0 이어야 한다
 ```
 
+### 실습 8 — ★★ 헤어핀: 안에서 공개 주소로 (G1 · G2)
+
+**① 증상**
+
+```bash
+# inet — 밖에서는 잘 된다
+curl -s -o /dev/null -w '%{http_code}\n' -m5 http://{{ dweb.public }}/
+```
+
+```bash
+# pc1 — 같은 주소를 사내에서
+time curl -s -m5 http://{{ dweb.public }}/ ; echo "종료 코드 = $?"
+```
+
+**타임아웃입니다.** 밖에서 되는 것이 안에서 안 됩니다.
+
+**② 어디서 죽었나 — 경계의 로그부터**
+
+```bash
+# edge
+sudo journalctl -k -n 20 | grep edge-drop
+```
+
+`[edge-drop]` 이 찍혀 있습니다. **정책에 막혔습니다.**
+`forward` 체인을 다시 보면 이유가 보입니다.
+
+```bash
+sudo nft list chain inet filter forward
+```
+
+허용 규칙은 `eth1 → eth2`(나가는 것)와 `eth2 → eth1`(공개 서비스)뿐입니다.
+지금 이 패킷은 **`eth1` 로 들어와 `eth1` 로 나가려** 합니다. 어느 줄에도 맞지 않으니 policy drop 입니다.
+
+> DNAT 자체는 **동작했습니다.** prerouting 규칙에 인터페이스 조건이 없기 때문입니다.
+> 목적지는 이미 `{{ ip.web }}` 로 바뀐 뒤에 정책에서 걸린 것입니다.
+
+**③ 정책을 열어 준다 — 그리고 증상이 바뀐다**
+
+```bash
+# edge — 들어온 쪽으로 되나가는 것(헤어핀)을 허용
+sudo nft add rule inet filter forward iifname "eth1" oifname "eth1" \
+  ip daddr {{ ip.web }} tcp dport 80 accept
+```
+
+```bash
+# pc1 — 다시
+time curl -s -m5 http://{{ dweb.public }}/ ; echo "종료 코드 = $?"
+```
+
+**여전히 실패합니다. 그런데 빨라졌습니다** — 타임아웃이 아니라 즉시 끊깁니다.
+
+> **증상이 바뀐 것은 전진입니다.** 고장이 하나가 아니었을 뿐입니다.
+> 막히던 것이 뚫렸고, 이제 그다음 문제가 보입니다.
+
+**④ 결정적 지문**
+
+```bash
+# pc1 (터미널 2) — 잡아 놓고
+sudo tcpdump -i eth1 -nn "tcp port 80" -c 6
+```
+
+```bash
+# pc1 (터미널 1)
+curl -s -m5 http://{{ dweb.public }}/
+```
+
+```
+{{ ip.pc1 }}.42918 > {{ dweb.public }}.80: Flags [S]        ← 공개 주소로 걸었는데
+{{ ip.web }}.80    > {{ ip.pc1 }}.42918: Flags [S.]        ← 사설 주소에서 답이 온다
+{{ ip.pc1 }}.42918 > {{ ip.web }}.80:    Flags [R]         ← "너 누구야" → RST
+```
+
+> **주소가 다릅니다.** 걸었던 상대와 답한 상대가 같지 않으니 커널이 버립니다.
+> 서버는 무죄입니다 — 요청도 받았고 응답도 보냈습니다. **길이 틀렸을 뿐입니다.**
+
+**⑤ 교차 검증 — 서버는 무엇을 봤나**
+
+```bash
+# web
+sudo tcpdump -i eth1 -nn "tcp port 80" -c 4
+```
+
+```
+{{ ip.pc1 }}.42918 > {{ ip.web }}.80: Flags [S]        ← DNAT 은 잘 됐다 (목적지가 사설)
+{{ ip.web }}.80 > {{ ip.pc1 }}.42918: Flags [S.]       ← 출발지가 사내 주소라 edge 를 안 거친다
+```
+
+```bash
+# web — 돌아가는 길을 확인
+ip route get {{ ip.pc1 }}
+```
+
+`via {{ gw.vlan40 }}` — **r4 로 갑니다. edge 가 아닙니다.** 여기서 확정됩니다.
+
+**⑥ 한 줄 처방 — 헤어핀 구간만 출발지를 빌린다**
+
+```bash
+# edge — 이 구간에 한해 출발지도 edge 로 바꾼다
+sudo nft add rule ip nat postrouting ip saddr {{ cidr.vlan10 }} \
+  ip daddr {{ ip.web }} tcp dport 80 snat to {{ p2p['r4-edge'].addresses.edge }}
+```
+
+```bash
+# pc1
+curl -s -m5 http://{{ dweb.public }}/ | head -1
+```
+
+**됩니다.** web 의 응답이 edge 를 향하게 되었고, 거기서 역번역이 끝났습니다.
+
+```bash
+# web — 누구에게서 온 것으로 보이나
+sudo tail -2 /var/log/nginx/access.log
+```
+
+출발지가 `{{ p2p['r4-edge'].addresses.edge }}` — **edge 입니다. pc1 이 아닙니다.**
+이것이 헤어핀 SNAT 의 대가입니다(2.7). 범위를 `{{ cidr.vlan10 }}` · 대상 · 포트로 좁힌 이유가 이것입니다.
+
+**정리 (반드시 할 것)**
+
+```bash
+# edge
+sudo nft -f /etc/nftables.conf
+sudo nft list ruleset | grep -c "{{ ip.web }} tcp dport 80"      # 0 이어야 한다
+```
+
+### 실습 9 — ★ 기억이 사라지면 (G2)
+
+**① 지금 표에 무엇이 있나**
+
+```bash
+# pc1 (터미널 2) — 연결 하나를 열어 둔다
+nc {{ public.external_site.inet_loopback }} 80
+```
+
+```bash
+# edge
+sudo conntrack -L 2>/dev/null | grep ":80 "
+```
+
+```
+tcp  6  431999 ESTABLISHED src={{ ip.pc1 }} dst={{ public.external_site.inet_loopback }} ...
+        └─ 남은 수명(초). 기본값은 5일이다.
+```
+
+**② 수명을 30초로 줄인다** (실무 방화벽은 훨씬 짧습니다)
+
+```bash
+# edge
+sudo sysctl -w net.netfilter.nf_conntrack_tcp_timeout_established=30
+```
+
+**③ 조용히 기다린다**
+
+연 채로 아무것도 보내지 않고 40초를 기다립니다.
+
+```bash
+# edge — 40초 뒤
+sudo conntrack -L 2>/dev/null | grep -c ":80 "      # 0 — 사라졌다
+```
+
+**④ 그런데 양쪽은 모른다**
+
+```bash
+# pc1 — 아직 열려 있다고 믿는 소켓
+ss -tn | grep :80
+```
+
+`ESTAB` 로 남아 있습니다. 이제 여기에 한 줄 쳐 보면 — **아무 일도 일어나지 않습니다.**
+edge 에는 이 연결의 기억이 없으므로, 돌아오는 것도 나가는 것도 표에 없는 패킷이라 버려집니다.
+
+> **이것이 "어제까지 되던 게 죽는" 장애의 정체입니다.**
+> 애플리케이션 로그에는 아무 단서가 없습니다 — 소켓은 멀쩡히 열려 있으니까요.
+> 그래서 **keepalive** 를 켭니다. 조용한 연결에 주기적으로 한 바이트를 흘려
+> 중간 장비의 기억을 갱신하는 것입니다 (M6).
+
+**정리 (반드시 할 것)**
+
+```bash
+# edge
+sudo sysctl -w net.netfilter.nf_conntrack_tcp_timeout_established=432000
+sudo sysctl net.netfilter.nf_conntrack_tcp_timeout_established
+```
+
 ---
 
 ## 4. 관찰 포인트 정리
@@ -581,6 +817,8 @@ sudo nft list ruleset | grep -c "{{ public.transit.addresses.inet }}"      # 0 �
 | NAT 규칙 | `nft list ruleset` 의 `nat` 테이블 | edge |
 | 정책과 **순서** | `nft list ruleset` 의 `forward` 체인 | edge |
 | 버려진 패킷 | `journalctl -k \| grep edge-drop` | edge |
+| **세션의 남은 수명** | `conntrack -L` 의 두 번째 숫자 | edge |
+| **안에서 공개 주소로** | `curl` + 출발지에서 캡처 | pc1 (헤어핀 의심) |
 | 경로가 있는가 | `ip route get <대상>` | 출발지 |
 | 실패의 성격 | `time` + 종료 코드 | 출발지 |
 | **되면 안 되는 것** | 외부에서 사설 IP 로 ping | inet |
@@ -604,6 +842,7 @@ make break LAB={{ lab_id }} SCENARIO=m09-01
 | m09-02 | 외부에서 web 공개 IP 만 안 됩니다. ftp 는 정상 | 두 서비스의 차이가 무엇인가 |
 | m09-03 | 나가는 것은 되는데 **아무 응답도 안 돌아옵니다** | 응답을 허용하는 규칙이 원래 몇 개였는가 |
 | m09-04 | FTP 접속은 되는데 전송만 안 됩니다. 내부에서는 정상 | `227` 응답 안에 무엇이 들어 있는가 |
+| m09-05 | 짧은 요청은 전부 정상. **오래 열어 둔 연결만** 조용히 죽습니다 | 소켓은 살아 있는데 중간의 무엇이 사라졌는가 |
 
 **규칙**: 복구 전에 **원인을 먼저 말합니다.**
 그리고 **NAT · 정책 · 라우팅 중 무엇인지**까지 답해 주세요.

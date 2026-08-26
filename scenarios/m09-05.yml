@@ -1,0 +1,40 @@
+---
+# M9-05 : 경계의 세션 수명을 30초로 줄인다 (conntrack idle timeout)
+#   증상  : 짧은 요청(curl·ping)은 전부 정상. 그런데 **오래 열어 둔 연결**이 조용히 죽는다.
+#           30초쯤 아무것도 주고받지 않으면 그 뒤로 아무 데이터도 가지 않는다.
+#           양쪽 소켓은 여전히 ESTABLISHED 다 — 애플리케이션 로그에 단서가 없다.
+#   정답  : edge 의 `net.netfilter.nf_conntrack_tcp_timeout_established` 가 30 이다 (기본 432000).
+#           `conntrack -L` 로 보면 남은 수명이 30 에서 시작한다.
+#   노림수: "어제까지 되던 게 죽었다" 를 상태 테이블에서 찾을 수 있는가.
+#           그리고 처방이 재기동이 아니라 **keepalive** 라는 것. (G2, E2)
+#   주의  : 캡스톤 풀에 넣지 않는다 — 검사는 짧은 요청뿐이라 이 장애를 감지하지 못한다.
+#           고쳐도 티가 나지 않으므로 채점이 성립하지 않는다 (m07-01 과 같은 이유).
+- name: "scenario m09-05 :: 세션이 30초 만에 잊힌다"
+  hosts: edge
+  become: true
+  gather_facts: false
+  tasks:
+    - name: 세션 수명을 30초로
+      ansible.posix.sysctl:
+        name: net.netfilter.nf_conntrack_tcp_timeout_established
+        value: "30"
+        sysctl_set: true
+        state: present
+        reload: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: 세션 수명 원복 (커널 기본값 5일)
+      ansible.posix.sysctl:
+        name: net.netfilter.nf_conntrack_tcp_timeout_established
+        value: "432000"
+        sysctl_set: true
+        state: present
+        reload: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'edge 의 세션 수명을 30초로 줄였다. 짧은 요청은 전부 정상이다 — 오래 열어 둔 연결만 죽는다.'
+             if scenario_action | default('break') == 'break'
+             else 'edge 의 세션 수명을 기본값으로 되돌렸다.' }}
