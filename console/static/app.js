@@ -123,9 +123,9 @@
 
   function bind() {
     $$('.tab').forEach(t => t.onclick = () => loadModule(curModule(), t.dataset.kind));
-    // 과제 탭 끝의 [검증하러 가기]. 탭과 같은 곳으로 간다 — 길이 둘이면
-    // 둘이 어긋나는 날이 온다.
-    $$('.next-step [data-kind]').forEach(b =>
+    // 탭으로 보내는 단추들 — 과제 끝의 [검증하러 가기], 퀴즈 통과 뒤의 [과제].
+    // 탭과 같은 곳으로 간다. 길이 둘이면 둘이 어긋나는 날이 온다.
+    $$('[data-kind]:not(.tab)').forEach(b =>
       b.onclick = () => loadModule(curModule(), b.dataset.kind));
     // 교재 본문에서 [과제](#tasks) 같은 링크를 누르면 그 탭으로 간다.
     // 교재는 웹과 인쇄본 양쪽으로 나가므로, 인쇄본에서는 그냥 앵커로 남는다.

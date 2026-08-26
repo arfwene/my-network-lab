@@ -121,6 +121,13 @@
     {% elif mstate.awaiting_review %}
       <div class="muted">관리자 승인을 기다리는 중입니다 —
         {{ mstate.awaiting_review | join(', ') }}. 승인되면 다음 모듈이 열립니다.</div>
+    {# 순서는 교재 → 퀴즈 → 과제 → 검증 → 다음 모듈이다. 어디까지 왔는지에 따라
+       바로 다음 한 걸음만 가리킨다 — 여기서 곧장 다음 모듈을 가리키면 남은
+       단계를 건너뛰게 된다. #}
+    {% elif not mstate.quiz_passed %}
+      <div class="muted"><b>[퀴즈]</b> 부터 통과해 주세요. 그다음이 <b>[과제]</b> 입니다.</div>
+    {% elif kind == 'quiz' %}
+      <button class="btn primary big" data-kind="tasks">퀴즈 통과 — 이제 [과제] →</button>
     {% else %}
       <div class="muted">통과하면 다음 모듈이 열립니다. 고친 뒤 다시 제출해 주세요.</div>
     {% endif %}
