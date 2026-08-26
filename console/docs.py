@@ -20,6 +20,7 @@ _spec.loader.exec_module(_labmap)
 
 SRC = L.ROOT / "modules"
 MERMAID_FENCE = re.compile(r"```mermaid\n(.*?)```", re.S)
+STAGE_MARK = re.compile(r"^%%\s*lab-stage:\s*(m\d+)\s*$", re.M)
 
 
 def modules():
@@ -104,8 +105,11 @@ def to_html(text, module=None):
 
     def swap(m):
         body = m.group(1)
-        # 전체 토폴로지인지 현재 단계인지 구분: 노드 수로 판단
-        stage = "m10" if body.count("([") + body.count("((") >= 8 else default_stage
+        # 그림이 스스로 밝힌 단계를 쓴다. 없으면 이 모듈의 단계로 그린다.
+        # 예전에는 노드 수로 짐작했는데, 전체 토폴로지의 노드가 기준치에 못 미쳐
+        # 어떤 그림도 "전체" 로 판정되지 않았다 — M0 의 "최종 모습" 이 M1 로 그려졌다.
+        mark = STAGE_MARK.search(body)
+        stage = mark.group(1) if mark else default_stage
         stages.append(stage)
         return (f'<div class="topo-wrap" data-stage="{stage}">'
                 f'{topology_svg.render(stage)}</div>')

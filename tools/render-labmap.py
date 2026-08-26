@@ -73,7 +73,8 @@ def mermaid(stage):
     by_zone = {}
     for n in ns:
         by_zone.setdefault(n["zone"], []).append(n)
-    lines = ["graph LR"]
+    # labdesign.mermaid 과 같은 표시. 웹 콘솔이 어느 단계로 그릴지 짐작하지 않게 한다.
+    lines = [f"%% lab-stage: {stage}", "graph LR"]
     for zone in ["site-a", "core", "site-b", "edge"]:
         if zone not in by_zone:
             continue

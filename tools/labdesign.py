@@ -591,7 +591,12 @@ def mermaid(lab_id=1, stage="m10", show_bridge=True):
     by_zone = {}
     for n in ns:
         by_zone.setdefault(n["zone"], []).append(n)
-    lines = ["graph LR"]
+    # 어느 단계의 그림인지 그림 자신이 말한다.
+    #  웹 콘솔은 ```mermaid 블록을 서버에서 SVG 로 바꾸는데, 어느 단계로 그릴지
+    #  노드 수로 짐작하고 있었다. M0 은 "최종 모습"과 "지금 모습"을 나란히 보여
+    #  주는데, 짐작이 빗나가 둘 다 지금 모습으로 그려졌다. mermaid 주석이라
+    #  그대로 흘러가도 그림에는 영향이 없다.
+    lines = [f"%% lab-stage: {stage}", "graph LR"]
     for zone in ["site-a", "core", "site-b", "edge"]:
         if zone not in by_zone:
             continue
