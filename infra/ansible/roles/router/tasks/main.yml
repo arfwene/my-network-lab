@@ -38,3 +38,27 @@
     name: frr
     enabled: true
     state: started
+
+# 여기서 handler 를 먼저 돌린다. 아래 대기가 **재시작된 뒤의** 상태를 봐야 한다.
+- name: FRR 재시작을 먼저 끝낸다
+  ansible.builtin.meta: flush_handlers
+
+- name: OSPF 인접이 설 때까지 기다린다
+  # "설정을 올렸다" 와 "프로토콜이 수렴했다" 는 다른 말이다. OSPF 는 DR 선출과
+  # DBD 교환에 수십 초가 걸린다. 그 사이에 [검증] 을 누르면 멀쩡한 랩이
+  # ExStart 로 잡혀 떨어진다 — 실제로 M4 검사 9개 중 5개가 그렇게 떨어졌다.
+  # 적용 버튼이 "끝났다" 고 말하려면 여기까지 끝나 있어야 한다.
+  #
+  # 인접이 아직 하나도 없는 단계(M3 이하 · edge)는 기다릴 것이 없으므로 통과시킨다.
+  # 머리글 앞에 빈 줄이 붙어 나오므로 IP 로 시작하는 줄만 본다.
+  ansible.builtin.shell: |
+    rows=$(vtysh -c 'show ip ospf neighbor' 2>/dev/null | awk '$1 ~ /^[0-9]+\./')
+    [ -n "$rows" ] || exit 0
+    printf '%s\n' "$rows" | grep -qv Full && exit 1
+    exit 0
+  register: ospf_conv
+  until: ospf_conv.rc == 0
+  retries: 30
+  delay: 2
+  changed_when: false
+  failed_when: false
