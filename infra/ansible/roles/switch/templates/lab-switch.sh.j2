@@ -16,6 +16,43 @@ set -uo pipefail
 BR={{ bridge_name_local }}
 {% set si = stages.index(lab_stage) %}
 {% set vf = stage_override.switch_vlan_filtering | default(true) %}
+{% set ports = lab_interfaces | selectattr('active') | selectattr('bridge_id') | map(attribute='name') | list %}
+
+# ---------------------------------------------------------------------------
+#  포트가 나타나기를 먼저 기다린다.
+#
+#  common 역할이 netplan 으로 NIC 이름을 바꾼다(MAC 기준). 그 handler 는
+#  async·poll:0 으로 던져지고 ansible 은 SSH 가 돌아오는 것만 기다리므로,
+#  관리망이 살아난 뒤에도 eth1·eth2 는 아직 이름이 바뀌는 중일 수 있다.
+#  그 틈에 이 스크립트가 돌면 이렇게 된다:
+#
+#      Cannot find device "eth1"
+#      Cannot find device "eth2"
+#
+#  그리고 **exit 0 이었다.** 포트 하나 없는 브리지가 NO-CARRIER 로 남았는데
+#  systemd 는 성공이라고 했고, 교육생에게는 "pc1 에서 pc2 가 안 되는" 랩이 갔다.
+#  스위치가 조용히 아무것도 안 하는 것보다 시끄럽게 실패하는 편이 낫다.
+# ---------------------------------------------------------------------------
+wait_dev() {
+  local i="$1" n=0
+  while [ "$n" -lt 60 ]; do            # 최대 30초
+    [ -e "/sys/class/net/$i" ] && return 0
+    sleep 0.5
+    n=$((n + 1))
+  done
+  return 1
+}
+
+MISSING=""
+for i in {{ ports | join(' ') }}; do
+  wait_dev "$i" || MISSING="$MISSING $i"
+done
+if [ -n "$MISSING" ]; then
+  echo "스위치 포트를 찾지 못했다:$MISSING" >&2
+  echo "  NIC 이름이 바뀌는 중이었을 수 있다. 다시 시도하려면:" >&2
+  echo "    systemctl restart lab-switch" >&2
+  exit 1
+fi
 
 ip link show "$BR" >/dev/null 2>&1 || ip link add name "$BR" type bridge
 {% if vf %}
@@ -34,7 +71,7 @@ ip link set "$BR" up
 {% for i in lab_interfaces if i.active and i.bridge_id %}
 # ---- {{ i.name }} -> {{ i.peer }}{% if i.mode %} ({{ i.mode }}){% endif %}{% if i.desc %}  {{ i.desc }}{% endif %}
 ip link set {{ i.name }} up
-ip link set {{ i.name }} master "$BR"
+ip link set {{ i.name }} master "$BR" || { echo "{{ i.name }} 포트를 $BR 에 꽂지 못했다" >&2; exit 1; }
 {%   if vf %}
 bridge vlan del dev {{ i.name }} vid 1 2>/dev/null || true
 {%     if i.mode == 'access' %}
@@ -47,5 +84,14 @@ bridge vlan add dev {{ i.name }} vid {{ i.native }} pvid untagged   # native VLA
 {%     endif %}
 {%   endif %}
 {% endfor %}
+
+# 정말 꽂혔는지 확인한다. 위 명령이 하나씩은 성공해도 결과가 비어 있을 수 있다 —
+# "명령을 돌렸다" 와 "스위치가 됐다" 는 다른 말이다.
+GOT=$(ls /sys/class/net/"$BR"/brif 2>/dev/null | wc -l)
+WANT={{ ports | length }}
+if [ "$GOT" -ne "$WANT" ]; then
+  echo "$BR 에 포트가 $GOT/$WANT 개만 꽂혔다" >&2
+  exit 1
+fi
 
 exit 0
