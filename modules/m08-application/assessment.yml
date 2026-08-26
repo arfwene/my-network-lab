@@ -188,7 +188,10 @@ checks:
       kind: connectivity
       title: "resolv.conf 를 통한 이름 해석이 되는가 (`dig` 없이)"
       host: pc1
-      run: "getent hosts web.{{ dns.zone }}"
+      # 이 랩은 M5 부터 듀얼스택이다. `getent hosts` 는 glibc 기본 정렬에 따라
+      # AAAA(IPv6)를 먼저 돌려주므로 IPv4 를 기대하면 늘 떨어진다.
+      # IPv4 를 확인하려면 IPv4 로 물어야 한다.
+      run: "getent ahostsv4 web.{{ dns.zone }}"
       expect: "{{ ip.web }}"
       hint: |
         `dig @서버` 는 되는데 이것이 안 되면 **클라이언트 설정** 문제입니다.

@@ -349,6 +349,14 @@ getent hosts web.{{ dns.zone }}
 ping -c 2 web.{{ dns.zone }}
 ```
 
+`dig` 는 물어본 레코드만 보여 주고, `getent` 는 **OS 가 실제로 고를 주소**를 보여 준다.
+이 랩은 M5 부터 듀얼스택이라 `getent hosts` 는 IPv6 를 먼저 돌려준다. IPv4 쪽을
+보려면 그렇게 물어야 한다.
+
+```bash
+getent ahostsv4 web.{{ dns.zone }}
+```
+
 `search {{ dns.zone }}` 덕분에 `ping web` 처럼 짧게 써도 된다.
 OS 가 뒤에 `{{ dns.zone }}` 을 붙여 다시 물어보기 때문이다.
 편하지만 **위험**하기도 하다 — 사내에 `web` 이라는 다른 서버가 있으면 엉뚱한 곳으로 간다.
