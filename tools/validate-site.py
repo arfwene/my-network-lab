@@ -206,6 +206,27 @@ def publish_guard():
     sensitive -= safe
     sensitive = {s for s in sensitive if len(s) > 6}
 
+    # 값이 **통째로 같을 때만** 찾으면 앞부분만 적은 것을 놓친다.
+    #   site.local.yml 에 점프 호스트 주소가 있어도, 문서에 그 주소의 앞
+    #   세 옥텟만 적고 뒤를 x 로 흐려 놓으면 그냥 지나갔다. 실제로 그렇게
+    #   사내 대역이 공개 저장소의 최신 파일로 나갔다 — 그것도 "이 대역이
+    #   이력에 남아 있다" 고 경고하는 문서에서.
+    # 그래서 주소의 앞 세 옥텟(/24 자리)도 함께 본다. site.yml 의 공개
+    # 기본값에서 나온 앞자리는 안전하므로 뺀다.
+    # 앞자리를 뽑는 것은 **실제 호스트 주소**에서만 한다.
+    # 대역이나 네트워크 주소(끝 옥텟 0)에서 뽑으면 사설 대역 자체의 앞자리가
+    # 나오는데, 그건 RFC1918 을 설명하는 M02 교재에 정당하게 등장하는 값이라
+    # 교재 전체가 오탐으로 걸린다.
+    def octet24(vals):
+        out = set()
+        for v in vals:
+            m = re.fullmatch(r"(\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d{1,3})", v)
+            if m and m.group(2) != "0":
+                out.add(m.group(1))
+        return out
+
+    prefixes = octet24(sensitive) - octet24(safe)
+
     if not sensitive:
         ok("공개 안전성: 검사할 사내 전용 값이 없다 (site.local.yml · var/runtime.yml 미사용)")
         return
@@ -242,13 +263,17 @@ def publish_guard():
         for s in sensitive:
             if s in body:
                 leaks.append((f, s))
+        for s in prefixes:
+            # 경계를 둔다 — 앞자리 a.b.c 가 a.b.cN.* 에 걸리면 안 된다.
+            if re.search(r"\b" + re.escape(s) + r"\b", body):
+                leaks.append((f, s + ".x"))
 
     if leaks:
         for f, s in sorted(set(leaks)):
             err(f"공개 위험: '{s}' 가 {f} 에 들어 있다 "
                 f"(site.local.yml / var/runtime.yml 전용 값)")
     else:
-        ok(f"공개 안전성: 사내 전용 값 {len(sensitive)}건이 다른 파일로 새지 않았다")
+        ok(f"공개 안전성: 사내 전용 값 {len(sensitive)}건 · 대역 앞자리 {len(prefixes)}건이 다른 파일로 새지 않았다")
 
     # .gitignore 확인
     gi = (L.ROOT / ".gitignore")
