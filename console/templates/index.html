@@ -73,7 +73,7 @@
         {% if drilling %}
         <p class="note">진행 중입니다. <b>증상부터</b> 확인해 주세요 —
            어디까지 되고 어디부터 안 되는가. 랩은 <b>터미널에서</b> 고칩니다.</p>
-        {{ act('drill-check', 'primary block', '다 고쳤습니다',
+        {{ act('drill-check', 'primary block', '결과 확인',
                '이 단계의 검사를 돌립니다. 통과하면 정답을 보지 않고 끝납니다') }}
         <div class="hints" id="hints">
           {%- for h in drill_hints %}
@@ -83,8 +83,8 @@
         <button class="btn block" id="hintbtn"
                 {{ 'disabled' if allow is not none }}
                 title="막혔을 때. 정답은 나오지 않습니다">
-          {{ '힌트 하나 더' if (lab_state.hints | default(0)) else '힌트 보기' }}</button>
-        {{ act('drill-end', 'block', '정답 보고 복구',
+          {{ '다음 힌트 보기' if (lab_state.hints | default(0)) else '힌트 보기' }}</button>
+        {{ act('drill-end', 'block', '포기 - 정답 확인',
                '무엇이 주입됐는지 로그에 나오고, 함께 복구합니다') }}
         {% else %}
         <p class="note">서버가 장애 하나를 <b>말없이</b> 주입합니다.

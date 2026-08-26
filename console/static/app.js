@@ -65,7 +65,7 @@
       title: '정답을 보고 복구합니다',
       body: `<ul>
         <li>무엇이 주입됐는지 <b>로그에 그대로 나옵니다</b>. 이 회차는 여기서 끝납니다</li>
-        <li>아직 안 눌러 봤다면 <b>[다 고쳤습니다]</b> 와 <b>[힌트]</b> 가 먼저입니다</li>
+        <li>아직 안 눌러 봤다면 <b>[결과 확인]</b> 과 <b>[힌트]</b> 가 먼저입니다</li>
         <li>이미 손으로 고쳤어도 괜찮습니다 — 복구는 여러 번 돌려도 됩니다</li>
       </ul>`,
       ok: '정답을 봅니다'
@@ -345,7 +345,7 @@
         ? `<b>더 없습니다</b> ${j.text}`
         : `<b>힌트 ${j.level} · ${j.title}</b> ${j.text}`;
       box.appendChild(el);
-      btn.textContent = j.done ? '힌트를 다 봤습니다' : '힌트 하나 더';
+      btn.textContent = j.done ? '힌트를 다 봤습니다' : '다음 힌트 보기';
       if (j.done) return;                       // 마지막이면 잠근 채로 둔다
     } finally {
       if (btn.textContent !== '힌트를 다 봤습니다') btn.disabled = false;
