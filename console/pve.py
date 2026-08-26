@@ -720,6 +720,7 @@ def preflight(lab_id, cfg=None):
     lo, hi = L.vmid_range(lab_id)
     c_id = Check("vmid", f"VMID {lo}~{hi}")
     cs.append(c_id)
+    existing = 0                                 # 이미 만들어져 있는 대수 (아래 용량 검사가 쓴다)
     try:
         vms = _api(cfg, "/api2/json/cluster/resources?type=vm") or []
         want = _lab_vm_names(lab_id)
@@ -733,6 +734,7 @@ def preflight(lab_id, cfg=None):
                      "구간으로 옮기거나, 해당 VM 을 옮길 것. 여기서 멈추지 않으면 "
                      "Terraform 이 절반쯤 만들다 실패한다")
         elif mine:
+            existing = len(mine)
             untagged = [v for v in mine if not _owned(v)]
             if untagged:
                 c_id.set("ok", f"{len(mine)}대가 이미 이 랩 소유로 존재한다 "
@@ -743,6 +745,50 @@ def preflight(lab_id, cfg=None):
             c_id.set("ok", "비어 있다")
     except Exception as e:                       # noqa: BLE001
         c_id.set("warn", f"확인하지 못했다: {type(e).__name__}: {e}")
+
+    # --- 디스크 여유 ------------------------------------------------------
+    #  local-lvm 은 thin pool 이다. 랩 하나는 8GiB 디스크 13장, 즉 104GiB 를
+    #  **약속**하지만 실제로는 쓰는 만큼만 차지한다(실측 25GiB 안팎). 그래서
+    #  랩을 여러 개 띄우면 약속 합계가 풀 크기를 훌쩍 넘는다.
+    #
+    #  평소에는 아무 문제가 없다. 문제는 풀이 꽉 차는 순간이다 — 그때 멈추는
+    #  것은 방금 만든 랩 하나가 아니라 **그 풀 위의 모든 VM** 이다. 다른
+    #  교육생들의 랩까지 한꺼번에 얼어붙는다.
+    #
+    #  [설치 상태] 화면에도 여유 공간이 나오지만 그건 보여 줄 뿐 막지는 않는다.
+    #  자원을 실제로 만드는 것은 여기이므로, 막는 것도 여기서 한다.
+    NEED_PER_LAB = 25 * 1024 ** 3                # 랩 하나의 실사용 실측치
+    c_sp = Check("space", f"{cfg['datastore']} 여유 공간")
+    cs.append(c_sp)
+    try:
+        total_nodes = len(L.TOPO["nodes"])
+        todo = max(total_nodes - existing, 0)
+        need = int(NEED_PER_LAB * todo / total_nodes) if total_nodes else 0
+        st = _api(cfg, f"/api2/json/nodes/{cfg['node']}/storage") or []
+        mine_ds = next((s for s in st if s.get("storage") == cfg["datastore"]), None)
+        if not mine_ds:
+            c_sp.set("warn", f"'{cfg['datastore']}' 를 찾지 못해 건너뛴다")
+        elif not todo:
+            c_sp.set("ok", f"여유 {mine_ds.get('avail', 0) / 1024 ** 3:.0f} GiB "
+                           f"· 13대가 이미 있어 새로 만들 디스크가 없다")
+        else:
+            avail = mine_ds.get("avail", 0)
+            g = avail / 1024 ** 3
+            if avail < need:
+                c_sp.set("error",
+                         f"여유 {g:.0f} GiB 뿐이다 (이 랩에 {need / 1024 ** 3:.0f} GiB 쯤 필요)",
+                         "지금 만들면 thin pool 이 찰 수 있다. 그러면 이 랩만이 아니라 "
+                         "**같은 풀 위의 모든 랩이 함께 멈춘다.** 쓰지 않는 랩을 "
+                         "[랩 삭제] 로 정리하거나 스토리지를 늘린 뒤 다시 시도할 것")
+            elif avail < need * 2:
+                c_sp.set("warn", f"여유 {g:.0f} GiB — 이 랩을 만들면 거의 남지 않는다",
+                         "thin pool 이 차면 같은 풀 위의 모든 랩이 함께 멈춘다. "
+                         "이번은 진행되지만, 다음 랩 전에 정리가 필요하다")
+            else:
+                c_sp.set("ok", f"여유 {g:.0f} GiB · 새로 만들 {todo}대에 "
+                               f"{need / 1024 ** 3:.0f} GiB 쯤 쓴다")
+    except Exception as e:                       # noqa: BLE001
+        c_sp.set("warn", f"확인하지 못했다: {type(e).__name__}: {e}")
 
     # --- 템플릿이 정말 템플릿인가 ----------------------------------------
     tid = L.SITE["labs"]["template_vmid"]
