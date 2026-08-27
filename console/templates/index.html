@@ -114,7 +114,8 @@
         위 <b>[이 모듈 적용]</b> 을 먼저 눌러 주세요.{% endif %}</p>
       {% macro opt(s) -%}
         <option value="{{ s.id }}" {{ 'disabled' if s.locked }}>{{ s.id }} —
-          {{ s.symptom }}{{ ' [랩이 아직 이 단계가 아닙니다]' if s.locked }}</option>
+          {{ s.symptom }}{{ ' [랩이 아직 이 단계가 아닙니다]' if s.locked }}{{
+            ' [연습용 · 실습 인정 안 됨]' if not s.graded }}</option>
       {%- endmacro %}
       {% set here = scenarios | selectattr('module', 'equalto', module.id) | list if module else [] %}
       <select id="scenario" {{ 'disabled' if allow is not none }}>

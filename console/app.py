@@ -742,7 +742,11 @@ async def submit(request: Request, module_id: str):
             # broken 이 이미 비어 있으므로 여기 걸리지 않는다 — 그게 맞다.
             # 정답을 보고 되돌린 것은 실습을 한 것이 아니다.
             st = state.load(job.lab_id)
-            mine = [s for s in (st.get("broken") or []) if s.split("-")[0] == module["id"]]
+            # 검사로 판정할 수 없는 시나리오는 세지 않는다. 그것까지 인정하면
+            # 주입만 하고 아무것도 안 해도 통과한다 (site.yml 에 이유를 적어 뒀다).
+            skip = set(L.SITE.get("console", {}).get("ungraded_scenarios") or [])
+            mine = [s for s in (st.get("broken") or [])
+                    if s.split("-")[0] == module["id"] and s not in skip]
             if mine and not res.get("passed"):
                 # 고장이 검사에 실제로 잡혔다. 이제부터 "고치면 인정" 이다.
                 state.mark_drill_seen(job.lab_id, module["id"])

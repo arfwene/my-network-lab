@@ -150,6 +150,11 @@ def scenario_menu(lab_stage=None):
         if len(sym) > 52:
             sym = sym[:51].rstrip(" ,.") + "…"
         out.append({"id": sid, "module": mod, "stage": stage, "symptom": sym,
+                    # 검사로 판정할 수 없는 것은 장애 실습으로 인정되지 않는다.
+                    # 연습거리로는 좋으므로 목록에는 남기되, 그 사실을 밝힌다 —
+                    # 모르고 고르면 다 고쳐 놓고도 통과가 안 되는 줄 안다.
+                    "graded": sid not in set(
+                        L.SITE.get("console", {}).get("ungraded_scenarios") or []),
                     "locked": not (lab_stage and L.stage_le(stage, lab_stage))})
     return out
 
