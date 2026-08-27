@@ -1,5 +1,7 @@
 """퀴즈 채점과 검사 결과 해석. 정답은 서버 밖으로 내보내지 않는다."""
+import ipaddress
 import json
+import re
 import sys
 import yaml
 from pathlib import Path
@@ -125,6 +127,56 @@ def _norm(s):
     return s.rstrip(".!?。")
 
 
+_MAC = re.compile(r"(?:[0-9a-f]{2}([:-])[0-9a-f]{2}(?:\1[0-9a-f]{2}){4}"
+                  r"|[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4})\Z", re.I)
+
+
+def _mac_key(s):
+    """MAC 으로 읽히면 16진수 12자리. 아니면 None."""
+    s = str(s or "").strip()
+    return re.sub(r"[^0-9a-f]", "", s.lower()) if _MAC.match(s) else None
+
+
+def _addr_key(s):
+    """주소로 읽히면 (주소, 접두길이 or None). 아니면 None."""
+    body, _, pref = str(s or "").strip().partition("/")
+    try:
+        a = ipaddress.ip_address(body)
+    except ValueError:
+        return None
+    if not pref:
+        return (a, None)
+    if not pref.isdigit() or int(pref) > a.max_prefixlen:
+        return None
+    return (a, int(pref))
+
+
+def _same(given, want, notation=False):
+    """단답형 한 건 비교.
+
+    주소는 **글자가 아니라 주소로** 견준다. `fe80::5054:ff:fe12:1` 과
+    `fe80::5054:ff:fe12:0001` 은 같은 주소인데 글자로는 다르다 — 맞게 적고도
+    틀리는 자리였다. MAC 도 `:` `-` `.` 어느 표기든 받는다.
+    접두 길이는 **정답이 달고 있을 때만** 따진다 (`10.30.8.0/22` 를 물었으면
+    `/22` 까지 맞아야 하고, 주소만 물었으면 붙여 적어도 넘어간다).
+
+    notation 이 참인 문항은 표기 자체를 묻는다(가장 짧게 축약하라).
+    거기서 주소로 견주면 문제가 사라지므로 글자 그대로 비교한다.
+    """
+    if _norm(given) == _norm(want):
+        return True
+    if notation:
+        return False
+    mw = _mac_key(want)
+    if mw:
+        return _mac_key(given) == mw
+    aw = _addr_key(want)
+    if aw:
+        ag = _addr_key(given)
+        return bool(ag) and ag[0] == aw[0] and (aw[1] is None or ag[1] == aw[1])
+    return False
+
+
 def _snip(s, n=90):
     """결과 목록에 쓸 한 줄 요약.
 
@@ -176,7 +228,8 @@ def grade_quiz(module, lab_id, answers):
             # "web 의 IP 는?" — 은 랩마다 답이 다르므로 `{{ ip.web }}` 로 적어야 하는데,
             # 지문만 렌더하고 정답을 원문 그대로 비교하면 아무도 맞힐 수 없다.
             want = [Template(str(a)).render(**ctx) for a in it["answer"]]
-            ok = bool(given) and any(_norm(given[0]) == _norm(a) for a in want)
+            ok = bool(given) and any(_same(given[0], a, it.get("notation"))
+                                     for a in want)
         correct += 1 if ok else 0
         # 해설(explain)은 **여기서 내보내지 않는다.**
         #  해설은 정답을 그대로 말한다 ("UP 인데 NO-CARRIER 면 …"). 틀린 문항에
