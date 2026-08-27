@@ -104,6 +104,41 @@ def shape_leaks(mod_dir):
     return out
 
 
+# 앞 모듈을 가리켜도 되는 자리. 중간 점검은 **누적 범위를 진단하는 것**이 목적이라
+# 범위 표기가 곧 그 과제의 정의다. 앞 모듈의 산출물을 요구하지는 않으므로,
+# 늦게 합류한 사람도 랩만 있으면 풀 수 있다.
+BACK_OK = {
+    ("m03", "### 과제 5. ★ 중간 점검 — 증상만 보고 진단하기 (M1~M3 범위)"),
+    ("m06", "### 과제 5. ★ 중간 점검 — 증상만 보고 진단하기 (M4~M6 범위)"),
+}
+
+
+def back_refs(mod_dir):
+    """과제가 **앞 모듈**을 가리키는 자리. [(줄번호, 줄)] 을 돌려준다.
+
+    과제는 그 모듈 안에서 끝나야 한다. 앞 모듈에서 만든 캡처·점검표·표를
+    가져오라고 하면, 늦게 합류했거나 그 파일을 잃은 사람은 손도 못 댄다.
+    앞을 가리키는 것(`M4 로 넘어가도 됩니다`)은 의존이 아니므로 놔둔다.
+    캡스톤(M10)만 예외다 — 전 과정을 모아 보는 자리이기 때문.
+    """
+    f = mod_dir / "tasks.md.j2"
+    try:
+        me = int(mod_dir.name[1:3])
+    except ValueError:
+        return []
+    if me == 10 or not f.exists():
+        return []
+    out = []
+    for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+        if (mod_dir.name[:3], line.strip()) in BACK_OK:
+            continue
+        for n in re.findall(r"\bM(\d)\b", line):
+            if int(n) < me:
+                out.append((i, line.strip()[:70]))
+                break
+    return out
+
+
 def quiz_count(mod_dir):
     """그 모듈의 퀴즈 문항 수. assessment.yml 이 없으면 0."""
     f = mod_dir / "assessment.yml"
@@ -142,15 +177,19 @@ def main(only=None):
     if only:
         files = [f for f in files if f.parent.name.startswith(only)]
     bad = 0
-    over, leaks = [], []
-    print(f"{'모듈':<6}{'퀴즈':>6}{'모양누출':>9}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
+    over, leaks, backs = [], [], []
+    print(f"{'모듈':<6}{'퀴즈':>6}{'모양누출':>9}{'앞모듈참조':>11}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
           f"{'작은표':>7}{'머리말없는인용':>15}")
-    print("-" * 75)
+    print("-" * 86)
     for f in files:
         m = measure(f)
         nq = quiz_count(f.parent)
         sl = shape_leaks(f.parent)
+        br = back_refs(f.parent)
         marks = []
+        if br:
+            marks.append("앞모듈")
+            backs += [(f.parent.name[:3], ln, s) for ln, s in br]
         if sl:
             marks.append("모양")
             leaks += [(f.parent.name[:3], qid, why) for qid, why in sl]
@@ -164,7 +203,7 @@ def main(only=None):
         if m["tiny"]: marks.append("작은표")
         if m["bad_prefix"]: marks.append("머리말")
         col = R if marks else G
-        print(f"{col}{f.parent.name[:4]:<6}{nq:>6}{len(sl):>9}{m['bold_per_sent']:>10.2f}"
+        print(f"{col}{f.parent.name[:4]:<6}{nq:>6}{len(sl):>9}{len(br):>11}{m['bold_per_sent']:>10.2f}"
               f"{m['quote_per_100']:>11.1f}{m['table_pct']:>7.1f}{len(m['tiny']):>7}"
               f"{len(m['bad_prefix']):>15}{N}")
         if marks:
@@ -173,8 +212,8 @@ def main(only=None):
                 print(f"        {Y}머리말 없는 인용구{N}: {b[:60]}")
             for b in m["tiny"][:2]:
                 print(f"        {Y}2열 3행 이하 표{N}: {b}")
-    print("-" * 75)
-    print(f"기준: 퀴즈 ≤ {QUIZ_MAX}문항 · 모양누출 0 · 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · "
+    print("-" * 86)
+    print(f"기준: 퀴즈 ≤ {QUIZ_MAX}문항 · 모양누출 0 · 앞모듈참조 0 · 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · "
           f"작은표 0 · 머리말 없는 인용구 0")
     print("표% 는 참고값이다 — 찾아보는 표가 본문인 문서는 높아도 맞다.")
     if bad:
@@ -183,12 +222,14 @@ def main(only=None):
         print(f"{G}전부 기준 안{N}")
     # 문장 밀도는 사람이 읽고 판단할 몫이라 재기만 한다. 퀴즈 문항 수는
     # 세면 답이 나오는 값이므로 여기서 막는다.
+    for mod, ln, s in backs:
+        print(f"{R}✘{N} {mod} tasks.md.j2:{ln} 이 앞 모듈을 가리킨다 — {s}")
     for mod, qid, why in leaks:
         print(f"{R}✘{N} {mod} {qid}: {why} — 모양만 보고 정답을 고를 수 있다")
     for name, n in over:
         print(f"{R}✘{N} {name} 의 퀴즈가 {n}문항이다 — {QUIZ_MAX}문항까지만 둔다 "
               f"(modules/{name}/assessment.yml)")
-    return 1 if (over or leaks) else 0
+    return 1 if (over or leaks or backs) else 0
 
 
 if __name__ == "__main__":

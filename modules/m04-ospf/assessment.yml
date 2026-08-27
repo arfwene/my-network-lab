@@ -192,7 +192,7 @@ checks:
 
     - id: no-static-left
       kind: config
-      title: "M3 의 정적 경로가 남아 있지 않은가 ★"
+      title: "손으로 넣은 정적 경로가 남아 있지 않은가 ★"
       host: r1
       run: "vtysh -c 'show ip route static'"
       expect_none: ["{{ zone['site-b'] }}", "blackhole"]
@@ -260,20 +260,21 @@ checks:
 written:
   items:
     - id: static-to-ospf
-      title: "정적에서 OSPF 로 — 무엇이 달라졌는가 ★"
+      title: "정적 경로였다면 — OSPF 와 무엇이 다른가 ★"
       kind: text
       review: optional
       auto_pass: true
       min_chars: 300
       prompt: |
-        M3 의 정적 라우팅과 지금의 OSPF 를 비교해 적을 것.
+        지금 이 랩은 라우터 4대가 OSPF 로 서로를 배우고 있습니다.
+        **OSPF 없이 정적 경로만으로** 같은 도달성을 만든다고 가정하고 비교해 적을 것.
         교과서 정의가 아니라 **이 랩에서 직접 본 것**을 근거로 씁니다.
 
-          1. 설정량 — 무엇을 몇 줄 적었고, 지금은 무엇을 적는가
-          2. 링크를 끊었을 때 — M3 라면 어떻게 됐을까, 실제로는 어떻게 됐는가
+          1. 설정량 — 정적이라면 라우터마다 몇 줄이 필요한가, 지금은 무엇을 적었는가
+          2. 링크를 끊었을 때 — 정적이라면 어떻게 되는가, 실제로는 어떻게 됐는가
           3. 수렴 — 몇 개의 패킷을 잃었는가, 무엇으로 측정했는가
           4. cost — 경로를 의도대로 바꿔 본 결과와, 그때 **반대 방향**은 어떻게 됐는가
-          5. 전환할 때 주의할 점 (정적을 걷어내는 문제 포함)
+          5. 정적 경로가 남아 있는 채로 OSPF 를 켜면 어느 쪽이 쓰이는가, 그 이유는
       rubric:
         - key: 설정량
           desc: "설정 방식의 차이를 구체적으로 적었는가"

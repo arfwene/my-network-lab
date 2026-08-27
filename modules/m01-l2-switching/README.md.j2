@@ -216,8 +216,7 @@ IPv6 의 DAD(M5)와 같은 발상이다.
 
 노드 셋(`pc1`, `pc2`, `sw1`)과 관찰용 `r1` 을 쓴다. 터미널 창을 여러 개 열어 두세요.
 
-### 실습 1 — 물리 계층부터 본다 (B1)
-
+### 실습 1 — 물리 계층부터 본다
 ```bash
 # pc1 에서
 ip -br link show
@@ -267,8 +266,7 @@ sudo ip link set eth1 up
 > `ethtool eth1` 의 Speed/Duplex 도 virtio NIC 에서는 `Unknown` 으로 나온다.
 > 실장비에서는 둘 다 보이고, 거기서 speed/duplex 불일치를 잡는다.
 
-### 실습 2 — 첫 통신과 ARP (B4)
-
+### 실습 2 — 첫 통신과 ARP
 터미널 2(pc2)에서 캡처를 먼저 걸어 주세요.
 
 ```bash
@@ -316,8 +314,7 @@ ip neigh show dev eth1
 살아 있다는 뜻이고, `FAILED` 나 `INCOMPLETE` 면 ARP 응답이 오지 않은 것이라
 L2 부터 문제다.
 
-### 실습 3 — 스위치가 무엇을 알고 있나 (B2)
-
+### 실습 3 — 스위치가 무엇을 알고 있나
 ```bash
 # sw1 에서
 bridge fdb show br br0 | grep -v permanent
@@ -350,8 +347,7 @@ bridge link show
 > 실무 — `permanent` 항목은 스위치 자기 포트의 MAC 이다. 학습된 것이 아니므로
 > 걸러서 본다.
 
-### 실습 4 — 플러딩을 눈으로 증명한다 ★ (B2)
-
+### 실습 4 — 플러딩을 눈으로 증명한다 ★
 관찰용 세 번째 포트를 만든다. `r1` 은 이미 sw1 과 랜선으로 연결돼 있고,
 설정은 없지만 프레임은 받을 수 있다.
 
@@ -413,8 +409,7 @@ bridge fdb show br br0 | grep de:ad
 sudo ip neigh del {{ unused_ip.vlan10 }} dev eth1
 ```
 
-### 실습 5 — 에이징 (B2)
-
+### 실습 5 — 에이징
 ```bash
 # sw1 — 현재 에이징 타임 (단위: 1/100초. 30000 = 300초)
 ip -d link show br0 | grep -o 'ageing_time [0-9]*'
