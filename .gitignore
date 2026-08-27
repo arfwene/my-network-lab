@@ -3,6 +3,10 @@ __pycache__/
 
 # ---- 실제 환경 값 (사내 IP·키). 절대 커밋하지 않는다 ----
 config/site.local.yml
+#  손으로 뜬 사본(.bak, .orig, 날짜 붙인 것)도 같은 값이 들어 있다.
+#  실제로 서버에 site.local.yml.bak 이 추적되지 않은 채 놓여 있었다.
+config/site.local.yml.*
+!config/site.local.yml.example
 
 # ---- 테스트 환경 접속 정보 (사내 IP·계정·비밀번호). 절대 커밋하지 않는다 ----
 .testenv/
