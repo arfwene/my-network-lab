@@ -12,6 +12,8 @@ import re
 import sys
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 G, Y, R, N = "\033[32m", "\033[33m", "\033[31m", "\033[0m"
 
@@ -21,6 +23,9 @@ TABLE_MAX = 18.0       # 본문 줄 대비 표 줄 %. 날카로운 규칙은 '�
                        # 이 비율은 '표가 많아 보인다' 는 신호일 뿐, 넘었다고 다 틀린 것은 아니다.
                        # M0 는 찾아보는 표(도구 10행·오류 대응 6행)만으로 16% 가 된다.
 PREFIX = ("실무", "주의", "**소요 시간**")   # 인용구에 허용된 머리말
+QUIZ_MAX = 12          # 모듈당 퀴즈 문항. 통과 기준이 100점이라 한 문항이 곧 재시험이다 —
+                       # 스물이 되면 아는 사람도 다섯 번씩 다시 풀게 된다.
+                       # 이것만은 재기만 하지 않고 **막는다** (아래 main 의 exit code).
 
 
 def strip_blocks(t):
@@ -52,6 +57,15 @@ def tables(t):
     return len(blocks), sum(len(b) for b in blocks), tiny, len(lines)
 
 
+def quiz_count(mod_dir):
+    """그 모듈의 퀴즈 문항 수. assessment.yml 이 없으면 0."""
+    f = mod_dir / "assessment.yml"
+    if not f.exists():
+        return 0
+    d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    return len((d.get("quiz") or {}).get("questions") or [])
+
+
 def measure(p):
     raw = p.read_text(encoding="utf-8")
     body = strip_blocks(raw)
@@ -81,11 +95,17 @@ def main(only=None):
     if only:
         files = [f for f in files if f.parent.name.startswith(only)]
     bad = 0
-    print(f"{'모듈':<6}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}{'작은표':>7}{'머리말없는인용':>15}")
-    print("-" * 60)
+    over = []
+    print(f"{'모듈':<6}{'퀴즈':>6}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
+          f"{'작은표':>7}{'머리말없는인용':>15}")
+    print("-" * 66)
     for f in files:
         m = measure(f)
+        nq = quiz_count(f.parent)
         marks = []
+        if nq > QUIZ_MAX:
+            marks.append("퀴즈")
+            over.append((f.parent.name, nq))
         if m["bold_per_sent"] > BOLD_MAX: marks.append("굵게")
         if m["quote_per_100"] > QUOTE_MAX: marks.append("인용")
         # 표 비율은 **재기만 한다.** M10 처럼 13행짜리 명령표·9단계 점검표가 본문인
@@ -93,7 +113,7 @@ def main(only=None):
         if m["tiny"]: marks.append("작은표")
         if m["bad_prefix"]: marks.append("머리말")
         col = R if marks else G
-        print(f"{col}{f.parent.name[:4]:<6}{m['bold_per_sent']:>10.2f}"
+        print(f"{col}{f.parent.name[:4]:<6}{nq:>6}{m['bold_per_sent']:>10.2f}"
               f"{m['quote_per_100']:>11.1f}{m['table_pct']:>7.1f}{len(m['tiny']):>7}"
               f"{len(m['bad_prefix']):>15}{N}")
         if marks:
@@ -102,14 +122,21 @@ def main(only=None):
                 print(f"        {Y}머리말 없는 인용구{N}: {b[:60]}")
             for b in m["tiny"][:2]:
                 print(f"        {Y}2열 3행 이하 표{N}: {b}")
-    print("-" * 60)
-    print(f"기준: 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · "
+    print("-" * 66)
+    print(f"기준: 퀴즈 ≤ {QUIZ_MAX}문항 · 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · "
           f"작은표 0 · 머리말 없는 인용구 0")
     print("표% 는 참고값이다 — 찾아보는 표가 본문인 문서는 높아도 맞다.")
     if bad:
         print(f"{Y}{bad}개 모듈이 기준을 넘는다 (docs/STYLE.md){N}")
     else:
         print(f"{G}전부 기준 안{N}")
+    # 문장 밀도는 사람이 읽고 판단할 몫이라 재기만 한다. 퀴즈 문항 수는
+    # 세면 답이 나오는 값이므로 여기서 막는다.
+    if over:
+        for name, n in over:
+            print(f"{R}✘{N} {name} 의 퀴즈가 {n}문항이다 — {QUIZ_MAX}문항까지만 둔다 "
+                  f"(modules/{name}/assessment.yml)")
+        return 1
     return 0
 
 

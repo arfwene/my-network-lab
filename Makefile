@@ -22,7 +22,8 @@ help:
 	@echo "  아래는 콘솔 없이 터미널에서 같은 일을 할 때 쓴다."
 	@echo ""
 	@echo "make doctor         배포 사전 점검 (도구 · 설정 · Proxmox · 관리망)"
-	@echo "make check          설정 검사 (대역 충돌 · 용량 · 공개 안전성)"
+	@echo "make style          교재 규칙 검사 (퀴즈 문항 수 · 굵게 · 인용구)"
+	@echo "make check          설정 검사 (대역 충돌 · 용량 · 공개 안전성 · 교재 규칙)"
 	@echo "make gen LAB=1      설계 -> Terraform/Ansible/문서 전부 생성"
 	@echo "make docs           문서만 생성 (dist/)"
 	@echo "make ipam           계산된 주소 계획 출력"
@@ -53,9 +54,13 @@ help:
 doctor:
 	@$(PY) tools/preflight.py --lab $(LAB)
 
+style:
+	@$(PY) tools/check-style.py
+
 check:
 	@$(PY) tools/validate-site.py --publish
 	@$(PY) tools/check-diagram.py
+	@$(PY) tools/check-style.py
 
 gen: check
 	@mkdir -p dist
