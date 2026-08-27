@@ -689,14 +689,47 @@ def drill_verdict(lab_id, module, checks_passed):
     return "pass" if state.drill_ready(lab_id, module["id"]) else None
 
 
+_H2 = re.compile(r"^## +(.+?)[ \t]*$", re.M)
+
+
+def _collapse_h2(md_text):
+    """`## 제목` 마다 접어 둔다. 제목이 그대로 여는 단추가 된다.
+
+    해설은 한 모듈에 여덟아홉 절이다. 다 펼쳐 놓으면 강사가 찾는 항목이 어디
+    있는지 보이지 않는다 — 제목만 늘어놓고 필요한 것만 열게 한다.
+    """
+    hits = list(_H2.finditer(md_text))
+    if not hits:
+        return md_text
+    out = [md_text[:hits[0].start()].rstrip()]
+    for i, m in enumerate(hits):
+        end = hits[i + 1].start() if i + 1 < len(hits) else len(md_text)
+        body = md_text[m.end():end].strip("\n")
+        body = re.sub(r"\n*-{3,}[ \t]*$", "", body)      # 절 끝 구분선은 접으면 의미가 없다
+        # summary 안에서는 마크다운이 처리되지 않는다 — 표시를 걷어낸다.
+        title = re.sub(r"\*\*|`", "", m.group(1))
+        out.append(f'<details markdown="1" class="sec">\n<summary>{title}</summary>\n\n'
+                   f'{body}\n\n</details>')
+    return "\n\n".join(out) + "\n"
+
+
 def _module_html(module, lab_id, user, kind="README"):
     text = docs.render_markdown(module, lab_id, kind)
     if text is None:
         return "<p>문서가 없습니다.</p>"
-    # 해설은 관리자만 본다(위에서 이미 걸렀다). 퀴즈 정답은 assessment.yml 에서
-    # 그때 만들어 붙인다 — 옮겨 적으면 문항을 고칠 때 한쪽만 고치게 된다.
+    # 해설은 관리자만 본다(위에서 이미 걸렀다).
+    #   · 퀴즈 정답은 assessment.yml 에서 그때 만들어 **맨 앞에** 넣는다 —
+    #     옮겨 적으면 문항을 고칠 때 한쪽만 고치게 되고, 순서는 화면 순서와 같아야
+    #     찾기 쉽다(퀴즈 → 과제).
+    #   · 그리고 절마다 접는다.
     if kind == "answers":
-        text += assess.quiz_answers_md(module, lab_id)
+        quiz = assess.quiz_answers_md(module, lab_id)
+        m = _H2.search(text)
+        if quiz and m:
+            text = text[:m.start()] + quiz + "\n" + text[m.start():]
+        elif quiz:
+            text = text + "\n" + quiz
+        text = _collapse_h2(text)
     return docs.to_html(text, module)
 
 

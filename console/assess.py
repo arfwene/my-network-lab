@@ -275,6 +275,9 @@ def quiz_answers_md(module, lab_id):
     **손으로 적지 않는다.** answers.md.j2 에 옮겨 적으면 문항을 고칠 때마다
     두 곳을 고쳐야 하고, 한 곳만 고치면 강사가 틀린 답을 들고 서게 된다.
     assessment.yml 하나에서 그때그때 만든다.
+
+    문항마다 접어 둔다. 열두 개를 펼쳐 놓으면 찾는 문항이 어디 있는지 보이지
+    않는다 — 지문 한 줄만 늘어놓고 필요한 것만 열게 한다.
     """
     q = spec(module).get("quiz") or {}
     items = q.get("questions") or []
@@ -285,28 +288,40 @@ def quiz_answers_md(module, lab_id):
     def r(s):
         return Template(str(s)).render(**ctx)
 
-    out = ["", "---", "", "## 퀴즈 정답 · 해설", "",
+    def plain(s):
+        """summary 안에서는 마크다운이 처리되지 않는다 — 표시를 걷어낸다."""
+        return re.sub(r"\*\*|`", "", " ".join(str(s).split()))
+
+    out = ["## 퀴즈 정답 · 해설", "",
            f"{len(items)}문항 · 통과 기준 {q.get('pass_score', PASS_SCORE)}점. "
            "**교육생 화면에는 정답도 해설도 나오지 않습니다** — 틀린 문항과 "
            "자기가 고른 답까지만 보입니다.", ""]
     for i, it in enumerate(items, 1):
-        kind = {"single": "택1", "multi": "복수 선택", "short": "단답"}.get(it["type"], it["type"])
-        out.append(f"### {i}. ({kind}) {' '.join(r(it['text']).split())}")
+        kind = {"single": "택1", "multi": "복수", "short": "단답"}.get(it["type"], it["type"])
+        head = plain(r(it["text"]))
+        if len(head) > 62:
+            head = head[:61].rstrip() + "…"
+        out.append(f'<details markdown="1">')
+        out.append(f"<summary>{i}. ({kind}) {head}</summary>")
+        out.append("")
+        out.append(" ".join(r(it["text"]).split()))
         out.append("")
         if it["type"] == "short":
-            got = " · ".join(f"`{r(a)}`" for a in it["answer"])
-            out.append(f"**정답** {got}")
+            out.append("**정답** " + " · ".join(f"`{r(a)}`" for a in it["answer"]))
             out.append("")
             out.append("> 주소·MAC 은 표기가 달라도 같은 값이면 맞게 칩니다 "
                        "(`fe80::…:1` 과 `…:0001`). 표기 자체를 묻는 문항만 글자로 봅니다.")
+            out.append("")
         else:
             for j, c in enumerate(it["choices"]):
                 mark = "**✔**" if j in it["answer"] else "　　"
                 out.append(f"- {mark} {r(c)}")
-        out.append("")
+            out.append("")
         if it.get("explain"):
             out.append("**해설** — " + " ".join(r(it["explain"]).split()))
             out.append("")
+        out.append("</details>")
+        out.append("")
     return "\n".join(out)
 
 

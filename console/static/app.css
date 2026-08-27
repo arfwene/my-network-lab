@@ -350,6 +350,35 @@ svg.dia .t.seg{fill:var(--body);font-family:ui-monospace,SFMono-Regular,monospac
 .brief details{margin-top:5px}
 .brief summary{cursor:pointer;color:var(--muted)}
 .brief details p{margin:4px 0 0;color:var(--body)}
+
+/* [해설] 탭. 절이 여덟아홉 개라 다 펼치면 찾는 것이 어디 있는지 안 보인다 —
+   제목만 늘어놓고 필요한 것만 연다. 안쪽(문항)은 한 겹 더 접혀 있다. */
+.doc details.sec{border:1px solid var(--line);border-radius:var(--r-sm);
+  margin:8px 0;background:var(--panel)}
+.doc details.sec>summary{list-style:none;cursor:pointer;padding:9px 12px;
+  font:600 15px/1.4 inherit;color:var(--ink);border-radius:var(--r-sm);
+  display:flex;align-items:center;gap:8px}
+.doc details.sec>summary::-webkit-details-marker{display:none}
+.doc details.sec>summary::before{content:"";flex:none;width:5px;height:5px;
+  border-right:1.5px solid var(--faint);border-bottom:1.5px solid var(--faint);
+  transform:rotate(-45deg);transition:transform .12s}
+.doc details.sec[open]>summary::before{transform:rotate(45deg)}
+.doc details.sec>summary:hover{background:var(--sunken)}
+.doc details.sec[open]>summary{border-bottom:1px solid var(--line);
+  border-radius:var(--r-sm) var(--r-sm) 0 0}
+.doc details.sec>*:not(summary){padding-left:12px;padding-right:12px}
+.doc details.sec>*:last-child{padding-bottom:10px}
+
+/* 문항 하나 */
+.doc details.sec details{border-top:1px solid var(--line);margin:0 -12px;
+  padding:0 12px;background:none}
+.doc details.sec details>summary{list-style:none;cursor:pointer;padding:7px 0;
+  font:500 13px/1.5 inherit;color:var(--body);display:flex;gap:7px}
+.doc details.sec details>summary::-webkit-details-marker{display:none}
+.doc details.sec details>summary::before{content:"▸";flex:none;color:var(--faint)}
+.doc details.sec details[open]>summary::before{content:"▾"}
+.doc details.sec details>summary:hover{color:var(--ink)}
+.doc details.sec details>*:not(summary){margin-left:14px}
 /* 버튼은 한 벌뿐이다. 크기는 .sm 하나로 나뉘고, 뜻은 색이 아니라 채움으로 말한다.
    기본(흰 바탕 + 실선) → 주 동작(잉크 채움) → 파괴적(빨강 글자). 그 이상 없다. */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
