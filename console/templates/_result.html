@@ -45,13 +45,13 @@
       <li class="{{ 'ok' if it.ok else 'bad' }}">
         <span class="mark">{{ '✔' if it.ok else '✘' }}</span>
         <div>
-          <div class="t">{{ it.text }}</div>
+          <div class="t">{{ it.text | labtext }}</div>
           {# 틀린 문항에 해설을 붙이지 않는다 — 해설은 정답을 그대로 말한다.
              무엇을 골랐는지만 보여 주고, 맞는 답은 교재에서 찾게 한다. #}
           {% if not it.ok %}
             {% if it.given_text %}
               <div class="picked"><span class="k">고른 답</span>
-                {% for g in it.given_text %}<span class="v">{{ g }}</span>{% endfor %}</div>
+                {% for g in it.given_text %}<span class="v">{{ g | labtext }}</span>{% endfor %}</div>
             {% else %}
               <div class="picked"><span class="k">고른 답</span> <span class="v none">답하지 않음</span></div>
             {% endif %}

@@ -105,6 +105,25 @@ def _norm(s):
     return " ".join(str(s or "").strip().lower().split())
 
 
+def _snip(s, n=90):
+    """결과 목록에 쓸 한 줄 요약.
+
+    지문에는 교재와 같은 표기(`**굵게**`, 백틱 코드)가 들어 있다. 그냥 잘라
+    내면 여는 표시만 남은 채 끝나 화면에 별 두 개가 그대로 보인다 —
+    화면이 마크다운 원문을 노출하는 그 증상이다. 잘린 표시는 닫아 준다.
+    """
+    s = (s or "").strip().splitlines()
+    s = s[0] if s else ""
+    cut = len(s) > n
+    if cut:
+        s = s[:n].rstrip()
+    if s.count("`") % 2:
+        s += "`"
+    if s.count("**") % 2:
+        s += "**"
+    return s + "…" if cut else s
+
+
 def _picked(it, given, ctx):
     """교육생이 고른 답을 사람이 읽을 수 있는 문장으로. 정답은 담지 않는다."""
     if it["type"] in ("single", "multi"):
@@ -148,7 +167,7 @@ def grade_quiz(module, lab_id, answers):
         #  교재에서 찾아야 한다. 해설은 [해설] 탭에 그대로 있고 관리자만 본다.
         detail.append({
             "id": it["id"], "ok": ok,
-            "text": Template(it["text"]).render(**ctx).strip().splitlines()[0][:90],
+            "text": _snip(Template(it["text"]).render(**ctx)),
             "given": given,
             "given_text": _picked(it, given, ctx),
         })
