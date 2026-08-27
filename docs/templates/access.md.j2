@@ -92,6 +92,11 @@ ssh -J {{ jump_user }}@{{ jump_office_ip }} {{ lab_user }}@{{ mgmt_hosts[0][1] }
 
 `~/.ssh/config` 를 배포하면 `ssh {{ mgmt_hosts[0][0] }}` 만으로 접속된다. **교육 첫날 배포한다.**
 
+교육생 PC 가 랩에 할 수 있는 것은 **SSH 하나뿐이다.** 점프 호스트는 SSH 연결만
+안쪽으로 넘겨 주므로, PC 에서 랩 주소로 `ping` 을 쏘거나 브라우저로 여는 것은
+되지 않는다. 이것은 고장이 아니라 설계다 — 확인은 노드에 들어가서 한다.
+교재의 `ping`·`traceroute`·`curl` 은 전부 노드 안에서 치는 명령이다.
+
 ```bash
 python3 tools/gen-ssh-config.py --lab 1 > dist/ssh-config-lab1
 ```
