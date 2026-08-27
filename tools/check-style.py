@@ -113,6 +113,30 @@ BACK_OK = {
 }
 
 
+CODE_FENCE = re.compile(r"```[a-z]*\n.*?```", re.S)
+MD_IN_CODE = re.compile(r"\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^)\n]+\)|(?<!`)`[^`\n]+`(?!`)")
+
+
+def md_in_code(mod_dir):
+    """코드 블록 안에 쓴 마크다운. [(파일, 줄)] 을 돌려준다.
+
+    코드 블록은 글자를 **그대로** 보여 주는 자리다. 거기 `**같은 지도**` 라고
+    쓰면 화면에 별 네 개가 그대로 찍힌다. 실제로 M4 2.3 이 그랬다.
+    구성도(labdiagram · mermaid)는 자체 문법이 있으므로 제외한다.
+    """
+    out = []
+    for f in sorted(mod_dir.glob("*.md.j2")):
+        t = f.read_text(encoding="utf-8")
+        for m in CODE_FENCE.finditer(t):
+            b = m.group(0)
+            if b.startswith("```labdiagram") or b.startswith("```mermaid"):
+                continue
+            for line in b.splitlines()[1:-1]:
+                if MD_IN_CODE.search(line):
+                    out.append((f.name, line.strip()[:60]))
+    return out
+
+
 def back_refs(mod_dir):
     """과제가 **앞 모듈**을 가리키는 자리. [(줄번호, 줄)] 을 돌려준다.
 
@@ -177,16 +201,20 @@ def main(only=None):
     if only:
         files = [f for f in files if f.parent.name.startswith(only)]
     bad = 0
-    over, leaks, backs = [], [], []
-    print(f"{'모듈':<6}{'퀴즈':>6}{'모양누출':>9}{'앞모듈참조':>11}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
+    over, leaks, backs, mds = [], [], [], []
+    print(f"{'모듈':<6}{'퀴즈':>6}{'모양누출':>9}{'앞모듈참조':>11}{'코드속MD':>10}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
           f"{'작은표':>7}{'머리말없는인용':>15}")
-    print("-" * 86)
+    print("-" * 96)
     for f in files:
         m = measure(f)
         nq = quiz_count(f.parent)
         sl = shape_leaks(f.parent)
         br = back_refs(f.parent)
+        mc = md_in_code(f.parent)
         marks = []
+        if mc:
+            marks.append("코드속MD")
+            mds += [(f.parent.name[:3], fn, s) for fn, s in mc]
         if br:
             marks.append("앞모듈")
             backs += [(f.parent.name[:3], ln, s) for ln, s in br]
@@ -203,7 +231,7 @@ def main(only=None):
         if m["tiny"]: marks.append("작은표")
         if m["bad_prefix"]: marks.append("머리말")
         col = R if marks else G
-        print(f"{col}{f.parent.name[:4]:<6}{nq:>6}{len(sl):>9}{len(br):>11}{m['bold_per_sent']:>10.2f}"
+        print(f"{col}{f.parent.name[:4]:<6}{nq:>6}{len(sl):>9}{len(br):>11}{len(mc):>10}{m['bold_per_sent']:>10.2f}"
               f"{m['quote_per_100']:>11.1f}{m['table_pct']:>7.1f}{len(m['tiny']):>7}"
               f"{len(m['bad_prefix']):>15}{N}")
         if marks:
@@ -212,8 +240,8 @@ def main(only=None):
                 print(f"        {Y}머리말 없는 인용구{N}: {b[:60]}")
             for b in m["tiny"][:2]:
                 print(f"        {Y}2열 3행 이하 표{N}: {b}")
-    print("-" * 86)
-    print(f"기준: 퀴즈 ≤ {QUIZ_MAX}문항 · 모양누출 0 · 앞모듈참조 0 · 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · "
+    print("-" * 96)
+    print(f"기준: 퀴즈 ≤ {QUIZ_MAX}문항 · 모양누출 0 · 앞모듈참조 0 · 코드속MD 0 · 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · "
           f"작은표 0 · 머리말 없는 인용구 0")
     print("표% 는 참고값이다 — 찾아보는 표가 본문인 문서는 높아도 맞다.")
     if bad:
@@ -222,6 +250,8 @@ def main(only=None):
         print(f"{G}전부 기준 안{N}")
     # 문장 밀도는 사람이 읽고 판단할 몫이라 재기만 한다. 퀴즈 문항 수는
     # 세면 답이 나오는 값이므로 여기서 막는다.
+    for mod, fn, s in mds:
+        print(f"{R}✘{N} {mod}/{fn} 코드 블록 안에 마크다운이 있다 — {s}")
     for mod, ln, s in backs:
         print(f"{R}✘{N} {mod} tasks.md.j2:{ln} 이 앞 모듈을 가리킨다 — {s}")
     for mod, qid, why in leaks:
@@ -229,7 +259,7 @@ def main(only=None):
     for name, n in over:
         print(f"{R}✘{N} {name} 의 퀴즈가 {n}문항이다 — {QUIZ_MAX}문항까지만 둔다 "
               f"(modules/{name}/assessment.yml)")
-    return 1 if (over or leaks or backs) else 0
+    return 1 if (over or leaks or backs or mds) else 0
 
 
 if __name__ == "__main__":

@@ -143,7 +143,7 @@ O   10.10.40.0/24 ...        O=OSPF 로 배움
 ```
 SNAT  나갈 때 출발지를 바꾼다   {{ lab_block }} → {{ public.nat_pool.snat_address }}
 DNAT  들어올 때 목적지를 바꾼다  공개 IP → 사설 IP
-      ▶ 리턴 트래픽을 여는 것은 `ct state established,related accept` 한 줄이다
+      ▶ 리턴 트래픽을 여는 것은 ct state established,related accept 한 줄이다
 ```
 
 ## 8. 캡처 (M7)

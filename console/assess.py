@@ -269,6 +269,53 @@ def read_checks_result(lab_id, module_id):
 OK_STATUS = ("auto_ok", "approved")
 
 
+def quiz_answers_md(module, lab_id):
+    """[해설] 탭에 붙일 퀴즈 정답·해설 (마크다운).
+
+    **손으로 적지 않는다.** answers.md.j2 에 옮겨 적으면 문항을 고칠 때마다
+    두 곳을 고쳐야 하고, 한 곳만 고치면 강사가 틀린 답을 들고 서게 된다.
+    assessment.yml 하나에서 그때그때 만든다.
+    """
+    q = spec(module).get("quiz") or {}
+    items = q.get("questions") or []
+    if not items:
+        return ""
+    ctx = L.doc_context(lab_id, module["stage"])
+
+    def r(s):
+        return Template(str(s)).render(**ctx)
+
+    out = ["", "---", "", "## 퀴즈 정답 · 해설", "",
+           f"{len(items)}문항 · 통과 기준 {q.get('pass_score', PASS_SCORE)}점. "
+           "**교육생 화면에는 정답도 해설도 나오지 않습니다** — 틀린 문항과 "
+           "자기가 고른 답까지만 보입니다.", ""]
+    for i, it in enumerate(items, 1):
+        kind = {"single": "택1", "multi": "복수 선택", "short": "단답"}.get(it["type"], it["type"])
+        out.append(f"### {i}. ({kind}) {' '.join(r(it['text']).split())}")
+        out.append("")
+        if it["type"] == "short":
+            got = " · ".join(f"`{r(a)}`" for a in it["answer"])
+            out.append(f"**정답** {got}")
+            out.append("")
+            out.append("> 주소·MAC 은 표기가 달라도 같은 값이면 맞게 칩니다 "
+                       "(`fe80::…:1` 과 `…:0001`). 표기 자체를 묻는 문항만 글자로 봅니다.")
+        else:
+            for j, c in enumerate(it["choices"]):
+                mark = "**✔**" if j in it["answer"] else "　　"
+                out.append(f"- {mark} {r(c)}")
+        out.append("")
+        if it.get("explain"):
+            out.append("**해설** — " + " ".join(r(it["explain"]).split()))
+            out.append("")
+    return "\n".join(out)
+
+
+def _checkpoint_for(stage):
+    """그 단계에 중간 점검이 걸려 있는가. exam 과 서로 import 하므로 늦게 가져온다."""
+    import exam
+    return exam.checkpoint_for(stage)
+
+
 def module_state(username, module, is_admin=False):
     """모듈 하나의 진행 상태."""
     pr = db.get_progress(username, module["id"]) or {}
@@ -293,6 +340,8 @@ def module_state(username, module, is_admin=False):
         "quiz_passed": bool(pr.get("quiz_passed")), "checks_passed": bool(pr.get("checks_passed")),
         "need_quiz": need_quiz, "need_checks": need_checks,
         "need_drill": need_drill, "drill_passed": bool(pr.get("drill_passed")),
+        # 이 모듈의 장애 실습이 **중간 점검으로만** 인정되는가 (M3 · M6)
+        "drill_checkpoint": bool(_checkpoint_for(module.get("stage"))),
         "need_written": bool(items), "need_review": bool(must),
         "written": subs,
         "written_submitted": submitted_ok,

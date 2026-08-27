@@ -655,10 +655,41 @@ async def index(request: Request, lab: int | None = None, m: str | None = None):
     return tpl.TemplateResponse(request, "index.html", ctx)
 
 
+def drill_verdict(lab_id, module, checks_passed):
+    """스스로 고른 장애 실습의 판정. "seen" · "pass" · None.
+
+    이 모듈의 시나리오가 주입돼 있는 채로 검사가 전부 통과했다
+    = **[복구] 를 누르지 않고 스스로 고쳤다.** [복구] 를 눌렀다면 broken 이
+    이미 비어 있으므로 걸리지 않는다 — 정답을 보고 되돌린 것은 실습이 아니다.
+    """
+    # 중간 점검이 있는 모듈은 **그것만** 장애 실습으로 친다.
+    #   여기를 열어 두면 스스로 고른 장애를 넣고 검사를 통과하는 것으로 가려 놓고
+    #   푸는 연습을 통째로 건너뛸 수 있다. 그 모듈의 과제가 중간 점검 하나이므로
+    #   (M3 · M6) 그 문을 지나야 통과다.
+    #   중간 점검 통과는 _job_done 의 drill-check 쪽에서 따로 인정한다.
+    if exam.checkpoint_for(module["stage"]):
+        return None
+    # 검사로 판정할 수 없는 시나리오는 세지 않는다. 그것까지 인정하면 주입만 하고
+    # 아무것도 안 해도 통과한다 (site.yml 에 이유를 적어 뒀다).
+    skip = set(L.SITE.get("console", {}).get("ungraded_scenarios") or [])
+    st = state.load(lab_id)
+    mine = [s for s in (st.get("broken") or [])
+            if s.split("-")[0] == module["id"] and s not in skip]
+    if not mine:
+        return None
+    if not checks_passed:
+        return "seen"
+    return "pass" if state.drill_ready(lab_id, module["id"]) else None
+
+
 def _module_html(module, lab_id, user, kind="README"):
     text = docs.render_markdown(module, lab_id, kind)
     if text is None:
         return "<p>문서가 없습니다.</p>"
+    # 해설은 관리자만 본다(위에서 이미 걸렀다). 퀴즈 정답은 assessment.yml 에서
+    # 그때 만들어 붙인다 — 옮겨 적으면 문항을 고칠 때 한쪽만 고치게 된다.
+    if kind == "answers":
+        text += assess.quiz_answers_md(module, lab_id)
     return docs.to_html(text, module)
 
 
@@ -765,16 +796,11 @@ async def submit(request: Request, module_id: str):
             # 통과했다 = **[복구] 를 누르지 않고 스스로 고쳤다.** [복구] 를 눌렀다면
             # broken 이 이미 비어 있으므로 여기 걸리지 않는다 — 그게 맞다.
             # 정답을 보고 되돌린 것은 실습을 한 것이 아니다.
-            st = state.load(job.lab_id)
-            # 검사로 판정할 수 없는 시나리오는 세지 않는다. 그것까지 인정하면
-            # 주입만 하고 아무것도 안 해도 통과한다 (site.yml 에 이유를 적어 뒀다).
-            skip = set(L.SITE.get("console", {}).get("ungraded_scenarios") or [])
-            mine = [s for s in (st.get("broken") or [])
-                    if s.split("-")[0] == module["id"] and s not in skip]
-            if mine and not res.get("passed"):
+            verdict = drill_verdict(job.lab_id, module, bool(res.get("passed")))
+            if verdict == "seen":
                 # 고장이 검사에 실제로 잡혔다. 이제부터 "고치면 인정" 이다.
                 state.mark_drill_seen(job.lab_id, module["id"])
-            elif mine and res.get("passed") and state.drill_ready(job.lab_id, module["id"]):
+            elif verdict == "pass":
                 db.update_progress(job.user, module["id"], drill_passed=True)
                 state.drill_solved(job.lab_id)
             assess.sync_progress(job.user, job.lab_id, module, checks=res)

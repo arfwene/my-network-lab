@@ -102,15 +102,38 @@
   }
 
   // ------------------------------------------------------------ 모듈 전환
+  //  문서만 갈아 끼우면 **오른쪽 실행 패널은 앞 모듈 것이 그대로 남는다.**
+  //  패널의 내용은 그 모듈의 단계에 달려 있다 — 중간 점검 단추(M3·M6 에만),
+  //  캡스톤 칸, 그리고 시나리오 목록(그 단계에 없는 장비는 잠긴다).
+  //  실제로 M3 에서 M4 로 넘어가도 [중간 점검 시작] 이 남아 있었다.
+  //  그래서 패널도 서버가 그 모듈로 그린 것으로 통째로 바꾼다.
+  async function refreshSide(id) {
+    if (es) return false;                 // 작업이 도는 중에는 건드리지 않는다
+    try {
+      const html = await fetch(`/?lab=${labId()}&m=${encodeURIComponent(id)}`)
+        .then(r => r.ok ? r.text() : null);
+      if (!html) return false;
+      const side = new DOMParser().parseFromString(html, 'text/html').querySelector('.side');
+      if (!side) return false;
+      $('.side').innerHTML = side.innerHTML;
+      return true;
+    } catch (e) { return false; }
+  }
+
   async function loadModule(id, kind = 'README') {
     const r = await fetch(`/m/${encodeURIComponent(id)}?lab=${labId()}&kind=${kind}`);
     $('#module').innerHTML = await r.text();
     $$('.mod').forEach(b => b.classList.toggle('on', b.dataset.module === id));
+    const swapped = await refreshSide(id);
     const stage = $('.tabs')?.dataset.stage;
     if (stage) {
-      $('.actions').dataset.stage = stage;
-      $('.side h3 small').textContent = stage;
-      fetch(`/topology.svg?stage=${stage}`).then(r => r.text()).then(s => $('#topo').innerHTML = s);
+      if ($('.actions')) $('.actions').dataset.stage = stage;
+      const small = $('.side h3 small');
+      if (small) small.textContent = stage;
+      // 패널을 통째로 바꿨으면 토폴로지도 그 안에 이미 그려져 있다.
+      if (!swapped) {
+        fetch(`/topology.svg?stage=${stage}`).then(r => r.text()).then(s => $('#topo').innerHTML = s);
+      }
     }
     paintLabStage();
     const cap = $('.actions')?.dataset.capstone;
