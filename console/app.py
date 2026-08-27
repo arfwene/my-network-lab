@@ -67,8 +67,22 @@ async def lifespan(_app):
 
 app = FastAPI(title="my-network-lab console", docs_url=None, redoc_url=None,
               lifespan=lifespan)
+#  세션 유효기간.
+#   Starlette 은 **세션 값이 바뀔 때만** 쿠키를 다시 굽는다. 로그인 뒤로 세션을
+#   건드리지 않으면 쿠키가 영영 갱신되지 않아서, 기본값 14일이 '마지막 활동'
+#   기준이 아니라 '로그인 시각' 기준의 고정 만료가 된다 — 유휴 시간 제한이
+#   사실상 없었다. 아래 _touch_session 이 요청마다 시각을 새로 적어
+#   그 14일을 진짜 유휴 시간으로 바꾼다.
+#   세션 서명 키는 var/console.db 에 있어 재시작해도 그대로다(수업 중 콘솔을
+#   다시 띄웠다고 전원이 로그아웃되면 안 된다). 그래서 재부팅으로는 안 풀리고,
+#   풀리는 것은 오직 이 유휴 시간이다.
+SESSION_IDLE = int((L.SITE.get("console", {}).get("login", {})
+                    or {}).get("idle_minutes", 240)) * 60
+SESSION_TOUCH = 60          # 매 요청마다 쿠키를 다시 굽지는 않는다
+
 app.add_middleware(SessionMiddleware, secret_key=auth.session_secret(),
-                   session_cookie="labconsole", same_site="lax")
+                   session_cookie="labconsole", same_site="lax",
+                   max_age=SESSION_IDLE)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 tpl = Jinja2Templates(directory=str(HERE / "templates"))
 
@@ -108,9 +122,18 @@ def current_user(request):
     이미 로그인한 세션에는 반영되지 않는다(권한 회수 불가).
     """
     sess = request.session.get("user") or {}
+    now = int(time.time())
+    seen = sess.get("seen") or 0
+    if seen and now - seen > SESSION_IDLE:
+        request.session.clear()
+        return None
     u = auth.load_user(sess.get("username"))
     if not u:
         request.session.clear()
+        return u
+    # 세션을 건드려야 쿠키가 다시 구워지고 유효기간이 밀린다.
+    if now - seen >= SESSION_TOUCH:
+        request.session["user"] = {**sess, "seen": now}
     return u
 
 
@@ -258,7 +281,8 @@ async def login(request: Request, username: str = Form(...), password: str = For
         return tpl.TemplateResponse(request, "login.html",
                                     {"error": e.message, "site_name": L.SITE["site"]["name"]},
                                     status_code=401)
-    request.session["user"] = {"username": u["username"]}   # 권한은 담지 않는다
+    # 권한은 담지 않는다 — seen 은 유휴 시간 제한의 기준 시각이다.
+    request.session["user"] = {"username": u["username"], "seen": int(time.time())}
     if u.get("must_change_password"):
         return RedirectResponse("/password", status_code=303)
     return RedirectResponse("/", status_code=303)
