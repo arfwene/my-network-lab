@@ -35,8 +35,8 @@
   <p class="note">시험 중에는 잠깁니다.</p>
   {% else %}
   <button class="btn primary" id="stage-up" {{ 'disabled' if busy }}>
-    {{ '랩을 ' ~ gap.need | upper ~ ' 단계로 올리기' if gap.dir == 'behind'
-       else '랩을 ' ~ gap.need | upper ~ ' 단계로 되돌리기' }}</button>
+    {{ gap.need | upper ~ ' 단계로 올리기' if gap.dir == 'behind'
+       else gap.need | upper ~ ' 단계로 되돌리기' }}</button>
   {% if busy %}<span class="muted">다른 작업이 실행 중입니다</span>{% endif %}
   {% endif %}
 </div>
@@ -197,7 +197,7 @@
     <p>과제에는 따로 제출할 것이 없어요. <b>랩에 만들어 둔 설정 자체가 답</b>입니다.<br>
       {% if has_checks %}<b>[검증]</b> 을 누르면 실제 노드에서 그 설정을 확인합니다.{% endif %}
       {% if written %} 거기서 서술 {{ written | length }}개도 함께 제출해요.{% endif %}</p>
-    <button class="btn primary" data-kind="verify" {{ 'disabled' if not ta.verify }}>검증하러 가기 →</button>
+    <button class="btn primary" data-kind="verify" {{ 'disabled' if not ta.verify }}>검증</button>
   </div>
   {% endif %}
 {% endif %}

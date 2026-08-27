@@ -123,8 +123,9 @@
 
   <div class="result-next">
     {% if mstate.complete and next_module %}
+      <div class="muted">이 모듈을 통과했습니다.</div>
       <button class="btn primary big" data-goto="{{ next_module.id }}">
-        다음 모듈 → {{ next_module.id | upper }}. {{ next_module.title }}</button>
+        다음 모듈 · {{ next_module.id | upper }}. {{ next_module.title }}</button>
     {% elif mstate.complete %}
       <div class="done">마지막 모듈까지 통과했습니다. 수고했습니다.</div>
     {% elif mstate.awaiting_review %}
@@ -136,7 +137,8 @@
     {% elif not mstate.quiz_passed %}
       <div class="muted"><b>[퀴즈]</b> 부터 통과해 주세요. 그다음이 <b>[과제]</b> 입니다.</div>
     {% elif kind == 'quiz' %}
-      <button class="btn primary big" data-kind="tasks">퀴즈 통과 — 이제 [과제] →</button>
+      <div class="muted">퀴즈를 통과했습니다. 다음은 과제입니다.</div>
+      <button class="btn primary big" data-kind="tasks">과제</button>
     {% else %}
       <div class="muted">통과하면 다음 모듈이 열립니다. 고친 뒤 다시 제출해 주세요.</div>
     {% endif %}

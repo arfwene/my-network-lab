@@ -121,12 +121,25 @@
     bind();
   }
 
+  // 다른 탭·다른 모듈로 보내는 단추를 묶는다.
+  //   [data-kind] — 같은 모듈의 다른 탭   [data-goto] — 다음 모듈
+  // 결과 화면은 채점 뒤에 통째로 갈아 끼운다. 그때 다시 묶지 않으면 그 안의
+  // 단추는 눌러도 아무 일도 일어나지 않는다. 실제로 퀴즈를 통과한 뒤 [과제]
+  // 단추가 그렇게 죽어 있었다 — 갈아 끼운 자리에서 [data-goto] 만 다시
+  // 묶고 있었기 때문이다. 그래서 묶는 일을 한 곳에 모은다.
+  function bindJumps(root) {
+    const r = root || document;
+    r.querySelectorAll('[data-kind]:not(.tab)').forEach(b =>
+      b.onclick = () => loadModule(curModule(), b.dataset.kind));
+    r.querySelectorAll('[data-goto]').forEach(b =>
+      b.onclick = () => loadModule(b.dataset.goto));
+  }
+
   function bind() {
     $$('.tab').forEach(t => t.onclick = () => loadModule(curModule(), t.dataset.kind));
-    // 탭으로 보내는 단추들 — 과제 끝의 [검증하러 가기], 퀴즈 통과 뒤의 [과제].
+    // 탭으로 보내는 단추들 — 과제 끝의 [검증], 퀴즈 통과 뒤의 [과제].
     // 탭과 같은 곳으로 간다. 길이 둘이면 둘이 어긋나는 날이 온다.
-    $$('[data-kind]:not(.tab)').forEach(b =>
-      b.onclick = () => loadModule(curModule(), b.dataset.kind));
+    bindJumps();
     // 교재 본문에서 [과제](#tasks) 같은 링크를 누르면 그 탭으로 간다.
     // 교재는 웹과 인쇄본 양쪽으로 나가므로, 인쇄본에서는 그냥 앵커로 남는다.
     $$('.doc a[href^="#"]').forEach(a => {
@@ -136,7 +149,6 @@
     });
     const f = $('#quizform');
     if (f) f.onsubmit = submitAssessment;
-    $$('[data-goto]').forEach(b => b.onclick = () => loadModule(b.dataset.goto));
     // 배너의 [단계 올리기] 는 옆의 [이 모듈 적용] 과 같은 것이다.
     // 따로 요청을 만들지 않는다 — 확인 창·시험 잠금·로그 처리를 두 벌 두지 않기 위해.
     const up = $('#stage-up');
@@ -233,7 +245,7 @@
     const kind = $('.tab.on')?.dataset.kind || form.dataset.phase || '';
     const r = await fetch(`/m/${mid}/result?lab=${labId()}&kind=${encodeURIComponent(kind)}`);
     $('#assessresult').innerHTML = await r.text();
-    $$('[data-goto]').forEach(b => b.onclick = () => loadModule(b.dataset.goto));
+    bindJumps($('#assessresult'));
     // 모듈 목록의 잠금·진도 갱신
     const idx = await fetch(`/?lab=${labId()}&m=${mid}`).then(r => r.text());
     const doc = new DOMParser().parseFromString(idx, 'text/html');
