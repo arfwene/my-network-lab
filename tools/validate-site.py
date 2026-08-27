@@ -168,6 +168,50 @@ def access_hosts():
            f"Proxmox {(A.get('proxmox') or {}).get('host_ip')})")
 
 
+def _secretish(v):
+    """값이 비밀번호·토큰처럼 생겼는가. 흔한 낱말은 걸러 낸다."""
+    if not (8 <= len(v) <= 64):
+        return False
+    if not (any(c.isdigit() for c in v) and any(c.isalpha() for c in v)):
+        return False
+    if re.search(r"(example|changeme|your|여기|xxx|placeholder|dummy|샘플|<|>)", v, re.I):
+        return False
+    # 소문자 식별자는 비밀번호가 아니다 — ubuntu-2404-lab, local-lvm, my-network-lab.
+    # 이걸 안 걸러 내면 스크립트마다 템플릿 이름이 자격 증명으로 걸린다.
+    if re.fullmatch(r"[a-z0-9][a-z0-9._/-]*", v):
+        return False
+    # 주소·URL 도 아니다 (주소는 따로 본다)
+    if re.fullmatch(r"[\d.:/]+", v) or v.startswith(("http://", "https://")):
+        return False
+    # 코드 조각도 아니다 — DESIGN.md 의 `{fontWeight: 500}` 같은 것.
+    if re.search(r"[{}();=]", v):
+        return False
+    # 기호가 섞였거나 대소문자가 섞였으면 비밀번호로 본다
+    return any(not c.isalnum() for c in v) or (v != v.lower() and v != v.upper())
+
+
+# `아이디` / `비밀번호` 처럼 나란히 적힌 자격 증명을 찾는다.
+#  .testenv 출처 검사와 달리 그 파일이 없는 곳에서도 걸린다 — 다른 사람이
+#  클론해서 자기 환경 값을 적어 넣는 경우가 그렇다.
+CRED_PAIR = re.compile(r"`([^`\s]{2,32})`\s*/\s*`([^`\s]{4,64})`")
+CRED_WORD = re.compile(r"(비밀번호|암호|password|passwd|token|secret|api[_-]?key)", re.I)
+CRED_LIT = re.compile(r"""[`"']([^`"'\s]{8,64})[`"']""")
+
+
+def _credentials_in(body):
+    """이 텍스트에 자격 증명처럼 보이는 값이 있는가."""
+    out = set()
+    for line in body.splitlines():
+        for _, pw in CRED_PAIR.findall(line):
+            if _secretish(pw):
+                out.add(pw)
+        if CRED_WORD.search(line):
+            for v in CRED_LIT.findall(line):
+                if _secretish(v):
+                    out.add(v)
+    return out
+
+
 def publish_guard():
     import yaml as _y
 
@@ -183,9 +227,10 @@ def publish_guard():
             out.add(obj.strip())
         return out
 
-    # 사내 전용 값의 출처는 둘이다.
+    # 사내 전용 값의 출처는 셋이다.
     #   config/site.local.yml  사람이 적은 실제 환경 값
     #   var/runtime.yml        웹 콘솔에서 관리자가 입력한 Proxmox 접속 정보
+    #   .testenv/server.md     시험 환경 주소·계정 메모
     # 둘 다 git 제외 대상이지만, 그 '값'이 다른 파일로 새는지는 여기서 잡아야 한다.
     sources = [L.ROOT / "config/site.local.yml", L.RUNTIME]
     sensitive = set()
@@ -196,6 +241,43 @@ def publish_guard():
         for v in vals:
             sensitive |= set(re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?\b", v))
             sensitive |= set(re.findall(r"\b(?:[a-z0-9-]+\.)+(?:co\.kr|kr|com|net|io|internal)\b", v))
+
+    # 세 번째 출처 — 시험 환경 메모.
+    #  이 파일은 YAML 이 아니라 사람이 읽는 메모라 위 두 개와 형식이 다르다.
+    #  그런데 여기 적힌 주소와 계정이 실수로 커밋된 적이 있다. 인수인계 문서에
+    #  "웹 콘솔 · admin / <비밀번호>" 한 줄을 적었고, 그게 공개 저장소로 나갔다.
+    #  검사기는 그것을 잡을 수 없었다 — 비밀번호는 site.local.yml 에 없고,
+    #  시험 서버 대역은 개발 PC 의 설정에 없기 때문이다.
+    testenv = L.ROOT / ".testenv/server.md"
+    if testenv.exists():
+        body = testenv.read_text(encoding="utf-8")
+        # 이 메모에는 랩 자체의 주소(관리망·랩 대역)도 잔뜩 적혀 있다. 그건
+        # site.yml 이 설계한 공개 값이라 유출이 아니다. **프로젝트가 설계한
+        # 대역 밖**의 주소 — 시험 서버가 실제로 놓인 사무실 대역 — 만 본다.
+        designed = []
+        for key in ("management", "lab_block", "public_transit",
+                    "public_service", "external_net"):
+            v = L.SITE["networks"].get(key)
+            if v:
+                designed.append(ipaddress.ip_network(v))
+        for a in re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", body):
+            try:
+                ip = ipaddress.ip_address(a)
+            except ValueError:
+                continue
+            if ip.is_loopback or any(ip in n for n in designed):
+                continue
+            # 끝자리가 0 인 것은 대역의 이름이지 장비 주소가 아니다.
+            # 이 메모에는 사용 금지 대역도 적혀 있는데, 그 대역들은 교재가
+            # 사설 주소를 설명할 때 정당하게 인용한다.
+            if a.endswith(".0"):
+                continue
+            sensitive.add(a)
+        # 백틱 안의 값 중 **비밀처럼 생긴 것**만. `admin` 이나 `main` 까지 넣으면
+        # 온 문서가 걸린다.
+        for tok in re.findall(r"`([^`\s]{8,64})`", body):
+            if _secretish(tok):
+                sensitive.add(tok)
     sensitive |= set(L.SITE.get("publish_guard", {}).get("forbidden_strings", []))
 
     # 공개 기본값(site.yml 의 값)은 안전하므로 제외
@@ -247,7 +329,7 @@ def publish_guard():
                  if p.is_file() and ".git" not in p.parts]
     ok(f"공개 대상 파일 {len(files)}개 검사")
 
-    leaks = []
+    leaks, creds = [], []
     for f in files:
         # 원본 두 개만 제외한다 (둘 다 git 제외 대상이다).
         #   .example 은 **제외하지 않는다** — 이 파일은 커밋되어 공개된다.
@@ -267,12 +349,21 @@ def publish_guard():
             # 경계를 둔다 — 앞자리 a.b.c 가 a.b.cN.* 에 걸리면 안 된다.
             if re.search(r"\b" + re.escape(s) + r"\b", body):
                 leaks.append((f, s + ".x"))
+        creds += [(f, s) for s in _credentials_in(body)]
 
+    for f, s in sorted(set(creds)):
+        # 값은 찍지 않는다. 찍으면 검사 출력 자체가 비밀번호를 흘린다.
+        err(f"공개 위험: {f} 에 자격 증명처럼 보이는 값이 있다 "
+            f"(길이 {len(s)}, '{s[0]}…{s[-1]}'). 문서에는 값 대신 "
+            f"'.testenv/server.md 참고' 처럼 적을 것")
     if leaks:
         for f, s in sorted(set(leaks)):
-            err(f"공개 위험: '{s}' 가 {f} 에 들어 있다 "
-                f"(site.local.yml / var/runtime.yml 전용 값)")
-    else:
+            # 비밀번호처럼 생긴 값은 **가려서** 찍는다. 안 그러면 이 검사 출력이
+            # 그 자체로 유출 경로가 된다 — 로그에 남고, 화면 캡처에 찍힌다.
+            shown = f"{s[0]}…{s[-1]} (길이 {len(s)})" if _secretish(s) else f"'{s}'"
+            err(f"공개 위험: {shown} 가 {f} 에 들어 있다 "
+                f"(site.local.yml / var/runtime.yml / .testenv 전용 값)")
+    elif not creds:
         ok(f"공개 안전성: 사내 전용 값 {len(sensitive)}건 · 대역 앞자리 {len(prefixes)}건이 다른 파일로 새지 않았다")
 
     # .gitignore 확인
