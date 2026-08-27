@@ -233,6 +233,7 @@ def nav_ctx(user, here, lab_id=None):
 
 def base_ctx(request, user, lab_id):
     st = state.load(lab_id)
+    ex = exam.view(lab_id, user)
     mods = docs.modules()
     is_admin = auth.can(user, "lab.all")
     unlocked = assess.unlocked_modules(user["username"], is_admin)
@@ -249,6 +250,12 @@ def base_ctx(request, user, lab_id):
         "busy": runner.busy(lab_id),
         # 코드만 나열하면 무엇을 고를지 알 수 없다 — 증상과 단계를 함께 싣는다.
         "scenarios": jobs.scenario_menu(st.get("stage")),
+        # 주입해 놓은 동안 "지금 무엇이 안 되고, 무엇이 되면 끝인가" 를 옆에 띄운다.
+        #   목표가 없으면 다 고쳐 놓고도 확신이 없어 [복구] 를 눌러 버린다.
+        #   중간 점검·시험 중에는 넘기지 않는다 — 그 자체가 문제를 알려 주는 셈이다.
+        "briefs": ([] if (st.get("blind") or ex.get("hide_faults"))
+                   else [b for b in (jobs.scenario_brief(s) for s in (st.get("broken") or []))
+                         if b]),
         "site_name": L.SITE["site"]["name"],
         "health": pve.last(),          # 마지막 점검 결과. 화면은 즉시 뜨고 JS 가 갱신한다
         "pve": pve.public(),
@@ -256,7 +263,7 @@ def base_ctx(request, user, lab_id):
         # 키를 안 넣으면 노드에 SSH 로 못 들어간다. 헤더에서 눈에 띄게 한다.
         "has_ssh_key": bool((db.get_user(user["username"]) or {}).get("ssh_key")),
         # 시험 상태. 진행 중에는 시나리오가 실려 나가지 않는다 (exam.view 가 걸러낸다).
-        "exam": exam.view(lab_id, user),
+        "exam": ex,
         "capstone": exam.module_id(),
         # 중간 점검은 **단계마다** 열린다. 지금 보고 있는 모듈이 그 단계면 버튼이 나온다.
         "checkpoints": {c["stage"]: c for c in exam.drill_cfg()["checkpoints"]},

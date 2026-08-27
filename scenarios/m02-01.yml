@@ -2,6 +2,8 @@
 # M2-01 : pc1 의 기본 경로 삭제
 #   증상  : pc1 만 아무 데도 못 간다. 링크 UP, 주소도 정상. pc2 는 멀쩡하다.
 #           ping 시 "Network is unreachable" — 패킷이 나가지도 않는다.
+#   한줄  : pc1 만 아무 데도 못 감
+#   목표  : pc1 에서 게이트웨이와 다른 대역으로 통신이 된다
 #   정답  : ip route show 에 default 줄이 없다.
 #   노림수: 에러 메시지를 읽는 습관. "unreachable" 은 상대 문제가 아니라 내 문제다. (C1)
 - name: "scenario m02-01 :: pc1 기본 경로 누락"

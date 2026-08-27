@@ -338,6 +338,18 @@ svg.dia .t.seg{fill:var(--body);font-family:ui-monospace,SFMono-Regular,monospac
 .status-grid .v{font-weight:600}
 .status-grid .v.warn{color:var(--warn)}
 .status-grid .v.busy{color:var(--accent)}
+
+/* 주입해 놓은 장애의 증상과 목표. 실행 패널에서 늘 보이게 둔다 —
+   목표를 모르면 다 고쳐 놓고도 확신이 없어 [복구] 를 눌러 버린다. */
+.brief{margin-top:8px;padding:8px 10px;font-size:12px;line-height:1.55;
+  border:1px solid var(--warn-line);border-radius:var(--r-sm);
+  background:color-mix(in srgb,var(--warn) 7%,var(--panel))}
+.brief b{font-variant-numeric:tabular-nums;margin-right:4px}
+.brief .goal{margin:5px 0 0;padding-top:5px;border-top:1px dashed var(--warn-line)}
+.brief .goal .k{color:var(--muted);margin-right:5px}
+.brief details{margin-top:5px}
+.brief summary{cursor:pointer;color:var(--muted)}
+.brief details p{margin:4px 0 0;color:var(--body)}
 /* 버튼은 한 벌뿐이다. 크기는 .sm 하나로 나뉘고, 뜻은 색이 아니라 채움으로 말한다.
    기본(흰 바탕 + 실선) → 주 동작(잉크 채움) → 파괴적(빨강 글자). 그 이상 없다. */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;

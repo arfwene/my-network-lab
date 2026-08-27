@@ -43,3 +43,16 @@
   <div><span class="k">실행 상태</span>
     <span class="v {{ 'busy' if busy else '' }}">{{ '작업 중' if busy else '대기' }}</span></div>
 </div>
+
+{# 주입해 놓은 장애의 증상과 목표. **정답은 없다.**
+   목표가 없으면 다 고쳐 놓고도 "이만하면 된 건가" 를 알 수 없어 [복구] 를 눌러
+   버린다. 무엇이 되면 끝인지는 알려 주는 편이 맞다 — 원인은 여전히 스스로 찾는다. #}
+{% for b in briefs | default([], true) %}
+<div class="brief">
+  <b>{{ b.id }}</b> {{ b.symptom }}
+  {% if b.goal %}<p class="goal"><span class="k">목표</span> {{ b.goal }}</p>{% endif %}
+  {% if b.detail and b.detail != b.symptom %}
+  <details><summary>증상 자세히</summary><p>{{ b.detail }}</p></details>
+  {% endif %}
+</div>
+{% endfor %}

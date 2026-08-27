@@ -128,7 +128,7 @@ def scenario_ids():
 #   #   노림수: ...
 # 중간 점검의 힌트가 여기서 나온다 — 따로 힌트를 쓰지 않는다.
 # 두 곳에 같은 말을 적으면 한쪽이 낡는다.
-_DOC_KEY = re.compile(r"^#\s{2,}(증상|정답|노림수)\s*:\s*(.*)$")
+_DOC_KEY = re.compile(r"^#\s{2,}(증상|한줄|목표|정답|노림수)\s*:\s*(.*)$")
 
 
 def scenario_menu(lab_stage=None):
@@ -146,9 +146,12 @@ def scenario_menu(lab_stage=None):
     for sid in scenario_ids():
         mod = sid.split("-")[0]                     # m03-01 -> m03
         stage = "m" + str(int(mod[1:]))             # m03 -> m3
-        sym = re.sub(r"\*\*", "", scenario_doc(sid).get("증상", ""))
-        if len(sym) > 52:
-            sym = sym[:51].rstrip(" ,.") + "…"
+        doc = scenario_doc(sid)
+        # 목록에는 **한 줄**만 쓴다. 증상 전문을 잘라 넣었더니 어느 것을 고르든
+        # 비슷하게 잘려서, 정작 무엇이 안 되는지가 보이지 않았다.
+        sym = re.sub(r"\*\*", "", doc.get("한줄") or doc.get("증상", ""))
+        if len(sym) > 34:
+            sym = sym[:33].rstrip(" ,.") + "…"
         out.append({"id": sid, "module": mod, "stage": stage, "symptom": sym,
                     # 검사로 판정할 수 없는 것은 장애 실습으로 인정되지 않는다.
                     # 연습거리로는 좋으므로 목록에는 남기되, 그 사실을 밝힌다 —
@@ -178,6 +181,21 @@ def scenario_doc(sid):
             # 다음 줄로 이어진 설명
             out[key] = (out[key] + " " + line[1:].strip()).strip()
     return out
+
+
+def scenario_brief(sid):
+    """주입해 놓은 동안 화면에 띄울 것 — 지금 무엇이 안 되고, 무엇이 되면 끝인가.
+
+    **정답은 넣지 않는다.** 증상과 목표만 있으면 스스로 찾는 연습이 성립하고,
+    목표가 없으면 "이만하면 고친 건가" 를 알 수 없어 [복구] 를 눌러 버린다.
+    """
+    d = scenario_doc(sid)
+    if not d:
+        return None
+    return {"id": sid,
+            "symptom": re.sub(r"\*\*", "", d.get("한줄") or d.get("증상", "")),
+            "detail": re.sub(r"\*\*", "", d.get("증상", "")),
+            "goal": re.sub(r"\*\*", "", d.get("목표", ""))}
 
 
 def build_steps(action, lab_id, stage, scenario=None, module=None):

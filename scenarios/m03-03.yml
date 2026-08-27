@@ -1,6 +1,8 @@
 ---
 # M3-03 : 라우팅 루프
 #   증상  : pc1 -> web 무응답. traceroute 를 돌리면 같은 두 주소가 번갈아 반복된다.
+#   한줄  : traceroute 가 같은 두 홉 반복
+#   목표  : pc1 → web traceroute 가 반복 없이 도달한다
 #   정답  : r2 의 Site-B 경로가 r4 가 아니라 r1 을 향한다.
 #           r1 은 r2 로, r2 는 다시 r1 으로 -> TTL 이 0 이 될 때까지 왕복한다.
 #   노림수: TTL 이 없으면 무슨 일이 벌어지는지(M1 의 L2 루프와 대조) + traceroute 읽기. (D2, H5)

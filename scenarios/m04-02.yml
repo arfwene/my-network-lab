@@ -1,6 +1,8 @@
 ---
 # M4-02 : 주 경로(r1-r2)의 MTU 불일치
 #   증상  : 통신은 되는데 traceroute 가 백업(r3) 경유로 나온다. 주 경로 링크는 UP.
+#   한줄  : 트래픽이 백업(r3)으로 돌아감
+#   목표  : 평상시 트래픽이 주 경로(r2)를 지난다
 #   정답  : r1 의 eth2 MTU 가 1400 이라 DBD 교환에서 막힌다.
 #           show ip ospf neighbor 의 State 가 ExStart/Exchange 에서 멈춰 있다.
 #   노림수: **상태 이름이 원인을 말해 준다.** ExStart 를 보면 곧장 MTU 를 본다. (D5, C5)

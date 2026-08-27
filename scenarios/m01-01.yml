@@ -1,6 +1,8 @@
 ---
 # M1-01 : pc2 의 랩 인터페이스를 관리적으로 down
 #   증상  : pc1 -> pc2 ping 무응답
+#   한줄  : pc1 → pc2 ping 안 됨
+#   목표  : pc1 과 pc2 가 서로 ping 이 된다
 #   정답  : pc2 의 eth1 이 admin down. `ip -br link` 에 UP 플래그가 없다.
 #   노림수: "ping 부터 치지 말고 링크부터 봐라" (B1)
 - name: "scenario m01-01 :: pc2 링크 down"
