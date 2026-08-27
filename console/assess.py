@@ -105,6 +105,19 @@ def _norm(s):
     return " ".join(str(s or "").strip().lower().split())
 
 
+def _picked(it, given, ctx):
+    """교육생이 고른 답을 사람이 읽을 수 있는 문장으로. 정답은 담지 않는다."""
+    if it["type"] in ("single", "multi"):
+        out = []
+        for g in given:
+            try:
+                out.append(Template(str(it["choices"][int(g)])).render(**ctx).strip())
+            except (ValueError, IndexError, KeyError):
+                continue
+        return out
+    return [str(g).strip() for g in given if str(g).strip()]
+
+
 def grade_quiz(module, lab_id, answers):
     """answers: {질문id: [값...]}  →  점수와 문항별 결과."""
     q = spec(module).get("quiz") or {}
@@ -126,11 +139,18 @@ def grade_quiz(module, lab_id, answers):
             want = [Template(str(a)).render(**ctx) for a in it["answer"]]
             ok = bool(given) and any(_norm(given[0]) == _norm(a) for a in want)
         correct += 1 if ok else 0
+        # 해설(explain)은 **여기서 내보내지 않는다.**
+        #  해설은 정답을 그대로 말한다 ("UP 인데 NO-CARRIER 면 …"). 틀린 문항에
+        #  해설을 바로 붙여 주면 교육생은 교재로 돌아가지 않고 해설만 읽고 다시
+        #  제출한다 — 통과는 하지만 배우지는 않는다. 통과 기준이 100점이라
+        #  이 지름길은 특히 매력적이다.
+        #  틀렸다는 사실과 **자기가 고른 답**만 돌려준다. 무엇이 맞는지는
+        #  교재에서 찾아야 한다. 해설은 [해설] 탭에 그대로 있고 관리자만 본다.
         detail.append({
             "id": it["id"], "ok": ok,
             "text": Template(it["text"]).render(**ctx).strip().splitlines()[0][:90],
-            "explain": Template(it.get("explain", "")).render(**ctx).strip(),
             "given": given,
+            "given_text": _picked(it, given, ctx),
         })
     total = len(q.get("questions", []))
     score = round(correct / total * 100) if total else 100
