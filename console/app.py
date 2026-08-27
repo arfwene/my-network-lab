@@ -737,6 +737,15 @@ async def submit(request: Request, module_id: str):
     def done(job):
         res = assess.read_checks_result(job.lab_id, job.module)
         if res:
+            # 장애 실습 판정. 이 모듈의 시나리오가 주입돼 있는 채로 검사가 전부
+            # 통과했다 = **[복구] 를 누르지 않고 스스로 고쳤다.** [복구] 를 눌렀다면
+            # broken 이 이미 비어 있으므로 여기 걸리지 않는다 — 그게 맞다.
+            # 정답을 보고 되돌린 것은 실습을 한 것이 아니다.
+            st = state.load(job.lab_id)
+            mine = [s for s in (st.get("broken") or []) if s.split("-")[0] == module["id"]]
+            if res.get("passed") and mine:
+                db.update_progress(job.user, module["id"], drill_passed=True)
+                state.drill_solved(job.lab_id)
             assess.sync_progress(job.user, job.lab_id, module, checks=res)
         state.record(job.lab_id, "check", job.stage, job.status == "ok", None, job.id)
 

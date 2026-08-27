@@ -827,3 +827,11 @@ table.users td b,table.users td strong{color:var(--ink)}
   background:var(--panel);color:var(--ink);font-size:13px;max-width:340px}
 .histpick .who-now{margin-left:auto;font-size:13px;color:var(--muted)}
 .histpick .who-now b{color:var(--ink)}
+
+/* 장애 실습 안내 — 과제 탭에서 "아직 남았다" 를 눈에 띄게 말한다.
+   검사가 5/5 로 뜨면 다 끝난 것처럼 보이기 때문이다. */
+.drillreq{margin-top:12px;padding:10px 13px;border-radius:var(--r-md);font-size:13px;
+  background:color-mix(in srgb,var(--warn) 9%,transparent);
+  border:1px solid color-mix(in srgb,var(--warn) 28%,transparent)}
+.drillreq.ok{background:color-mix(in srgb,var(--ok) 8%,transparent);
+  border-color:color-mix(in srgb,var(--ok) 26%,transparent)}

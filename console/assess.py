@@ -56,6 +56,16 @@ def written_items(module, lab_id=None):
     return out
 
 
+def has_drill(module):
+    """이 모듈에 장애 시나리오가 있는가.
+
+    있으면 **장애 실습이 필수**다. 검사만 통과하는 것으로는 부족하다 —
+    검사는 "랩이 정상인가" 를 보는데 그건 [이 모듈 적용] 직후에도 참이라
+    아무것도 안 해도 통과한다. 한 번은 망가뜨려 보고 되살려야 한다.
+    """
+    return bool(list((L.ROOT / "scenarios").glob(f"{module['id']}-*.yml")))
+
+
 def has_written(module):
     return bool(written_items(module))
 
@@ -203,8 +213,10 @@ def module_state(username, module, is_admin=False):
     items = written_items(module)
     subs = db.latest_submissions(username, module["id"]) if items else {}
 
+    need_drill = has_drill(module)
     quiz_ok = bool(pr.get("quiz_passed")) or not need_quiz
     checks_ok = bool(pr.get("checks_passed")) or not need_checks
+    drill_ok = bool(pr.get("drill_passed")) or not need_drill
 
     # 비차단 원칙: 서술형은 "냈는가"만 본다. 승인이 필요한 항목만 승인까지 본다.
     submitted_ok = all(i["id"] in subs for i in items)
@@ -217,6 +229,7 @@ def module_state(username, module, is_admin=False):
     return {
         "quiz_passed": bool(pr.get("quiz_passed")), "checks_passed": bool(pr.get("checks_passed")),
         "need_quiz": need_quiz, "need_checks": need_checks,
+        "need_drill": need_drill, "drill_passed": bool(pr.get("drill_passed")),
         "need_written": bool(items), "need_review": bool(must),
         "written": subs,
         "written_submitted": submitted_ok,
@@ -224,8 +237,8 @@ def module_state(username, module, is_admin=False):
         "awaiting_review": [i["title"] for i in awaiting],
         "changes_requested": [i["title"] for i in rejected],
         "complete": bool(pr.get("passed_at")) or (
-            quiz_ok and checks_ok and submitted_ok and approved_ok
-            and (need_quiz or need_checks or items)),
+            quiz_ok and checks_ok and drill_ok and submitted_ok and approved_ok
+            and (need_quiz or need_checks or need_drill or items)),
         "best_score": pr.get("best_score", 0), "tries": pr.get("tries", 0),
         "passed_at": pr.get("passed_at"),
     }

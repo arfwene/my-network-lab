@@ -136,6 +136,10 @@
        단계를 건너뛰게 된다. #}
     {% elif not mstate.quiz_passed %}
       <div class="muted"><b>[퀴즈]</b> 부터 통과해 주세요. 그다음이 <b>[과제]</b> 입니다.</div>
+    {% elif mstate.need_drill and not mstate.drill_passed and mstate.checks_passed %}
+      <div class="muted">랩 상태는 정상입니다. 이제 <b>장애 실습</b>만 남았습니다 —
+        시나리오를 하나 <b>[주입]</b> 하고 스스로 고친 뒤 다시 <b>[검증]</b> 하세요.</div>
+      <button class="btn primary big" data-kind="tasks">과제</button>
     {% elif kind == 'quiz' %}
       <div class="muted">퀴즈를 통과했습니다. 다음은 과제입니다.</div>
       <button class="btn primary big" data-kind="tasks">과제</button>

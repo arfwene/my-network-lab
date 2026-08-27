@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import labdesign as L
 
 DB_PATH = L.ROOT / "var/console.db"
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -142,6 +142,10 @@ CREATE TABLE IF NOT EXISTS progress (
     module_id    TEXT    NOT NULL,
     quiz_passed  INTEGER NOT NULL DEFAULT 0,
     checks_passed INTEGER NOT NULL DEFAULT 0,
+    -- 장애 실습: 스스로 주입하고 **[복구] 를 누르지 않고** 고쳤는가.
+    -- 검사만으로는 "랩이 정상인가" 밖에 못 본다. 그건 [이 모듈 적용] 직후에도
+    -- 참이라, 아무것도 안 해도 통과한다. 고장을 겪고 되살린 사실은 따로 센다.
+    drill_passed INTEGER NOT NULL DEFAULT 0,
     best_score   INTEGER NOT NULL DEFAULT 0,
     tries        INTEGER NOT NULL DEFAULT 0,
     passed_at    TEXT,
@@ -197,6 +201,7 @@ def init():
         v = con.execute("PRAGMA user_version").fetchone()[0]
         _upgrade_v1_to_v2(con, v)
         _upgrade_v5_to_v6(con, v)
+        _upgrade_v6_to_v7(con, v)
         con.executescript(SCHEMA)
         if v < SCHEMA_VERSION:
             con.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
@@ -252,6 +257,17 @@ def _upgrade_v5_to_v6(con, version):
         if col not in have:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
     print("[db] 스키마 v5 -> v6 (사용자별 SSH 공개키)", file=sys.stderr)
+
+
+def _upgrade_v6_to_v7(con, version):
+    """v6 -> v7: 장애 실습 통과 여부. 기존 DB 에 컬럼만 더한다."""
+    have = {r["name"] for r in con.execute("PRAGMA table_info(progress)")}
+    if not have or version >= 7:
+        return
+    if "drill_passed" not in have:
+        con.execute("ALTER TABLE progress ADD COLUMN "
+                    "drill_passed INTEGER NOT NULL DEFAULT 0")
+    print("[db] 스키마 v6 -> v7 (장애 실습 통과 여부)", file=sys.stderr)
 
 
 # ============================================================ 탭 열람 순서
@@ -664,7 +680,8 @@ def record_attempt(username, lab_id, module_id, kind, score, correct, total,
 
 
 def update_progress(username, module_id, quiz_passed=None, checks_passed=None,
-                    score=None, bump_try=False, module_complete=None):
+                    score=None, bump_try=False, module_complete=None,
+                    drill_passed=None):
     with connect() as con:
         con.execute("INSERT OR IGNORE INTO progress (username, module_id) VALUES (?,?)",
                     (username, module_id))
@@ -673,6 +690,11 @@ def update_progress(username, module_id, quiz_passed=None, checks_passed=None,
             sets.append("quiz_passed=?"); args.append(1 if quiz_passed else 0)
         if checks_passed is not None:
             sets.append("checks_passed=?"); args.append(1 if checks_passed else 0)
+        if drill_passed is not None:
+            # 한 번 통과하면 되돌리지 않는다 — 다음 모듈에서 랩을 초기화해도
+            # "그때 스스로 고쳤다" 는 사실은 그대로다.
+            sets.append("drill_passed=MAX(drill_passed, ?)")
+            args.append(1 if drill_passed else 0)
         if score is not None:
             sets.append("best_score=MAX(best_score, ?)"); args.append(int(score))
         if bump_try:
