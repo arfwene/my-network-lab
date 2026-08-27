@@ -743,7 +743,10 @@ async def submit(request: Request, module_id: str):
             # 정답을 보고 되돌린 것은 실습을 한 것이 아니다.
             st = state.load(job.lab_id)
             mine = [s for s in (st.get("broken") or []) if s.split("-")[0] == module["id"]]
-            if res.get("passed") and mine:
+            if mine and not res.get("passed"):
+                # 고장이 검사에 실제로 잡혔다. 이제부터 "고치면 인정" 이다.
+                state.mark_drill_seen(job.lab_id, module["id"])
+            elif mine and res.get("passed") and state.drill_ready(job.lab_id, module["id"]):
                 db.update_progress(job.user, module["id"], drill_passed=True)
                 state.drill_solved(job.lab_id)
             assess.sync_progress(job.user, job.lab_id, module, checks=res)

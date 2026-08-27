@@ -1,5 +1,6 @@
 """랩별 진행 상태 — 어느 단계까지 적용했고, 무엇이 검증을 통과했는가."""
 import json
+import time
 import sys
 from pathlib import Path
 
@@ -28,6 +29,10 @@ def load(lab_id):
             pass
     return {"lab_id": lab_id, "stage": None, "applied": [], "verified": [],
             "last_job": None, "broken": [], "provisioned": None,
+            # 장애 실습: 주입한 뒤 **검사가 실제로 실패하는 것을 본** 모듈들.
+            # 이것 없이 "검사가 통과했다" 만으로 인정하면, 아직 증상이 나타나기
+            # 전에 검증한 사람과 다 고친 사람을 구분하지 못한다.
+            "drill_seen": [],
             # 진단 연습 중에는 무엇이 주입됐는지 화면에 쓰지 않는다.
             # 이 값이 참인 동안 broken 은 있으나 보이지 않는다.
             "blind": False,
@@ -103,10 +108,14 @@ def record(lab_id, action, stage=None, ok=True, scenario=None, job_id=None):
         st["verified"].append(stage)
     if action == "break" and scenario and scenario not in st["broken"]:
         st["broken"].append(scenario)
+        # 주입 시각. 아래 drill_ready() 가 쓴다.
+        st["drill_at"] = time.time()
     if action == "fix" and scenario:
         st["broken"] = [b for b in st["broken"] if b != scenario]
     if action == "reset":
         st["broken"] = []
+        # 랩을 되돌렸으면 이번 장애 실습은 없던 일이다.
+        st["drill_seen"] = []
     # 진단 연습: 서버가 고르고 화면에서 가린다. 끝내면 다시 보인다.
     if ok and action == "drill" and scenario:
         st["broken"] = [x for x in scenario.split(",") if x]
@@ -146,6 +155,50 @@ def take_hint(lab_id):
     return st["hints"]
 
 
+def mark_drill_seen(lab_id, module_id):
+    """이 모듈의 장애가 검사에 실제로 잡혔다.
+
+    OSPF 인접은 dead interval(40초)이 지나야 끊기고, ARP 항목도 시간이 지나야
+    영향이 보인다. 주입하자마자 검증하면 아직 멀쩡해서 전부 통과한다.
+    그 상태로 인정해 주면 아무것도 안 하고 통과하는 길이 생긴다.
+
+    그래서 **고장을 한 번 본 뒤에 고친 것**만 인정한다. 검사가 못 잡는
+    시나리오도 이 규칙에서는 저절로 걸러진다 — 본 적이 없으니 인정되지 않는다.
+    """
+    st = load(lab_id)
+    seen = st.setdefault("drill_seen", [])
+    if module_id not in seen:
+        seen.append(module_id)
+        save(lab_id, st)
+    return st
+
+
+# 주입 직후에는 아직 고장이 나타나지 않는다. OSPF 는 dead interval(40초)이
+# 지나야 인접을 내리고, ARP 도 시간이 걸린다. 그 사이에 검증하면 전부 통과한다.
+DRILL_SETTLE = 90
+
+
+def drill_ready(lab_id, module_id):
+    """이 통과를 '스스로 고쳤다' 로 볼 수 있는가.
+
+    둘 중 하나면 된다.
+      · 검사가 실패하는 것을 한 번 봤다 — 고장이 확실히 있었다는 뜻
+      · 주입한 지 충분히 지났다 — 터미널에서 진단하고 고친 뒤 검증을 한 번만
+        누른 사람도 있다. 그 사람을 실패한 적 없다는 이유로 떨어뜨리면 안 된다.
+
+    주입하자마자 누른 경우만 걸러진다. 그때는 다시 누르면 된다.
+    """
+    st = load(lab_id)
+    if module_id in (st.get("drill_seen") or []):
+        return True
+    at = st.get("drill_at")
+    return bool(at) and (time.time() - at) >= DRILL_SETTLE
+
+
+def drill_seen(lab_id, module_id):
+    return module_id in (load(lab_id).get("drill_seen") or [])
+
+
 def drill_solved(lab_id):
     """검사를 통과했다 — 정답을 보지 않고 끝냈다.
 
@@ -156,4 +209,5 @@ def drill_solved(lab_id):
     st = load(lab_id)
     st["broken"] = []
     st["blind"] = False
+    st["drill_seen"] = []
     return save(lab_id, st)
