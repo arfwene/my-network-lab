@@ -147,9 +147,7 @@
     }
     const c = e.target.closest('[data-copy]');
     if (c) {
-      navigator.clipboard.writeText(c.dataset.copy).then(() => {
-        const t = c.textContent; c.textContent = '복사됨'; setTimeout(() => c.textContent = t, 1200);
-      });
+      window.copyText(c.dataset.copy, c);
     }
   });
 })();

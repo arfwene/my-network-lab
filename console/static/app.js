@@ -500,5 +500,56 @@
     if (e.key === 'Escape' && !$('#modal').hidden) $('#modal-cancel').click();
   });
 
+  // 클립보드 복사. **HTTP 로 서비스하면 navigator.clipboard 가 아예 없다** —
+  // 브라우저가 보안 컨텍스트(HTTPS·localhost)에서만 내주기 때문이다. 이 콘솔은
+  // 사내 IP 의 8080 으로 뜨므로 해당되지 않는다. 그래서 [복사] 를 눌러도
+  // TypeError 만 나고 화면에는 아무 일도 일어나지 않았다 — 계정 만들고 임시
+  // 비밀번호를 복사하려던 관리자가 그걸 만났다.
+  //
+  // 셋을 차례로 시도한다. 마지막은 "직접 Ctrl+C 하세요" 라고 말하되,
+  // 적어도 선택은 해 준다.
+  async function copyText(text, el) {
+    const say = (m) => {
+      if (!el) return;
+      const t0 = el.dataset.label || el.textContent;
+      el.dataset.label = t0;
+      el.textContent = m;
+      setTimeout(() => { el.textContent = el.dataset.label; }, 1600);
+    };
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        say('복사됨');
+        return true;
+      }
+    } catch (e) { /* 아래로 */ }
+    // execCommand 는 지원이 끊겨 가지만 HTTP 에서도 아직 동작한다.
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) { say('복사됨'); return true; }
+    } catch (e) { /* 아래로 */ }
+    // 둘 다 막혔다. 값을 골라 놓고 사람이 복사하게 한다.
+    const src = el && el.closest('.pwbox') ? el.closest('.pwbox').querySelector('[data-pw]') : null;
+    if (src) {
+      // 가려 둔 상태라면 값을 드러낸다. 안 그러면 점만 선택된다.
+      src.textContent = text;
+      const r = document.createRange();
+      r.selectNodeContents(src);
+      const s = window.getSelection();
+      s.removeAllRanges(); s.addRange(r);
+    }
+    say('Ctrl+C 로 복사');
+    return false;
+  }
+  window.copyText = copyText;
+
   bind();
 })();

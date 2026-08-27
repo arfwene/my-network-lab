@@ -9,7 +9,7 @@
 
   {% if secret %}
   {# 임시 비밀번호는 여기서만, 한 번만 보인다. 주소창에도 로그에도 남지 않는다. #}
-  <div class="flash ok secretbox">
+  <div class="flash ok secretbox pwbox">
     <b>{{ secret.username }}</b> {{ secret.what }} — 임시 비밀번호
     <span class="pw" id="pwval" data-pw="{{ secret.password }}">••••••••••••</span>
     <button class="btn small" type="button" id="pwshow">보기</button>
@@ -115,11 +115,11 @@
       pv.textContent = on ? '••••••••••••' : pv.dataset.pw;
       e.target.textContent = on ? '보기' : '가리기';
     };
-    document.getElementById('pwcopy').onclick = e => {
-      navigator.clipboard.writeText(pv.dataset.pw).then(() => {
-        e.target.textContent = '복사됨';
-        setTimeout(() => e.target.textContent = '복사', 1200);
-      });
+    // 복사는 app.js 의 copyText 를 쓴다. navigator.clipboard 를 직접 부르면
+    // HTTP 에서는 그 객체가 없어 아무 일도 일어나지 않는다.
+    document.getElementById('pwcopy').onclick = async e => {
+      // 가려 둔 상태로 복사해도 값은 data-pw 에서 가져오므로 문제없다.
+      await window.copyText(pv.dataset.pw, e.target);
     };
   }
 </script>
