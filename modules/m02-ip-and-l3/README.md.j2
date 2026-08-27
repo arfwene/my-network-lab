@@ -186,6 +186,8 @@ links:
   - { label: untagged, sub: "eth1 · eth2" }
   - { label: "트렁크  eth3 ↔ eth1", sub: "VLAN {{ vlans[10].id }},{{ vlans[20].id }} 태그", tone: warn }
 marks:
+  pc1: ["{{ ipc.pc1 }}"]
+  pc2: ["{{ ipc.pc2 }}"]
   r1: ["eth1.10  {{ gw.vlan10 }}", "eth1.20  {{ gw.vlan20 }}"]
 ```
 
@@ -258,6 +260,10 @@ cols: [pc1, r1, pc2]
 links:
   - { label: "dst MAC = r1", sub: "dst IP = pc2" }
   - { label: "dst MAC = pc2", sub: "dst IP = pc2" }
+marks:
+  pc1: ["{{ ip.pc1 }}"]
+  r1: ["{{ gw.vlan10 }} · {{ gw.vlan20 }}"]
+  pc2: ["{{ ip.pc2 }}"]
 notes:
   - MAC 은 홉마다 새로 쓰인다
   - IP 는 끝까지 그대로

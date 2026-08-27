@@ -44,7 +44,7 @@ UPPER_ROW = {"edge": "site-b"}            # 이 구역 위에 얹고 오른쪽�
 PAD = 22                       # 캔버스 바깥 여백
 CELL_W, CELL_H = 78, 90        # 노드 한 칸 (그림 + 이름 + 설명 두 줄)
 GLYPH_H = 44                   # 칸 안에서 그림이 차지하는 높이. 나머지는 이름.
-COL, ROW = 152, 108            # 칸 사이 간격. 통로에 대역 이름이 들어가야 한다.
+COL, ROW = 152, 114            # 칸 사이 간격. 통로에 대역 이름이 들어가야 한다.
 Z_L, Z_R = 16, 16              # 구역 상자 안쪽 좌우 여백
 Z_TITLE, Z_PLAIN = 30, 14      # 제목이 있는 쪽 / 없는 쪽의 위아래 여백
 Z_GAP_X, Z_GAP_Y = 20, 34      # 구역 사이 간격
@@ -88,6 +88,45 @@ def _iface(node_name, if_name):
                 if i["name"] == if_name:
                     return i
     return {}
+
+
+def _end_octet(node, ifname, ctx):
+    """그 인터페이스가 들고 있는 주소의 끝자리. 없으면 None."""
+    i = (ctx["ifs"].get(node) or {}).get(ifname) or {}
+    v = i.get("ipv4")
+    return v.split("/")[0].split(".")[-1] if v else None
+
+
+def _addr_lines(name, ctx, on_link):
+    """그 장비가 **자기 것으로 들고 있는 주소**. 최대 두 줄.
+
+    링크에 대역만 적혀 있으면 "이 주소가 어느 장비 것인가" 를 끝내 알 수 없다.
+    실제로 교육생이 `Time to live exceeded` 를 돌려준 주소를 보고도 그것이
+    r1 인 줄 몰라 답을 못 적었다. 그림이 말해 줘야 하는 것은 대역이 아니라
+    **주소와 장비의 짝**이다.
+
+    on_link 은 링크 끝에 이미 주소가 적히는 (장비, 인터페이스) 들이다.
+    거기 적히는 게이트웨이는 여기서 또 적지 않는다 — 통로가 좁아서 두 번 적으면
+    옆 링크의 대역 이름을 밀어낸다.
+
+    has_l3 로 막지 않는다. M1 은 라우팅이 없을 뿐 **주소는 있다** — pc1 과 pc2 가
+    같은 `/24` 에 있다는 것이 M1 의 전부인데, 그것을 그림이 안 보여 주고 있었다.
+    """
+    ifs = ctx["ifs"].get(name) or {}
+    gw = [i["ipv4"].split("/")[0] for nm, i in ifs.items()
+          if i.get("role") == "gateway" and i.get("ipv4") and (name, nm) not in on_link]
+    if gw:
+        return [f"GW {a}" for a in gw[:2]]
+    # 단말은 끝자리(`eth1 .11`)만으로는 대역을 알 수 없다 — 접두 길이까지 적는다.
+    own = [i["ipv4"] for i in ifs.values()
+           if i.get("role") in ("access", "public", "external-site") and i.get("ipv4")]
+    if own:
+        return own[:2]
+    # 라우터 사이만 잇는 장비는 자기 주소가 P2P 뿐이고 그것은 링크 끝에 적힌다.
+    # 여기서는 OSPF 의 router-id 가 되는 루프백을 보여 준다.
+    lo = [i["ipv4"].split("/")[0] for i in ifs.values()
+          if i.get("role") == "loopback" and i.get("ipv4")]
+    return [f"lo {lo[0]}"] if lo else []
 
 
 def _seg_index(stage):
@@ -208,6 +247,8 @@ def layout(stage="m10"):
         return {"stage": stage, "w": 100, "h": 60, "zones": [], "nodes": [], "links": []}
 
     depth = _depth(nodes, links)
+    # 링크 끝에 주소가 적히는 인터페이스 — 장비 밑에 또 적지 않기 위해 미리 모은다.
+    on_link = {(a, ai) for _, (a, ai), _ in links} | {(b, bi) for _, _, (b, bi) in links}
     has_l3 = L.stage_le("m2", stage)           # M1 은 아직 주소가 없다
     segs, ctx = _seg_index(stage)
     zsum = ctx["zone"]
@@ -277,7 +318,8 @@ def layout(stage="m10"):
                      "w": CELL_W, "h": CELL_H,
                      "cx": nx + CELL_W / 2, "cy": ny + GLYPH_H / 2,
                      "gx": nx + (CELL_W - gw) / 2, "gy": ny + (GLYPH_H - gh) / 2,
-                     "gw": gw, "gh": gh, "caption": []}
+                     "gw": gw, "gh": gh,
+                     "caption": _addr_lines(n["name"], ctx, on_link)}
                 placed.append(d)
                 by_name[n["name"]] = d
 
@@ -346,7 +388,9 @@ def layout(stage="m10"):
         if lines and lines[0].startswith("VLAN"):
             leaf = next((n for n in (A, B) if degree[n["name"]] == 1), None)
             if leaf is not None:
-                leaf["caption"] = lines
+                # VLAN 이름만 얹는다. 대역은 그 단말이 이미 자기 주소로 말한다
+                # (`10.10.10.11/24` -> 대역이 `10.10.10.0/24` 임을 함께 알려 준다).
+                leaf["caption"] = lines[:1] + leaf["caption"]
                 lines = []
 
         if p["cross"]:
@@ -386,7 +430,11 @@ def layout(stage="m10"):
         ends_out = []
         for i, (nm, nf) in enumerate(ends):
             tx, ty, anc = _if_spot(pts, i == 0)
-            ends_out.append({"node": nm, "if": nf, "fan": fan[nm],
+            # `eth2 .1` — 대역은 링크 위에 있으므로 끝자리만 적으면 주소가 정해진다.
+            # 이름만 적혀 있으면 "10.10.64.1 이 누구 것인가" 를 그림이 답하지 못한다.
+            oc = _end_octet(nm, nf, ctx)
+            label = f"{nf} .{oc}" if oc else nf
+            ends_out.append({"node": nm, "if": label, "fan": fan[nm],
                              "at": pts[0 if i == 0 else -1],
                              "tx": tx, "ty": ty, "anchor": anc})
         out.append({"a": p["a"], "b": p["b"], "a_if": p["ai"], "b_if": p["bi"],
@@ -413,7 +461,7 @@ def layout(stage="m10"):
             P.add((cx, z["title_y"] - 11, cx + cw, z["title_y"] + 2))
 
     IF_TRY = (0, 11, 22, -17, -28)
-    SEG_TRY = (0, -13, -26, 15, 28, -39)
+    SEG_TRY = (0, -13, -26, 15, 28, -39, 41, -52)
     for lk in out:                                      # 인터페이스 이름이 먼저 — 선에 붙어야 한다
         for e in lk["ends"]:
             w = _tw(e["if"], 10)

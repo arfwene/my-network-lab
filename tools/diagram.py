@@ -279,13 +279,19 @@ def _mini(spec, S):
         for cx, s in subs:
             S.text(cx, bottom + 18, s, cls="t m", anchor="middle", size=FS_SM)
         bottom += 18 + 6
+    # 한 열에 장비가 둘이면(pc1·pc2) 주석의 x 가 같다. 줄까지 같으면 글자가
+    # 그대로 포개지므로, 같은 열의 것은 이어서 쌓는다.
+    used = {}
     for n, rowsm in marks.items():
         x, yy = pos[n]
-        for j, r in enumerate(_lines(rowsm)):
-            S.text(x + NW / 2, bottom + 18 + j * LH, r, cls="t m",
+        start = used.get(x, 0)
+        rows_n = _lines(rowsm)
+        for j, r in enumerate(rows_n):
+            S.text(x + NW / 2, bottom + 18 + (start + j) * LH, r, cls="t m",
                    anchor="middle", size=FS_SM)
+        used[x] = start + len(rows_n)
     if marks:
-        bottom += 18 + max(len(_lines(v)) for v in marks.values()) * LH - LH + 6
+        bottom += 18 + max(used.values()) * LH - LH + 6
     for j, note in enumerate(_lines(spec.get("notes"))):
         S.text(PAD, bottom + 24 + j * LH, "← " + note, cls="t m", size=FS_SM)
     return S

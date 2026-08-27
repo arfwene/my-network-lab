@@ -80,6 +80,10 @@ PAT  :  주소와 **함께 포트도** 바꾼다        여럿이 주소 하나�
 ```labdiagram
 kind: mini
 cols: [["pc1 :41000", "pc2 :41000"], edge]
+marks:
+  "pc1 :41000": ["{{ ip.pc1 }}"]
+  "pc2 :41000": ["{{ ip.pc2 }}"]
+  edge: ["{{ public.nat_pool.snat_address }}"]
 links:
   - { label: 둘 다 {{ public.nat_pool.snat_address }} 로, tone: warn,
       sub: 응답이 돌아왔을 때 누구 것인지 알 수 없다 }

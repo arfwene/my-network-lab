@@ -182,7 +182,12 @@ tcpdump -i eth1 -e -nn 'icmp'               # access 포트
 ```labdiagram
 kind: mini
 cols: [pc1, r1, r2, r4, web]
-marks: { pc1: ["①"], r2: ["②"], web: ["③"] }
+marks:
+  pc1: ["①", "{{ ip.pc1 }}"]
+  r1: ["{{ gw.vlan10 }}"]
+  r2: ["②", "{{ p2p['r1-r2'].addresses.r2 }}"]
+  r4: ["{{ gw.vlan40 }}"]
+  web: ["③", "{{ ip.web }}"]
 ```
 
 세 곳에서 **동시에** 뜨고, 같은 패킷을 찾아 대조한다.
