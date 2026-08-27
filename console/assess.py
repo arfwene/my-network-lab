@@ -112,7 +112,17 @@ def quiz_for_client(module, lab_id):
 
 
 def _norm(s):
-    return " ".join(str(s or "").strip().lower().split())
+    """단답형 비교용 정규화.
+
+    공백을 **전부** 없앤다. 남겨 두면 `경로 요약` 은 맞고 `경로요약` 은 틀린다 —
+    맞는 답을 띄어쓰기로 떨어뜨리는 셈이다. 양쪽 다 지우므로 `ip route` 같은
+    답도 서로 같게 비교된다.
+
+    끝에 붙은 마침표·느낌표도 뗀다. 문장 습관이지 답의 일부가 아니다.
+    """
+    s = str(s or "").lower()
+    s = "".join(s.split())
+    return s.rstrip(".!?。")
 
 
 def _snip(s, n=90):
