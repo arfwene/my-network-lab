@@ -964,6 +964,14 @@ async def action(request: Request, lab: int = Form(...), action: str = Form(...)
         except ValueError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
         secret = True          # 로그에 시나리오 이름이 찍힌다. 응시자에게는 가린다.
+    # 장애 주입도 마찬가지다. 시나리오 메뉴는 **증상만** 보여 주고 원인은 감춘다 —
+    # 무엇이 망가졌는지 스스로 알아내는 것이 이 연습의 전부이기 때문이다. 그런데
+    # 실행 로그에는 플레이 이름("pc2 링크 down")과 안내 메시지("pc2 eth1 을 down
+    # 시켰다")가 그대로 찍혀서, 메뉴가 애써 감춘 것을 로그가 무효로 만들었다.
+    # 교육생도 lab.break 를 갖고 있어 스스로 주입할 수 있으므로 실제로 새어 나간다.
+    # 관리자는 그대로 본다(reveal) — 안내 메시지는 원래 진행자에게 쓴 글이다.
+    if action == "break":
+        secret = True
     # 랩 단계보다 위의 시나리오는 없는 장비를 대상으로 돌아 그냥 실패한다.
     # 화면은 잠가 두지만 그건 화면일 뿐이므로 여기서도 막는다.
     if action in ("break", "fix") and scenario:
@@ -1069,6 +1077,15 @@ async def job_stream(request: Request, job_id: str):
                 else:
                     yield sse(f"== 아직입니다. {okc}/{tot} 통과.")
                     yield sse("   막혔으면 [힌트] 를 눌러 주세요. 한 단계씩 나옵니다.")
+            elif job.action == "break":
+                yield sse("$ 장애를 주입합니다 — 무엇을 건드리는지는 알려 드리지 않습니다")
+                while job.status not in ("ok", "failed"):
+                    await asyncio.sleep(0.5)
+                if job.status != "ok":
+                    yield sse("!! 주입 실패 — 교육 담당자에게 알려 주세요")
+                else:
+                    yield sse("== 주입 완료. 증상부터 확인해 주세요 — "
+                              "어디까지 되고 어디부터 안 되는가.")
             else:
                 drill = job.action == "drill"
                 yield sse("$ " + ("중간 점검 준비 중" if drill else "시험 준비 중")
