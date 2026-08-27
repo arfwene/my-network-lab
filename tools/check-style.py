@@ -57,6 +57,53 @@ def tables(t):
     return len(blocks), sum(len(b) for b in blocks), tiny, len(lines)
 
 
+# 모양만 보고 정답을 고를 수 있으면 그 문항은 개념을 묻지 않는다.
+#   대시 뒤 근거절이 일부에만 · 굵게가 정답에만 · 정답만 유난히 긺 ·
+#   '항상/전부' 같은 단정이 오답에만 — 넷 다 교육생이 실제로 쓰는 요령이다.
+SHAPE_OK = {
+    # 틀린 단정 자체가 시험하려는 오해인 것들. '항상' 을 빼면 문제가 사라진다.
+    ("m04", "q3"), ("m04", "q4"), ("m06", "q10"),
+    # 정답이 긴 이유가 내용이 아니라 묻고 있는 대상(bpf 식) 자체인 것.
+    ("m07", "q6"),
+    # 다섯 중 넷이 정답이라 '가장 긴 것' 요령이 통하지 않는다.
+    ("m07", "q4"),
+}
+ABSOLUTE = ("항상", "절대", "전부", "무조건", "반드시", "오직", "만이")
+LEN_GAP = 8            # 정답이 2등보다 이만큼 길면 눈에 띈다
+
+
+def shape_leaks(mod_dir):
+    """선택지의 모양이 정답을 가리키는 문항. [(문항id, 무엇이)] 를 돌려준다."""
+    f = mod_dir / "assessment.yml"
+    if not f.exists():
+        return []
+    d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    out = []
+    for q in ((d.get("quiz") or {}).get("questions") or []):
+        if q.get("type") not in ("single", "multi"):
+            continue
+        if (mod_dir.name[:3], q["id"]) in SHAPE_OK:
+            continue
+        ch, ans = q["choices"], set(q["answer"])
+        length = [len(c) for c in ch]
+        why = []
+        if max(length) >= LEN_GAP + sorted(length)[-2] and length.index(max(length)) in ans:
+            why.append("정답만 긺")
+        dash = [i for i, c in enumerate(ch) if "—" in c]
+        if dash and len(dash) < len(ch):
+            why.append("대시가 일부에만")
+        bold = [i for i, c in enumerate(ch) if "**" in c]
+        if bold and set(bold) <= ans:
+            why.append("굵게가 정답에만")
+        hard = [i for i in range(len(ch)) if i not in ans
+                and any(a in ch[i] for a in ABSOLUTE)]
+        if hard and not [i for i in ans if any(a in ch[i] for a in ABSOLUTE)]:
+            why.append("단정이 오답에만")
+        if why:
+            out.append((q["id"], " · ".join(why)))
+    return out
+
+
 def quiz_count(mod_dir):
     """그 모듈의 퀴즈 문항 수. assessment.yml 이 없으면 0."""
     f = mod_dir / "assessment.yml"
@@ -95,14 +142,18 @@ def main(only=None):
     if only:
         files = [f for f in files if f.parent.name.startswith(only)]
     bad = 0
-    over = []
-    print(f"{'모듈':<6}{'퀴즈':>6}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
+    over, leaks = [], []
+    print(f"{'모듈':<6}{'퀴즈':>6}{'모양누출':>9}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
           f"{'작은표':>7}{'머리말없는인용':>15}")
-    print("-" * 66)
+    print("-" * 75)
     for f in files:
         m = measure(f)
         nq = quiz_count(f.parent)
+        sl = shape_leaks(f.parent)
         marks = []
+        if sl:
+            marks.append("모양")
+            leaks += [(f.parent.name[:3], qid, why) for qid, why in sl]
         if nq > QUIZ_MAX:
             marks.append("퀴즈")
             over.append((f.parent.name, nq))
@@ -113,7 +164,7 @@ def main(only=None):
         if m["tiny"]: marks.append("작은표")
         if m["bad_prefix"]: marks.append("머리말")
         col = R if marks else G
-        print(f"{col}{f.parent.name[:4]:<6}{nq:>6}{m['bold_per_sent']:>10.2f}"
+        print(f"{col}{f.parent.name[:4]:<6}{nq:>6}{len(sl):>9}{m['bold_per_sent']:>10.2f}"
               f"{m['quote_per_100']:>11.1f}{m['table_pct']:>7.1f}{len(m['tiny']):>7}"
               f"{len(m['bad_prefix']):>15}{N}")
         if marks:
@@ -122,8 +173,8 @@ def main(only=None):
                 print(f"        {Y}머리말 없는 인용구{N}: {b[:60]}")
             for b in m["tiny"][:2]:
                 print(f"        {Y}2열 3행 이하 표{N}: {b}")
-    print("-" * 66)
-    print(f"기준: 퀴즈 ≤ {QUIZ_MAX}문항 · 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · "
+    print("-" * 75)
+    print(f"기준: 퀴즈 ≤ {QUIZ_MAX}문항 · 모양누출 0 · 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · "
           f"작은표 0 · 머리말 없는 인용구 0")
     print("표% 는 참고값이다 — 찾아보는 표가 본문인 문서는 높아도 맞다.")
     if bad:
@@ -132,12 +183,12 @@ def main(only=None):
         print(f"{G}전부 기준 안{N}")
     # 문장 밀도는 사람이 읽고 판단할 몫이라 재기만 한다. 퀴즈 문항 수는
     # 세면 답이 나오는 값이므로 여기서 막는다.
-    if over:
-        for name, n in over:
-            print(f"{R}✘{N} {name} 의 퀴즈가 {n}문항이다 — {QUIZ_MAX}문항까지만 둔다 "
-                  f"(modules/{name}/assessment.yml)")
-        return 1
-    return 0
+    for mod, qid, why in leaks:
+        print(f"{R}✘{N} {mod} {qid}: {why} — 모양만 보고 정답을 고를 수 있다")
+    for name, n in over:
+        print(f"{R}✘{N} {name} 의 퀴즈가 {n}문항이다 — {QUIZ_MAX}문항까지만 둔다 "
+              f"(modules/{name}/assessment.yml)")
+    return 1 if (over or leaks) else 0
 
 
 if __name__ == "__main__":
