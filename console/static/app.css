@@ -490,7 +490,12 @@ li.ok .mark{color:var(--ok)} li.bad .mark{color:var(--danger)}
    여기 오지 않는다 — 맞는 답은 교재에서 찾게 한다. */
 .picked{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;font-size:12px}
 .picked .k{flex:none;color:var(--muted)}
-.picked .v{padding:1px 7px;border-radius:var(--r-sm);background:var(--line);color:var(--fg)}
+/* 이 칩은 **틀린 문항에만** 나온다. 중립색 배경을 주면 "제시된 정답" 처럼
+   읽힌다 — 실제로 교육생이 자기가 고른 오답을 정답으로 읽고 교재와 퀴즈가
+   어긋난다고 신고했다. 오답 색으로 칠해 오해가 생길 여지를 없앤다. */
+.picked .v{padding:1px 7px;border-radius:var(--r-sm);
+  background:color-mix(in srgb,var(--danger) 12%,transparent);
+  color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent)}
 .picked .v.none{background:transparent;color:var(--muted);font-style:italic;padding-left:0}
 .why{margin-top:5px;color:var(--danger);font-size:12px}
 .hint{margin-top:4px;color:var(--muted);font-size:12px;white-space:pre-line}
