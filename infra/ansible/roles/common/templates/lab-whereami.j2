@@ -4,14 +4,31 @@
 #
 # 주소는 **지금 올라가 있는 값**을 읽는다. 설계값을 그대로 찍으면, 설정이
 # 아직 안 올라간 랩에서도 주소가 있는 것처럼 보인다 — 그게 제일 나쁘다.
+#
+# 이름도 마찬가지다. eth1 같은 이름은 MAC 기준 .link 파일이 붙여 주는데,
+# 그 파일은 [이 모듈 적용] 이 올린다. 적용 전에는 커널 기본 이름(ens19 …)
+# 그대로다. 그때 설계 이름을 찍으면 교육생이 표를 보고 그대로 따라 쳤다가
+#   $ sudo ip link set eth1 down
+#   Cannot find device "eth1"
+# 를 만난다. 관리망도 mgmt0 로 찍히면서 "state none · 주소 -" 가 되어,
+# **바로 그 링크로 접속해 있는데도** 죽은 것처럼 보인다.
+# 그래서 이름은 MAC 으로 실제 장치를 찾아 **지금 칠 수 있는 이름**을 찍는다.
 cat <<'BANNER'
 {{ node }} ({{ node_role }}) — {{ desc }}
 BANNER
 
 live_addr() { ip -4 -br addr show dev "$1" 2>/dev/null | awk '{print $3}' | head -1; }
 live_state() { cat "/sys/class/net/$1/operstate" 2>/dev/null || echo none; }
+# 설계 이름이 아직 안 붙었을 수 있다. MAC 으로 지금 이름을 찾는다.
+dev_by_mac() {
+  local d
+  for d in /sys/class/net/*; do
+    if [ "$(cat "$d/address" 2>/dev/null)" = "$1" ]; then basename "$d"; return; fi
+  done
+}
 
 missing=0
+declare -a RENAMED
 # 머리글은 printf 로 채우지 않고 손으로 맞춘다.
 #   printf 의 %-10s 는 **글자 수**로 채우는데 한글은 터미널에서 두 칸을 쓴다.
 #   그래서 `인터페이스`(5자 = 10칸)와 `mgmt0`(5자 = 5칸)이 같은 폭으로 채워지고
@@ -19,12 +36,18 @@ missing=0
 #   본문 칸은 전부 ASCII 라 %-10s 로 맞는다 — 그래서 상대노드에도 한글을 쓰지 않는다.
 printf '\n%s\n' "인터페이스 상태     주소                 상대노드       설명"
 printf '%s\n' "-------------------------------------------------------------------------------"
-m=$(live_addr {{ mgmt_interface }})
-printf '%-10s %-8s %-20s %-14s %s\n' "{{ mgmt_interface }}" \
-  "$(live_state {{ mgmt_interface }})" \
+mdev=$(dev_by_mac '{{ mgmt_mac }}')
+mdev=${mdev:-{{ mgmt_interface }}}
+if [ "$mdev" != "{{ mgmt_interface }}" ]; then RENAMED+=("{{ mgmt_interface }} → $mdev"); fi
+m=$(live_addr "$mdev")
+printf '%-10s %-8s %-20s %-14s %s\n' "$mdev" \
+  "$(live_state "$mdev")" \
   "${m:--}" "-" "관리망(OOB) — 통신 테스트에 쓰지 말 것"
 {% for i in lab_interfaces if i.active %}
-a=$(live_addr {{ i.name }})
+dev=$(dev_by_mac '{{ i.mac }}')
+dev=${dev:-{{ i.name }}}
+if [ "$dev" != "{{ i.name }}" ]; then RENAMED+=("{{ i.name }} → $dev"); fi
+a=$(live_addr "$dev")
 {# 조건 블록은 반드시 자기 줄을 차지해야 한다.
    ansible 의 template 모듈은 trim_blocks 가 켜져 있어 블록 태그 뒤의 줄바꿈을
    지운다. 한 줄에 몰아 쓰면 이렇게 붙어 버린다:
@@ -37,11 +60,22 @@ a=$(live_addr {{ i.name }})
 {% if i.ipv4 is defined and i.ipv4 %}
 [ -z "$a" ] && missing=1
 {% endif %}
-printf '%-10s %-8s %-20s %-14s %s\n' "{{ i.name }}" \
-  "$(live_state {{ i.name }})" "${a:--}" "{{ i.peer | default('-') }}" \
+printf '%-10s %-8s %-20s %-14s %s\n' "$dev" \
+  "$(live_state "$dev")" "${a:--}" "{{ i.peer | default('-') }}" \
   "{{ i.desc | default(i.role | default('', true), true) }}{% if i.vlan is defined and i.vlan %} [VLAN {{ i.vlan }}]{% endif %}"
 {% endfor %}
 echo
+# 배열 길이를 세는 bash 문법(달러-중괄호-샵)은 여기서 쓸 수 없다.
+# 그 중괄호-샵을 Jinja 가 주석 시작으로 읽어 템플릿이 통째로 깨진다.
+# 원소를 이어 붙여 비었는지만 본다.
+if [ -n "${RENAMED[*]}" ]; then
+  # 여기는 터미널이다. 굵게 표시를 쓰면 별표가 그대로 보인다.
+  echo "위 표의 이름은 지금 이 장비에 실제로 있는 이름입니다 — 그대로 치면 됩니다."
+  echo "교재에 나오는 이름은 [이 모듈 적용] 뒤에 붙습니다:"
+  for r in "${RENAMED[@]}"; do echo "    $r"; done
+  echo "    (왼쪽이 교재의 이름, 오른쪽이 지금 이름)"
+  echo
+fi
 if [ "$missing" = 1 ]; then
   echo "이 노드에 아직 주소가 없습니다 — 설정이 안 올라간 상태입니다."
   echo "웹 콘솔에서 [이 모듈 적용] 을 누르면 올라갑니다 (1분쯤)."
