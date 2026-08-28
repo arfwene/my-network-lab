@@ -200,6 +200,8 @@ def quiz_count(mod_dir):
 #  한 번에 다 못 바꾼다 — 막지 않고 **몇 문장 남았는지만** 센다. 0 이면 다 바뀐 것이다.
 #  제목과 도입부(첫 `---` 위)는 이름표에 가까우므로 세지 않는다.
 PLAIN = re.compile(r"[가-힣]+(?<!니)다(?=[.\s]|$)")
+# 괄호가 바로 붙어 문장이 끝나는 자리. PLAIN 은 구절 끝에서만 세므로 이것을 놓쳤다.
+PAREN = re.compile(r"[가-힣]+(?<!니)다(?=\*{0,2}\()")
 
 
 def plain_form(raw):
@@ -209,6 +211,12 @@ def plain_form(raw):
     for line in body.splitlines():
         if line.startswith("#") or line.lstrip().startswith("- ["):
             continue
+        # 문장이 괄호로 끝나는 자리 — "…보낸다(M2 에서 본 것)." 도 평서형이다.
+        # 따옴표 안은 세지 않는다. 증상이나 남의 말을 그대로 옮긴 인용이라
+        # 평서형이 맞기 때문이다.
+        for m in PAREN.finditer(line):
+            if line[:m.start()].count('"') % 2 == 0:
+                n += 1
         for seg in re.split(r"(?<=다[.])\s+|\|", line):
             # 문장 끝의 괄호와 굵게 표시를 걷어내야 "(M3 에서 쓴다)" 나
             # "**...생겼다.**" 처럼 표시에 감싸인 평서형이 잡힌다. 따옴표는
