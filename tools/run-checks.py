@@ -84,6 +84,26 @@ def _included(module_id, block):
     return out
 
 
+def _drill_scope(upto):
+    """이 중간 점검에서 **장애가 나올 수 있는 모듈**. 없으면 None.
+
+    판정 범위를 여기까지만 좁힌다. 중간 점검은 성적도 시계도 없는 자리인데
+    앞 모듈 검사를 전부 돌리면, 한 개 심어 놓은 장애를 찾으라 해 놓고 그와
+    상관없는 모듈까지 다시 세우게 만든다. 뽑을 수 있는 장애가 m04~m07 뿐이면
+    m00~m03 검사는 **어차피 통과할 것**이라, 돌려 봐야 할 일만 늘린다.
+
+    고르는 기준은 그 점검의 pool 이다. 따로 목록을 만들지 않는다 —
+    두 곳에 적으면 pool 에 장애를 더했을 때 한쪽만 낡는다.
+    """
+    for cp in (((L.SITE.get("console") or {}).get("drill") or {})
+               .get("checkpoints") or []):
+        if cp.get("stage") != upto:
+            continue
+        # `m05-02` → `m05`. 시나리오 id 앞자리가 곧 모듈 id 다.
+        return {s.split("-")[0] for s in (cp.get("pool") or [])} or None
+    return None
+
+
 def _cumulative(module_id, upto):
     """`upto` 단계까지의 **앞 모듈 검사**. 중간 점검이 이걸 쓴다.
 
@@ -93,13 +113,15 @@ def _cumulative(module_id, upto):
 
     어느 검사를 가져올지는 새로 정하지 않는다. 캡스톤(m11)이 이미 **끝까지
     살아남는 검사**만 골라 두었으므로 그 목록을 그대로 쓰고, 이번 단계보다
-    나중 모듈만 걸러낸다. 목록이 한 곳이라 한쪽만 낡을 일이 없다.
+    나중 모듈과 **이 점검에서 장애가 나올 수 없는 모듈**을 걸러낸다.
+    목록이 한 곳이라 한쪽만 낡을 일이 없다.
     (그 단계 모듈 자신의 검사는 호출한 쪽이 통째로 쓴다 — 캡스톤 기준으로
      솎아낸 것이 아니라 그 단계에서 참인 것 전부여야 하기 때문이다.)
     """
     cap = ((L.SITE.get("console") or {}).get("capstone") or {}).get("module")
     if not cap or cap == module_id:
         return []
+    scope = _drill_scope(upto)
     block = _read_spec(cap)[1].get("checks") or {}
     incs = []
     for inc in block.get("include") or []:
@@ -107,6 +129,8 @@ def _cumulative(module_id, upto):
         if src == module_id:
             continue
         if not L.stage_le(_read_spec(src)[0]["stage"], upto):
+            continue
+        if scope is not None and src not in scope:
             continue
         incs.append(inc)
     return _included(module_id, {"include": incs})
