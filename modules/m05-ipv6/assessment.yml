@@ -211,8 +211,8 @@ checks:
       expect: "2"
       hint: |
         OSPF(v2)와 **다른 프로세스**다. IPv4 인접이 Full 이어도 이쪽은 따로 확인해야 합니다.
-          vtysh -c 'show ipv6 ospf6 neighbor'
-          vtysh -c 'show ipv6 ospf6 interface eth2'
+          r1# show ipv6 ospf6 neighbor
+          r1# show ipv6 ospf6 interface eth2
 
     - id: r1-ospf6-routes
       kind: config
@@ -255,7 +255,7 @@ checks:
 
     - id: pc1-no-extra-v6
       kind: config
-      title: "실습 6(SLAAC)에서 생긴 임시 주소를 정리했는가"
+      title: "6.6(SLAAC)에서 생긴 임시 주소를 정리했는가"
       host: pc1
       run: "ip -6 addr show dev eth1 scope global | grep -c 'inet6' || true"
       expect: "1"
