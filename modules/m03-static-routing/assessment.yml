@@ -22,7 +22,7 @@ quiz:
       explain: |
         라우팅은 **가장 구체적인(prefix 가 긴) 경로**를 고릅니다. 순서도, 위아래도 상관없습니다.
         `10.60.8.0/24` > `10.60.0.0/19` > `0.0.0.0/0` 순으로 이깁니다.
-        → 그래서 잘못 넣은 /32 하나가 요약 경로 전체를 무력화할 수 있습니다 (실습 2).
+        → 그래서 잘못 넣은 /32 하나가 요약 경로 전체를 무력화할 수 있습니다 (6.2).
 
     - id: q2
       type: single
@@ -62,7 +62,7 @@ quiz:
         `* * *` 는 **"그 홉이 응답을 안 했다"** 는 뜻이지 "패킷이 못 갔다"가 아닙니다.
         원인: ICMP 차단 정책 · **ICMP rate limit** · 응답 소스 주소 문제.
         마지막 줄까지 응답이 온다면 경로는 살아 있습니다.
-        → 이 오독으로 멀쩡한 구간을 파는 일이 실무에서 매우 흔합니다 (실습 5).
+        → 이 오독으로 멀쩡한 구간을 파는 일이 실무에서 매우 흔합니다 (6.5).
 
     - id: q4
       type: single
@@ -210,10 +210,12 @@ checks:
       run: "vtysh -c 'show ip route static'"
       expect_all: ["{{ zone['site-b'] }}", "{{ p2p['r1-r2'].addresses.r2 }}"]
       hint: |
-        vtysh 로 확인·설정합니다.
-          vtysh -c "show ip route static"
-          sudo vtysh -c "conf t" -c "ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}"
-        설정 파일 기준으로 되돌리려면 sudo systemctl restart frr
+        sudo vtysh 로 라우터에 들어가서 확인·설정합니다.
+          r1# show ip route static
+          r1# configure terminal
+          r1(config)# ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}
+          r1(config)# end
+        설정 파일 기준으로 되돌리려면 셸에서 sudo systemctl restart frr
 
     - id: r2-routes-both
       kind: config
@@ -235,17 +237,21 @@ checks:
       expect_all: ["{{ zone['site-a'] }}", "{{ p2p['r2-r4'].addresses.r2 }}"]
       hint: |
         이 한 줄이 없으면 요청은 도착하는데 응답이 돌아오지 못합니다.
-        sudo vtysh -c "conf t" -c "ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}"
+          r4# configure terminal
+          r4(config)# ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}
+          r4(config)# end
 
     - id: r1-no-leftover
       kind: config
-      title: "실습 2 에서 넣은 blackhole 경로를 정리했는가"
+      title: "6.2 에서 넣은 blackhole 경로를 정리했는가"
       host: r1
       run: "vtysh -c 'show ip route static'"
       expect_none: ["blackhole", "{{ ip.web }}/32"]
       hint: |
-        sudo vtysh -c "conf t" -c "no ip route {{ ip.web }}/32 blackhole"
         더 긴 prefix 가 남아 있으면 요약 경로가 무력화된 채 다음 모듈로 갑니다.
+          r1# configure terminal
+          r1(config)# no ip route {{ ip.web }}/32 blackhole
+          r1(config)# end
 
     - id: cross-site-ping
       kind: connectivity
@@ -280,12 +286,12 @@ checks:
         - "{{ p2p['r2-r4'].addresses.r4 }}"
         - "{{ ip.web }}"
       hint: |
-        홉이 하나라도 빠지거나 `* * *` 가 남아 있으면 실습 5 의 rate limit 을 되돌리지 않은 것입니다.
+        홉이 하나라도 빠지거나 `* * *` 가 남아 있으면 6.5 의 rate limit 을 되돌리지 않은 것입니다.
         r2 에서: sudo sysctl -w net.ipv4.icmp_ratelimit=1000
 
     - id: r2-icmp-restored
       kind: config
-      title: "실습 5 에서 건드린 ICMP rate limit 을 되돌렸는가"
+      title: "6.5 에서 건드린 ICMP rate limit 을 되돌렸는가"
       host: r2
       run: "cat /proc/sys/net/ipv4/icmp_ratelimit"
       expect: "1000"
@@ -312,7 +318,7 @@ written:
       auto_pass: true
       min_chars: 250
       prompt: |
-        실습 4(리턴 경로 제거) 또는 장애 주입 중 하나를 골라, 아래 순서로 적을 것.
+        6.4(리턴 경로 제거) 또는 장애 주입 중 하나를 골라, 아래 순서로 적을 것.
         **결론이 아니라 판별 과정**을 남깁니다.
 
           1. 증상 — 무엇이 안 됐는가

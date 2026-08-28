@@ -76,6 +76,17 @@ class Scene:
             for x, y in l["pts"]:
                 xs.append(x)
                 ys.append(y)
+        #  가운데 맞춘 글자가 첫 칸보다 넓으면 캔버스 왼쪽 밖으로 나간다.
+        #  글자를 줄이는 대신 그림 전체를 오른쪽으로 민다.
+        dx = max(0, extra - min(xs))
+        if dx:
+            for b in self.boxes + self.glyphs:
+                b["x"] += dx
+            for t in self.texts:
+                t["x"] += dx
+            for l in self.lines:
+                l["pts"] = [(x + dx, y) for x, y in l["pts"]]
+            xs = [x + dx for x in xs]
         self.w = round(max(xs) + extra)
         self.h = round(max(ys) + extra)
         return self
