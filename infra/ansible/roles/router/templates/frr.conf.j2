@@ -8,7 +8,7 @@
 !    show ip ospf neighbor    <- OSPF 인접
 !    show ip ospf interface   <- 인터페이스별 area/cost
 ! =============================================================================
-{% set si = stages.index(lab_stage) %}
+{% set si = stages.index(config_stage | default(lab_stage)) %}
 {% set v6 = si >= stages.index('m5') %}
 {% set m3 = stages.index('m3') %}
 {% set m4 = stages.index('m4') %}

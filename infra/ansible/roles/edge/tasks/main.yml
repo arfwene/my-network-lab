@@ -7,11 +7,11 @@
     mode: "0644"
     validate: "nft -c -f %s"
   notify: reload nftables
-  when: stages.index(lab_stage) >= stages.index('m9')
+  when: stages.index(config_stage | default(lab_stage)) >= stages.index('m9')
 
 - name: nftables 활성화
   ansible.builtin.systemd:
     name: nftables
     enabled: true
     state: started
-  when: stages.index(lab_stage) >= stages.index('m9')
+  when: stages.index(config_stage | default(lab_stage)) >= stages.index('m9')

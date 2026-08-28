@@ -2,7 +2,11 @@
 # 랩 전체 설정 적용
 #   ansible-playbook -i inventory/lab1 playbooks/site.yml -e lab_stage=m4
 #
-# lab_stage 가 "지금 어느 모듈까지 배웠는가"를 결정한다.
+# lab_stage 가 "어떤 장비·링크가 존재하는가"를,
+# config_stage 가 "어느 모듈의 목표 설정까지 올리는가"를 결정한다.
+#   둘이 같으면 지금까지와 똑같다 (목표 구성).
+#   config_stage 를 한 단계 낮추면 **초기 구성**이 된다 — 장비는 다 있고
+#   그 모듈에서 배울 설정만 비어 있는 상태. 교육생이 그것을 직접 만든다.
 # 배선(VM/NIC)은 Terraform 이 항상 전체를 만들어 두고, 설정만 단계별로 올린다.
 # -> 실제 현장과 같다. 케이블은 꽂혀 있지만 설정이 없으면 통신은 안 된다.
 - name: "my-network-lab :: 설정 적용"

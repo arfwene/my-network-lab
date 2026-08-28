@@ -14,7 +14,7 @@
 # =============================================================================
 set -uo pipefail
 BR={{ bridge_name_local }}
-{% set si = stages.index(lab_stage) %}
+{% set si = stages.index(config_stage | default(lab_stage)) %}
 {% set vf = stage_override.switch_vlan_filtering | default(true) %}
 {% set ports = lab_interfaces | selectattr('active') | selectattr('bridge_id') | map(attribute='name') | list %}
 

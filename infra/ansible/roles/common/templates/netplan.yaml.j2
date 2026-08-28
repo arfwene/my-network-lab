@@ -5,7 +5,7 @@
 # 인터페이스 이름을 MAC 으로 매칭해 고정한다.
 # -> 부팅 순서나 PCI 순서가 바뀌어도 eth1 이 항상 같은 링크를 가리킨다.
 #    실장비에서 포트 번호가 물리적으로 고정된 것과 같은 효과.
-{% set si = stages.index(lab_stage) %}
+{% set si = stages.index(config_stage | default(lab_stage)) %}
 {% set v6 = si >= stages.index('m5') %}
 network:
   version: 2

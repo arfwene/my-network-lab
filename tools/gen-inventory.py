@@ -2,7 +2,10 @@
 """
 설계 -> Ansible 인벤토리 생성.
 
-usage:  python3 tools/gen-inventory.py --lab 1 [--stage m10]
+usage:  python3 tools/gen-inventory.py --lab 1 [--stage m10] [--config-stage m9]
+
+  --stage         어떤 장비·링크가 존재하는가
+  --config-stage  어느 모듈의 목표 설정까지 올릴 것인가 (없으면 --stage 와 같다)
 
 출력: infra/ansible/inventory/lab<N>/{hosts.yml, group_vars/all.yml, host_vars/<node>.yml}
 """
@@ -85,7 +88,7 @@ def _proxy_args():
             f"-o ProxyJump={user}@{host} -o StrictHostKeyChecking=accept-new"}
 
 
-def main(lab_id, stage):
+def main(lab_id, stage, config_stage=None):
     # 노드는 전부 포함한다 — 배선은 이미 끝나 있고, 관리망 접속은 단계와 무관하게 가능해야 한다.
     # 각 노드의 node_active 가 "이 단계에서 설정을 올리는가"를 결정한다.
     nodes = [L.node_config(lab_id, n, stage) for n in L.TOPO["nodes"]]
@@ -111,6 +114,11 @@ def main(lab_id, stage):
     common = {
         "lab_id": lab_id,
         "lab_stage": stage,
+        # 단계 하나가 두 가지를 결정하고 있었다 — **어떤 장비가 있는가**와
+        # **어디까지 설정하는가**. 교육생이 직접 만들게 하려면 그 둘을 갈라야 한다.
+        #   M4 의 초기 구성 = r3 는 있고(장비는 m4), OSPF 는 없다(설정은 m3).
+        # 안 주면 지금까지와 똑같이 동작한다.
+        "config_stage": config_stage or stage,
         "stages": L.STAGES,
         "ansible_user": "lab",
         "ansible_python_interpreter": "/usr/bin/python3",
@@ -146,10 +154,13 @@ def main(lab_id, stage):
             "# 자동 생성 (tools/gen-inventory.py). 직접 수정하지 말 것.\n"
             + yaml.safe_dump(c, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
-    print(f"generated {base}  (nodes={len(nodes)}, stage={stage})")
+    cs = config_stage or stage
+    print(f"generated {base}  (nodes={len(nodes)}, stage={stage}"
+          + (f", config={cs}" if cs != stage else "") + ")")
 
 
 if __name__ == "__main__":
     a = sys.argv
     main(int(a[a.index("--lab") + 1]) if "--lab" in a else 1,
-         a[a.index("--stage") + 1] if "--stage" in a else "m10")
+         a[a.index("--stage") + 1] if "--stage" in a else "m10",
+         a[a.index("--config-stage") + 1] if "--config-stage" in a else None)

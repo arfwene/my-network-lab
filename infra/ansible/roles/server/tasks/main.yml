@@ -1,7 +1,7 @@
 ---
 - name: 어떤 서비스를 올릴지 결정
   ansible.builtin.set_fact:
-    svc_active: "{{ stages.index(lab_stage) >= stages.index(stage) }}"
+    svc_active: "{{ stages.index(config_stage | default(lab_stage)) >= stages.index(stage) }}"
 
 - block:
     # ---------------- nginx (web, inet) ----------------
