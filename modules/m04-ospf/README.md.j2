@@ -271,7 +271,42 @@ r1 에서 Site-B 로 가는 두 길
 (방화벽 · NAT · 로드밸런서)가 있으면 한쪽 방향만 지나가 세션이 깨집니다.
 그래서 실무에서는 양쪽 cost 를 함께 조정합니다. 6.2 에서 일부러 한쪽만 바꿔 봅니다.
 
-### 2.6 passive — 광고는 하되 Hello 는 안 보낸다
+### 2.6 링크 종류 — 라우터 둘만 쓰는 선이라면
+
+OSPF 는 링크를 두 부류로 봅니다.
+
+| 종류 | 어떤 선인가 | 하는 일 |
+|---|---|---|
+| broadcast | 여럿이 붙을 수 있는 선 (이더넷의 기본값) | 대표(DR)와 부대표(BDR)를 뽑습니다 |
+| point-to-point | 둘만 쓰는 선 | 대표를 안 뽑습니다 |
+
+여럿이 붙은 선에서 라우터가 열 대면 인접을 45벌 맺어야 합니다.
+그래서 대표 하나를 뽑고 **모두 대표하고만** 이야기하게 합니다. 그것이 DR 입니다.
+
+**둘뿐인 선에서는 뽑을 이유가 없습니다.** 이 랩의 라우터 간 링크는 전부 `/30` 이라
+붙을 수 있는 것이 둘뿐입니다 (M3 2.2). 그런데 매체가 이더넷이라
+**OSPF 는 기본적으로 broadcast 로 봅니다.** 그래서 손으로 알려 줍니다.
+
+```
+r1(config-if)# ip ospf network point-to-point
+```
+
+안 알려 주면 어떻게 되는가 — 동작은 합니다. 다만 선마다 대표 선출이 한 번씩 돌고,
+인접 상태가 이렇게 보입니다.
+
+| | `show ip ospf neighbor` 의 State | `show ip ospf interface` 의 Network Type |
+|---|---|---|
+| 알려 줬을 때 | `Full/-` | `POINTOPOINT` |
+| 안 알려 줬을 때 | `Full/DR` · `Full/Backup` | `BROADCAST` |
+
+`show ip ospf neighbor` 의 State 칸에 `/` 뒤가 붙어 있으면 그 선을 broadcast 로 보고 있는 것입니다.
+`/-` 는 "대표를 안 뽑는 선" 이라는 뜻입니다.
+
+> 실무 — 라우터끼리 직접 잇는 구간은 거의 다 이렇게 잡아 둡니다. 선출이 한 단계 없어져
+> 인접이 빨리 서고, 장애 때 볼 것이 하나 줄어듭니다. 반대로 사용자망처럼 여럿이 붙는
+> 선에 이것을 잘못 걸면 인접이 아예 안 섭니다 — 양 끝의 종류가 다르면 안 맺어집니다.
+
+### 2.7 passive — 광고는 하되 Hello 는 안 보낸다
 
 Hello 는 이웃을 찾기 위한 것입니다. 라우터가 없는 곳으로 보내면 아무도 답하지 않습니다.
 사용자망과 서버망이 그런 곳입니다.
@@ -310,7 +345,7 @@ r1(config-if)# ip ospf passive
 Cisco IOS 는 아직 `router ospf` 절의 `passive-interface` 를 씁니다.
 **개념은 같고 적는 자리만 다릅니다** — 벤더를 옮길 때 늘 겪는 종류의 차이입니다.
 
-### 2.7 경로가 여럿일 때 무엇이 이기는가
+### 2.8 경로가 여럿일 때 무엇이 이기는가
 
 라우터가 같은 목적지에 대해 여러 정보를 갖고 있으면 아래 순서로 하나를 고릅니다.
 **순서를 헷갈리면 3.7 을 이해할 수 없습니다.**
@@ -331,7 +366,7 @@ OSPF 가 배우는 서버망은 `{{ cidr.vlan40 }}` 입니다. 목적지가 `{{ 
 
 > 실무 — 정적을 동적으로 바꾸는 작업에서는 "OSPF 를 켜는 것"과 "정적을 걷어내는 것"이 한 작업 단위입니다. 반만 하고 끝내면 몇 달 뒤 원인 모를 블랙홀이 됩니다.
 
-### 2.8 수렴 — 제어 평면과 데이터 평면
+### 2.9 수렴 — 제어 평면과 데이터 평면
 
 **수렴**은 토폴로지가 변한 뒤 모든 라우터가 같은 지도를 갖고 계산을 마친 상태입니다.
 
@@ -362,7 +397,7 @@ span: { from: 0, to: 4, text: 이 구간이 수렴 시간 = 통신이 끊기는 
 인접이 `Full` 이어도 그 경로로 안 보낼 수 있고, 인접이 끊어지는 중에도 통신은 될 수 있습니다.
 둘을 같은 것으로 여기면 6.3 의 관찰을 이해할 수 없습니다.
 
-### 2.9 사내망(IGP)과 인터넷(EGP)
+### 2.10 사내망(IGP)과 인터넷(EGP)
 
 OSPF 는 하나의 조직 안에서 쓰는 프로토콜입니다. 조직과 조직 사이는 다른 것을 씁니다.
 
@@ -493,7 +528,8 @@ C>* {{ p2p['r3-r4'].cidr }} is directly connected, eth2
 1. OSPF 프로세스를 켜고 router-id 를 `{{ loopback.r1 }}` 으로 못 박습니다
 2. `eth2` `eth3` `eth1.10` `eth1.20` `lo0` 을 area `{{ routing.ospf.area }}` 에 넣습니다
 3. `eth2` 는 cost `{{ p2p['r1-r2'].ospf_cost }}`, `eth3` 은 cost `{{ p2p['r1-r3'].ospf_cost }}`
-4. 사용자망(`eth1.10` `eth1.20`)과 `lo0` 은 passive 로 둡니다
+4. 라우터 간 링크 둘은 `point-to-point` 로 잡습니다 (2.6)
+5. 사용자망(`eth1.10` `eth1.20`)과 `lo0` 은 passive 로 둡니다
 
 FRR 은 "이 인터페이스는 area 0 이다" 를 인터페이스 쪽에 적는 방식과, `router ospf` 안에
 `network` 로 적는 방식을 다 지원합니다. 이 랩은 **인터페이스 쪽에 적는 방식**을 씁니다.
@@ -506,10 +542,12 @@ r1(config-router)# ospf router-id {{ loopback.r1 }}
 r1(config-router)# exit
 r1(config)# interface eth2
 r1(config-if)# ip ospf area {{ routing.ospf.area }}
+r1(config-if)# ip ospf network point-to-point
 r1(config-if)# ip ospf cost {{ p2p['r1-r2'].ospf_cost }}
 r1(config-if)# exit
 r1(config)# interface eth3
 r1(config-if)# ip ospf area {{ routing.ospf.area }}
+r1(config-if)# ip ospf network point-to-point
 r1(config-if)# ip ospf cost {{ p2p['r1-r3'].ospf_cost }}
 r1(config-if)# exit
 r1(config)# interface eth1.10
@@ -582,10 +620,12 @@ r2(config-router)# ospf router-id {{ loopback.r2 }}
 r2(config-router)# exit
 r2(config)# interface eth1
 r2(config-if)# ip ospf area {{ routing.ospf.area }}
+r2(config-if)# ip ospf network point-to-point
 r2(config-if)# ip ospf cost {{ p2p['r1-r2'].ospf_cost }}
 r2(config-if)# exit
 r2(config)# interface eth2
 r2(config-if)# ip ospf area {{ routing.ospf.area }}
+r2(config-if)# ip ospf network point-to-point
 r2(config-if)# ip ospf cost {{ p2p['r2-r4'].ospf_cost }}
 r2(config-if)# exit
 r2(config)# interface lo0
@@ -657,10 +697,12 @@ r3(config-router)# ospf router-id {{ loopback.r3 }}
 r3(config-router)# exit
 r3(config)# interface eth1
 r3(config-if)# ip ospf area {{ routing.ospf.area }}
+r3(config-if)# ip ospf network point-to-point
 r3(config-if)# ip ospf cost {{ p2p['r1-r3'].ospf_cost }}
 r3(config-if)# exit
 r3(config)# interface eth2
 r3(config-if)# ip ospf area {{ routing.ospf.area }}
+r3(config-if)# ip ospf network point-to-point
 r3(config-if)# ip ospf cost {{ p2p['r3-r4'].ospf_cost }}
 r3(config-if)# exit
 r3(config)# interface lo0
@@ -710,10 +752,12 @@ r4(config-router)# ospf router-id {{ loopback.r4 }}
 r4(config-router)# exit
 r4(config)# interface eth1
 r4(config-if)# ip ospf area {{ routing.ospf.area }}
+r4(config-if)# ip ospf network point-to-point
 r4(config-if)# ip ospf cost {{ p2p['r2-r4'].ospf_cost }}
 r4(config-if)# exit
 r4(config)# interface eth2
 r4(config-if)# ip ospf area {{ routing.ospf.area }}
+r4(config-if)# ip ospf network point-to-point
 r4(config-if)# ip ospf cost {{ p2p['r3-r4'].ospf_cost }}
 r4(config-if)# exit
 r4(config)# interface eth3
@@ -809,7 +853,7 @@ Routing entry for {{ cidr.vlan40 }}
 ```
 
 정적은 `{{ zone['site-b'] }}`, OSPF 는 `{{ cidr.vlan40 }}` 입니다. 목적지 `{{ ip.web }}` 에는
-둘 다 맞지만 **더 긴 쪽이 이깁니다.** AD 는 프리픽스가 같을 때에만 봅니다 (2.7).
+둘 다 맞지만 **더 긴 쪽이 이깁니다.** AD 는 프리픽스가 같을 때에만 봅니다 (2.8).
 정적을 남겨 두면 OSPF 가 안 쓰인다는 말은 이 랩에서는 맞지 않습니다.
 
 그러면 왜 걷어내는가. 이유는 셋입니다.

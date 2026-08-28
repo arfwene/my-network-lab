@@ -51,6 +51,10 @@ interface {{ i.name }}
 {% if i.desc %} description {{ i.desc }}
 {% endif %}
  ip ospf area {{ routing.ospf.area }}
+{% if i.role | default('') == 'p2p' %}
+! 라우터 둘만 쓰는 링크다. DR/BDR 을 뽑을 이유가 없다 (M4 2.5)
+ ip ospf network point-to-point
+{% endif %}
 {% if i.name in ospf_passive or i.role | default('') == 'loopback' %}
 ! 사용자·서버망·루프백 — Hello 를 보낼 이유가 없다
  ip ospf passive
@@ -61,6 +65,9 @@ interface {{ i.name }}
 {% endif %}
 {% if v6 and i.ipv6 is defined %}
  ipv6 ospf6 area {{ routing.ospf6.area }}
+{% if i.role | default('') == 'p2p' %}
+ ipv6 ospf6 network point-to-point
+{% endif %}
 {% if i.role in ['gateway', 'loopback'] or i.name in ospf_passive %}
  ipv6 ospf6 passive
 {% endif %}
