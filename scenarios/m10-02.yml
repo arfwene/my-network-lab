@@ -1,0 +1,33 @@
+---
+# M10-02 : web 의 DNAT 규칙만 제거
+#   증상  : 외부에서 web 공개 IP 만 안 된다. ftp 공개 IP 는 정상.
+#   한줄  : web 공개 IP 만 안 됨
+#   목표  : 외부에서 web 의 공개 IP 로 접속된다
+#   정답  : prerouting 체인에서 web 용 dnat 규칙이 빠졌다.
+#           두 서비스를 비교하면 차이가 바로 보인다.
+#   노림수: "되는 것" 이 있는 장애에서는 **되는 쪽과의 차이**가 가장 빠른 단서다. (G1)
+- name: "scenario m10-02 :: 공개 서비스 하나만 안 된다"
+  hosts: edge
+  become: true
+  gather_facts: false
+  vars:
+    pub: "{{ (public.ipv4.nat_pool.dnat | selectattr('node','equalto','web') | first).public }}"
+  tasks:
+    - name: web 용 DNAT 규칙 삭제 (handle 로 지정)
+      ansible.builtin.shell: |
+        h=$(nft -a list chain ip nat prerouting | awk '/{{ pub }}/ {print $NF}' | head -1)
+        [ -n "$h" ] && nft delete rule ip nat prerouting handle "$h"
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: 설정 파일 기준으로 복구
+      ansible.builtin.command: "nft -f /etc/nftables.conf"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'edge 에서 ' ~ pub ~ ' 의 DNAT 을 지웠다. ftp 공개 IP 는 정상이라는 점을 알려 줄 것.'
+             if scenario_action | default('break') == 'break'
+             else 'edge 규칙 복구 완료.' }}

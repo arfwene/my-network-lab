@@ -1,0 +1,25 @@
+---
+# M7-03 : nginx 프로세스를 죽이지 않고 **멈춘다** (SIGSTOP)
+#   증상  : 연결은 되는데 응답이 오지 않는다. systemctl status 는 active 로 보인다.
+#   한줄  : 연결은 되는데 응답이 없음
+#   목표  : pc1 에서 web 의 HTTP 가 응답한다
+#   정답  : 감별표 ④ — 서비스 행. 3-way handshake 는 커널이 처리하므로 연결은 된다.
+#           캡처에 SYN -> SYN-ACK -> ACK 까지 정상이고 그 뒤가 침묵이다.
+#   노림수: **프로세스가 살아 있다 != 서비스가 동작한다.** 이 모듈에서 가장 어려운 시나리오. (E3)
+- name: "scenario m07-03 :: 연결은 되는데 응답이 없다"
+  hosts: web
+  become: true
+  gather_facts: false
+  tasks:
+    - name: nginx 프로세스 정지 / 재개
+      ansible.builtin.command: >-
+        pkill -{{ 'STOP' if scenario_action | default('break') == 'break' else 'CONT' }} -x nginx
+      changed_when: true
+      failed_when: false
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'web 의 nginx 를 SIGSTOP 으로 멈췄다. systemctl status 는 active 로 보인다 — 캡처 없이는 못 찾는다.'
+             if scenario_action | default('break') == 'break'
+             else 'web nginx 재개 완료 (ps -o stat= -C nginx 에 T 가 없어야 한다).' }}

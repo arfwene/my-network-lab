@@ -7,7 +7,7 @@
   tools/render-drawio.py     draw.io 에서 손볼 수 있는 .drawio
 
 ▸ 왜 구역을 먼저 놓는가
-  예전 배치는 구역을 무시하고 홉 수(BFS)로만 열을 잡았다. 그 결과 M9 부터
+  예전 배치는 구역을 무시하고 홉 수(BFS)로만 열을 잡았다. 그 결과 M10 부터
   edge 구역 상자(x 796~1078)가 site-b 상자(646~1078) 안에 통째로 들어가
   라벨이 겹쳐 찍혔고, sw2 는 남의 구역 안에, inet 은 서버들 사이에 놓였다.
   구역을 먼저 배치하고 그 안에서만 열을 잡으면 겹침이 구조적으로 불가능해진다.
@@ -239,7 +239,7 @@ def _anchor(n, side, i, total):
     return x0 + (x1 - x0) * f, y1
 
 
-def layout(stage="m10"):
+def layout(stage="m11"):
     """단계 -> 그림 한 장의 기하 정보. 그리는 쪽은 이 값만 보면 된다."""
     nodes = [n for n in L.TOPO["nodes"] if L.stage_le(n["stage"], stage)]
     links = L.links_at(1, stage)
@@ -482,5 +482,5 @@ def layout(stage="m10"):
 
 if __name__ == "__main__":
     import json
-    print(json.dumps(layout(sys.argv[1] if len(sys.argv) > 1 else "m10"),
+    print(json.dumps(layout(sys.argv[1] if len(sys.argv) > 1 else "m11"),
                      ensure_ascii=False, indent=1))

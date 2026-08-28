@@ -1,35 +1,23 @@
 ---
-# M7-02 : r4 에서 특정 출발지의 HTTP 만 버린다
-#   증상  : **pc1 에서만** web 의 HTTP 가 안 된다. ping 은 정상이고 pc2 는 멀쩡하다.
-#   한줄  : pc1 에서만 HTTP 안 됨
+# M7-02 : nginx 중지
+#   증상  : HTTP 접속이 **즉시** Connection refused.
+#   한줄  : HTTP 가 즉시 refused
 #   목표  : pc1 에서 web 의 HTTP 가 응답한다
-#   정답  : r4 의 forward 체인에서 pc1 출발 tcp/80 이 DROP 된다.
-#           r4 의 **들어오는 인터페이스에는 보이는데 나가는 인터페이스에는 안 보인다**.
-#   노림수: 다중 지점 캡처 + 이등분. 한 장비에서도 양쪽을 봐야 한다는 것. (H1, H3) ★
-- name: "scenario m07-02 :: 어느 구간에서 사라진다"
-  hosts: r4
+#   정답  : 감별표 ③ — 포트를 듣는 서비스가 없다. 캡처에 SYN -> RST.
+#   노림수: "즉시 거부" 가 **네트워크는 완벽하다**는 증거임을 말할 수 있는가. (E3)
+- name: "scenario m07-02 :: 서비스가 안 떠 있다"
+  hosts: web
   become: true
   gather_facts: false
-  vars:
-    src: "{{ ipv4.segments.vlan10.hosts.pc1 }}"
   tasks:
-    - name: forward 체인에 DROP 규칙 추가
-      ansible.builtin.shell: |
-        nft add table inet labbreak
-        nft add chain inet labbreak forward '{ type filter hook forward priority 0; }'
-        nft add rule inet labbreak forward ip saddr {{ src }} tcp dport 80 drop
-      changed_when: true
-      when: scenario_action | default('break') == 'break'
-
-    - name: 규칙 제거
-      ansible.builtin.command: "nft delete table inet labbreak"
-      changed_when: true
-      failed_when: false
-      when: scenario_action | default('break') != 'break'
+    - name: nginx 중지
+      ansible.builtin.systemd:
+        name: nginx
+        state: "{{ 'stopped' if scenario_action | default('break') == 'break' else 'started' }}"
 
     - name: 안내
       ansible.builtin.debug:
         msg: >-
-          {{ 'r4 에서 ' ~ src ~ ' 출발 HTTP 만 버리게 했다. ping 과 pc2 는 정상이다. show 명령 금지 규칙을 반드시 붙일 것.'
+          {{ 'web 의 nginx 를 내렸다. 교육생이 "즉시 거부 = 네트워크는 정상" 까지 말하는지 볼 것.'
              if scenario_action | default('break') == 'break'
-             else 'r4 방화벽 규칙 제거 완료 (nft list ruleset 으로 확인).' }}
+             else 'web nginx 복구 완료.' }}

@@ -10,7 +10,7 @@
   화면용 글리프(42x42 등)보다 커서, 같은 좌표에 놓으면 서로 겹친다. 배치를
   그대로 두고 좌표만 2.2배로 늘리면 통로가 함께 넓어져 기호가 편히 들어간다.
 
-usage:  python3 tools/topodrawio.py m10 > topology-m10.drawio
+usage:  python3 tools/topodrawio.py m11 > topology-m10.drawio
 """
 import sys
 from pathlib import Path
@@ -49,7 +49,7 @@ def _side(pt, n):
     return f, (0.0 if abs(y - gy) < 1.5 else 1.0)
 
 
-def drawio(stage="m10"):
+def drawio(stage="m11"):
     d = T.layout(stage)
     by_name = {n["name"]: n for n in d["nodes"]}
     cells, nid = [], [2]
@@ -118,4 +118,4 @@ def drawio(stage="m10"):
 
 
 if __name__ == "__main__":
-    sys.stdout.write(drawio(sys.argv[1] if len(sys.argv) > 1 else "m10"))
+    sys.stdout.write(drawio(sys.argv[1] if len(sys.argv) > 1 else "m11"))

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-구성도가 겹치지 않는지 검사한다. 단계 m1~m10 을 전부 본다.
+구성도가 겹치지 않는지 검사한다. 단계 m1~m11 을 전부 본다.
 
 ▸ 왜 필요한가
   구성도는 design/topology.yml 에서 자동으로 그려진다. 노드를 하나 더하거나
   이름을 길게 바꾸면 라벨이 장비를 덮거나 선이 장비를 통과할 수 있는데,
   그림은 그래도 그려지므로 아무도 모른 채 배포된다. 실제로 예전 배치는
-  M9 부터 구역 상자가 겹친 채로 오래 나갔다.
+  M10 부터 구역 상자가 겹친 채로 오래 나갔다.
 
 ▸ 글자 폭은 추정한다
   정확히 재려면 폰트를 열어야 하고, 그러면 이 검사가 폰트에 묶인다.
@@ -164,7 +164,7 @@ def main():
         for f in found:
             print("  " + f)
         return 1
-    sizes = ", ".join(f"{s} {T.layout(s)['w']}x{T.layout(s)['h']}" for s in ("m1", "m10"))
+    sizes = ", ".join(f"{s} {T.layout(s)['w']}x{T.layout(s)['h']}" for s in ("m1", "m11"))
     print(f"토폴로지 {len(L.STAGES)}단계 겹침 없음 ({sizes}) · 교재 구성도 {n}개 겹침 없음")
     return 0
 

@@ -67,11 +67,11 @@ bridges:
 
   - {id: "301", alias: r4-sw2,    zone: site-b, stage: m3, desc: "r4 ↔ sw2   (access VLAN40)"}
   - {id: "302", alias: sw2-web,   zone: site-b, stage: m3, desc: "sw2 ↔ web"}
-  - {id: "303", alias: sw2-ftp,   zone: site-b, stage: m8, desc: "sw2 ↔ ftp"}
-  - {id: "304", alias: sw2-dns,   zone: site-b, stage: m8, desc: "sw2 ↔ dns"}
+  - {id: "303", alias: sw2-ftp,   zone: site-b, stage: m9, desc: "sw2 ↔ ftp"}
+  - {id: "304", alias: sw2-dns,   zone: site-b, stage: m9, desc: "sw2 ↔ dns"}
 
-  - {id: "401", alias: r4-edge,   zone: edge,   stage: m9, desc: "r4 ↔ edge  (내부 ↔ 경계)"}
-  - {id: "402", alias: edge-inet, zone: edge,   stage: m9, desc: "edge ↔ inet (공인 구간)"}
+  - {id: "401", alias: r4-edge,   zone: edge,   stage: m10, desc: "r4 ↔ edge  (내부 ↔ 경계)"}
+  - {id: "402", alias: edge-inet, zone: edge,   stage: m10, desc: "edge ↔ inet (공인 구간)"}
 
 # -----------------------------------------------------------------------------
 # VLAN
@@ -173,7 +173,7 @@ nodes:
       - {name: eth1, bridge: "203", peer: r2,   mac: "52:54:00:34:00:01"}
       - {name: eth2, bridge: "204", peer: r3,   mac: "52:54:00:34:00:02", stage: m4}
       - {name: eth3, bridge: "301", peer: sw2,  mac: "52:54:00:34:00:03", vlan: 40, mode: access, desc: "서버망 게이트웨이"}
-      - {name: eth4, bridge: "401", peer: edge, mac: "52:54:00:34:00:04", stage: m9, desc: "인터넷 경계"}
+      - {name: eth4, bridge: "401", peer: edge, mac: "52:54:00:34:00:04", stage: m10, desc: "인터넷 경계"}
       - {name: lo0,  type: loopback}
 
   - name: sw2
@@ -186,8 +186,8 @@ nodes:
     interfaces:
       - {name: eth1, bridge: "301", peer: r4,  mac: "52:54:00:22:00:01", vlan: 40, mode: access}
       - {name: eth2, bridge: "302", peer: web, mac: "52:54:00:22:00:02", vlan: 40, mode: access}
-      - {name: eth3, bridge: "303", peer: ftp, mac: "52:54:00:22:00:03", vlan: 40, mode: access, stage: m8}
-      - {name: eth4, bridge: "304", peer: dns, mac: "52:54:00:22:00:04", vlan: 40, mode: access, stage: m8}
+      - {name: eth3, bridge: "303", peer: ftp, mac: "52:54:00:22:00:03", vlan: 40, mode: access, stage: m9}
+      - {name: eth4, bridge: "304", peer: dns, mac: "52:54:00:22:00:04", vlan: 40, mode: access, stage: m9}
 
   - name: web
     id: 0x41
@@ -204,10 +204,10 @@ nodes:
     id: 0x42
     role: server
     zone: site-b
-    stage: m8
+    stage: m9
     memory: 768
     services: [vsftpd]
-    desc: "FTP 서버 (21 + passive 데이터 포트) — M8/M9 Active vs Passive 실습"
+    desc: "FTP 서버 (21 + passive 데이터 포트) — M9/M10 Active vs Passive 실습"
     interfaces:
       - {name: eth1, bridge: "303", peer: sw2, mac: "52:54:00:42:00:01", vlan: 40, mode: access}
 
@@ -215,19 +215,19 @@ nodes:
     id: 0x43
     role: server
     zone: site-b
-    stage: m8
+    stage: m9
     memory: 768
     services: [bind9]
     desc: "DNS 서버 (lab.local 권한 서버)"
     interfaces:
       - {name: eth1, bridge: "304", peer: sw2, mac: "52:54:00:43:00:01", vlan: 40, mode: access}
 
-  # ---------------- Edge : 인터넷 경계 (M9) ----------------
+  # ---------------- Edge : 인터넷 경계 (M10) ----------------
   - name: edge
     id: 0x35
     role: edge
     zone: edge
-    stage: m9
+    stage: m10
     memory: 768
     desc: "NAT / 방화벽 경계 장비. 사설 ↔ 공인 경계선."
     interfaces:
@@ -239,7 +239,7 @@ nodes:
     id: 0x51
     role: host
     zone: edge
-    stage: m9
+    stage: m10
     memory: 768
     services: [nginx]
     desc: "외부 인터넷 흉내. 공인 IP 만 보유 — 사설 IP 는 여기까지 오지 못합니다."
@@ -256,9 +256,10 @@ stages:
   m2: {nodes: [r1],             desc: "VLAN 분리 + L3 게이트웨이 등장"}
   m3: {nodes: [r2, r4, sw2, web], desc: "정적 라우팅으로 사이트 간 연결"}
   m4: {nodes: [r3],             desc: "이중 경로 + OSPF"}
-  m5: {nodes: [],               desc: "전 구간 IPv6 dual-stack (노드 추가 없음)"}
-  m6: {nodes: [],               desc: "TCP/포트/세션 (기존 노드 활용)"}
-  m7: {nodes: [],               desc: "tcpdump 심화 (기존 노드 활용)"}
-  m8: {nodes: [ftp, dns],       desc: "DNS / HTTP / FTP"}
-  m9: {nodes: [edge, inet],     desc: "NAT · 방화벽 · 사설↔공인 경계"}
-  m10: {nodes: [],              desc: "장애 주입 캡스톤 (전체 토폴로지)"}
+  m5: {nodes: [],               desc: "게이트웨이 이중화 (VRRP) — r3 가 sw1 에도 붙는다"}
+  m6: {nodes: [],               desc: "전 구간 IPv6 dual-stack (노드 추가 없음)"}
+  m7: {nodes: [],               desc: "TCP/포트/세션 (기존 노드 활용)"}
+  m8: {nodes: [],               desc: "tcpdump 심화 (기존 노드 활용)"}
+  m9: {nodes: [ftp, dns],       desc: "DNS / HTTP / FTP"}
+  m10: {nodes: [edge, inet],     desc: "NAT · 방화벽 · 사설↔공인 경계"}
+  m11: {nodes: [],              desc: "장애 주입 캡스톤 (전체 토폴로지)"}

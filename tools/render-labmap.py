@@ -115,7 +115,7 @@ def node_rows(stage, lab_id=None):
     return rows
 
 
-def render(stage="m10", lab_id=None):
+def render(stage="m11", lab_id=None):
     """랩 지도 마크다운. lab_id 를 주면 그 랩 기준으로 주소를 채운다.
 
     전역 LAB_ID 를 쓰지 않는 이유: 웹 콘솔은 여러 랩의 지도를 동시에 렌더한다.
@@ -271,12 +271,12 @@ def render(stage="m10", lab_id=None):
 
 
 if __name__ == "__main__":
-    stage = "m10"
+    stage = "m11"
     if "--stage" in sys.argv:
         stage = sys.argv[sys.argv.index("--stage") + 1]
     if "--lab" in sys.argv:
         globals()["LAB_ID"] = int(sys.argv[sys.argv.index("--lab") + 1])
-    default = stage == "m10" and LAB_ID == 1
+    default = stage == "m11" and LAB_ID == 1
     (ROOT / "dist").mkdir(exist_ok=True)
     out = ROOT / ("dist/lab-map.md" if default else f"dist/lab-map-lab{LAB_ID}-{stage}.md")
     out.write_text(render(stage), encoding="utf-8")

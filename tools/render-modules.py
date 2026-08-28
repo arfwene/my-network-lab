@@ -70,7 +70,7 @@ def render(lab_id=1, only=None):
         if only and meta["id"] != only:
             continue
         ctx = {**L.doc_context(lab_id, meta["stage"]), "meta": meta}
-        ctx["topology_full"] = L.mermaid(lab_id, "m10")
+        ctx["topology_full"] = L.mermaid(lab_id, "m11")
         env = Environment(loader=FileSystemLoader(d), undefined=StrictUndefined,
                           keep_trailing_newline=True)
         dst = OUT / d.name

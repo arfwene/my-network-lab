@@ -27,7 +27,7 @@ FILL = devices.FILL
 GLYPH_FN = devices.GLYPH_FN
 
 
-def render(stage="m10", highlight=None, show_labels=True, standalone=False):
+def render(stage="m11", highlight=None, show_labels=True, standalone=False):
     d = T.layout(stage)
     hl = set(highlight or ())
     # 원본 크기를 그대로 들고 나간다. 칸이 좁다고 줄이면 글자가 못 읽는 크기가
@@ -85,4 +85,4 @@ def render(stage="m10", highlight=None, show_labels=True, standalone=False):
 
 
 if __name__ == "__main__":
-    print(render(sys.argv[1] if len(sys.argv) > 1 else "m10"))
+    print(render(sys.argv[1] if len(sys.argv) > 1 else "m11"))

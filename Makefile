@@ -1,5 +1,5 @@
 LAB ?= 1
-STAGE ?= m10
+STAGE ?= m11
 LABS ?= 9          # 관리망 VLAN 을 몇 개 랩만큼 준비할 것인가 (최대 9. 브리지는 늘 1개)
 VMID ?=            # 운영 서버 VM 의 VMID (dist/ops-server.md 의 qm 명령에 박힌다)
 OPSNET ?= 1        # 운영 서버의 관리망 트렁크 NIC 번호 (netN). 랩 수와 무관하게 1개다

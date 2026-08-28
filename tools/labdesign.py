@@ -16,7 +16,7 @@ import yaml
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-STAGES = [f"m{i}" for i in range(1, 11)]
+STAGES = [f"m{i}" for i in range(1, 12)]
 
 
 # ----------------------------------------------------------------- 설정 로딩
@@ -332,7 +332,7 @@ def resolve_interface(node, itf):
                 out["extra_ipv4"] = [f'{d["public"]}/32'
                                      for d in IPAM["public"]["ipv4"]["nat_pool"]["dnat"]]
                 out["extra_ipv6"] = [f'{IPAM["ipv6"]["public"]["web_public"]}/128']
-                out["extra_stage"] = "m9"
+                out["extra_stage"] = "m10"
         elif name == "inet":
             out["ipv4"] = f'{IPAM["public"]["ipv4"]["external_site"]["inet_loopback"]}/32'
             out["ipv6"] = f'{IPAM["ipv6"]["public"]["external_site"]}/128'
@@ -408,7 +408,7 @@ def _apply_stage_override(node_name, r, stage):
     return r
 
 
-def node_config(lab_id, node, stage="m10", config_stage=None):
+def node_config(lab_id, node, stage="m11", config_stage=None):
     """노드 하나의 완성된 설정 (Ansible host_vars 로 그대로 사용).
 
     stage 는 **무엇이 존재하는가**(배선 · 포트), config_stage 는 **어디까지 설정돼
@@ -451,7 +451,7 @@ def node_config(lab_id, node, stage="m10", config_stage=None):
                 net = i.get("ipv4_network")
                 if net and ipaddress.ip_address(via) in ipaddress.ip_network(net):
                     i.setdefault("routes", []).append(
-                        {"to": rt["prefix"], "via": via, "stage": "m9", "desc": rt.get("desc")})
+                        {"to": rt["prefix"], "via": via, "stage": "m10", "desc": rt.get("desc")})
 
     return {
         "node": node["name"], "lab_id": lab_id,
@@ -476,7 +476,7 @@ def node_config(lab_id, node, stage="m10", config_stage=None):
     }
 
 
-def all_nodes(lab_id, stage="m10"):
+def all_nodes(lab_id, stage="m11"):
     return [node_config(lab_id, n, stage) for n in TOPO["nodes"] if stage_le(n["stage"], stage)]
 
 
@@ -510,7 +510,7 @@ def mgmt_iface(lab_id):
     return f"mgmt{lab_id}"
 
 
-def all_bridges(lab_id, stage="m10"):
+def all_bridges(lab_id, stage="m11"):
     """이 랩이 만드는 브리지 = 랩 링크뿐. 관리망은 여기 없다."""
     return [{"id": b["id"], "name": bridge_name(lab_id, b["id"]), "alias": b["alias"],
              "zone": b["zone"], "stage": b["stage"], "desc": b["desc"]}
@@ -600,7 +600,7 @@ def links_at(lab_id, stage):
     return out
 
 
-def mermaid(lab_id=1, stage="m10", show_bridge=True):
+def mermaid(lab_id=1, stage="m11", show_bridge=True):
     ns = [n for n in TOPO["nodes"] if stage_le(n["stage"], stage)]
     by_zone = {}
     for n in ns:
@@ -644,7 +644,7 @@ def _eui64_id(mac):
     """MAC -> EUI-64 인터페이스 ID (64비트 정수).
 
     가운데에 ff:fe 를 끼우고 첫 바이트의 U/L 비트를 뒤집는다.
-    M5 교재가 이 값을 손으로 적지 않게 하려고 여기서 계산한다.
+    M6 교재가 이 값을 손으로 적지 않게 하려고 여기서 계산한다.
     """
     b = [int(x, 16) for x in mac.split(":")]
     b[0] ^= 0x02
@@ -661,7 +661,7 @@ def _addr6(prefix, iid):
 
 
 # --------------------------------------------------------------- 교재용 컨텍스트
-def doc_context(lab_id=1, stage="m10"):
+def doc_context(lab_id=1, stage="m11"):
     """모듈 교재 템플릿에 넘길 값. 주소를 교재에 하드코딩하지 않기 위한 것."""
     nodes = {c["node"]: c for c in all_nodes(lab_id, stage)}
     ip, ipc, mac, ifs = {}, {}, {}, {}
@@ -670,7 +670,7 @@ def doc_context(lab_id=1, stage="m10"):
         for i in c["lab_interfaces"]:
             if i.get("active") and i.get("ipv4") and i.get("role") in ("access", "public", "external-site"):
                 ip[name], ipc[name] = i["ipv4"].split("/")[0], i["ipv4"]
-                # dual-stack 교재(M5)가 주소를 지어내지 않도록 IPv6 도 같은 규칙으로 뽑는다
+                # dual-stack 교재(M6)가 주소를 지어내지 않도록 IPv6 도 같은 규칙으로 뽑는다
                 if i.get("ipv6"):
                     ip6[name], ip6c[name] = i["ipv6"].split("/")[0], i["ipv6"]
                 break
@@ -718,7 +718,7 @@ def doc_context(lab_id=1, stage="m10"):
 
     segs = IPAM["ipv4"]["segments"]
 
-    # MAC 에서 파생되는 IPv6 값들 (M5 의 EUI-64 / SLAAC 설명용)
+    # MAC 에서 파생되는 IPv6 값들 (M6 의 EUI-64 / SLAAC 설명용)
     eui64, lladdr6, slaac6 = {}, {}, {}
     for name, m in mac.items():
         iid = _eui64_id(m)
@@ -749,7 +749,7 @@ def doc_context(lab_id=1, stage="m10"):
         # 라우팅 정책(area · 타이머 · passive 목록)도 교재가 지어내지 않게 여기서 넘긴다
         "routing": ROUTING,
         "public": IPAM["public"]["ipv4"], "dns": IPAM["dns"],
-        # 서비스 포트(FTP passive 대역 등)도 교재가 지어내지 않게 넘긴다 — M7 · M8 · M9
+        # 서비스 포트(FTP passive 대역 등)도 교재가 지어내지 않게 넘긴다 — M8 · M9 · M10
         "services": IPAM["services"],
         "mgmt": {n: mgmt_ip(lab_id, n) for n in IPAM["management"]["hosts"]},
         "mgmt_cidr": mgmt_cidr(lab_id), "mgmt_if": IPAM["management"]["interface"],
@@ -765,7 +765,7 @@ def doc_context(lab_id=1, stage="m10"):
         "bcast": {k: str(ipaddress.ip_network(v["cidr"]).broadcast_address)
                   for k, v in segs.items()},
         "fake_mac": "52:54:00:de:ad:01",
-        # 중간 점검이 놓인 단계. 교재가 "M3 · M6" 을 손으로 적지 않게 한다 —
+        # 중간 점검이 놓인 단계. 교재가 "M3 · M7" 을 손으로 적지 않게 한다 —
         # config/site.yml 에서 지점을 옮기면 교재도 따라 바뀌어야 하기 때문.
         "checkpoints": [c["stage"].upper()
                         for c in SITE.get("console", {}).get("drill", {})

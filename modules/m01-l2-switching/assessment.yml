@@ -154,7 +154,7 @@ quiz:
       answer: ["-D", "D", "-d"]
       explain: |
         `-D` 는 Duplicate Address Detection 입니다. 쓰는 사람이 있으면 **종료 코드 1** 과 함께
-        그 장비의 MAC 을 알려 줍니다. IPv6 가 표준으로 하는 DAD(M5)를 IPv4 에서 손으로 하는 셈입니다.
+        그 장비의 MAC 을 알려 줍니다. IPv6 가 표준으로 하는 DAD(M6)를 IPv4 에서 손으로 하는 셈입니다.
         한 줄이면 끝나고, 안 치면 며칠을 잡아먹습니다.
 
 

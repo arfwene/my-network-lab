@@ -1,0 +1,280 @@
+# M8 평가 — 퀴즈(필터·지점 선정) + 검사(**교육생이 만든 pcap 을 실제로 열어 본다**) + 서술
+#   이 모듈의 검사는 특이하다. 랩 상태가 아니라 **산출물**을 검증한다.
+#   tcpdump -r 로 파일을 열어 "조건에 맞는 패킷이 들어 있는가" 와
+#   "들어가면 안 되는 것이 안 들어갔는가" 를 함께 본다.
+quiz:
+  pass_score: 100
+  questions:
+    - id: q1
+      type: single
+      text: |
+        "pc1 에서 web 으로 HTTP 가 안 됩니다" 라는 신고를 받았습니다.
+        **가장 먼저 캡처를 떠야 할 곳**은?
+      choices:
+        - "web (목적지) — 서버가 요청을 받았는지부터 봐야 범위가 갈리기 때문"
+        - "pc1 (출발지) — 패킷이 나가기는 하는지부터 확인합니다"
+        - "r1 (첫 홉) — 랩 밖으로 나가는 관문부터 확인합니다"
+        - "sw1 (첫 스위치) — 프레임이 스위치까지는 오는지 봅니다"
+      answer: [1]
+      explain: |
+        **출발지부터 봅니다.** 패킷이 나가지도 않았다면(경로 없음 · 소켓 문제) 다른 곳을 아무리 봐도 없습니다.
+        나간 것을 확인한 뒤에 "어디까지 가는가" 로 넘어갑니다.
+        → 순서는 언제나 **출발지 → 목적지 → 그 사이를 이등분**입니다.
+
+    - id: q2
+      type: single
+      text: |
+        pc1 에서는 SYN 이 나가고 web 에서는 아무것도 안 보입니다. 홉이 3개입니다.
+        다음에 어디를 떠야 **가장 빨리** 범위를 좁힐 수 있는가?
+      choices:
+        - "r1 (첫 번째 홉) — 출발지에서 가까운 쪽부터 순서대로 봅니다"
+        - "r2 (가운데 홉) — 한 번에 후보를 절반으로 줄입니다"
+        - "r4 (마지막 홉) — 목적지에 가장 가까운 곳부터 거슬러 올라갑니다"
+        - "세 곳을 순서대로 — 빠뜨리지 않는 것이 가장 확실합니다"
+      answer: [1]
+      explain: |
+        **이등분법(Divide and Conquer)** 입니다. 가운데에서 보이면 문제는 뒤쪽 절반, 안 보이면 앞쪽 절반.
+        홉이 8개라면 순서대로 뜰 때 최대 8번, 이등분하면 3번이면 끝납니다.
+        M11 의 트러블슈팅 방법론이 여기서 미리 나옵니다.
+
+    - id: q3
+      type: single
+      text: |
+        SSH 로 접속한 노드에서 `tcpdump -i eth1` 을 그냥 실행했습니다. 화면이 폭포처럼 흐릅니다.
+        **가장 먼저 넣어야 할 필터**는?
+      choices:
+        - "`-c 100` — 100개만 잡고 멈춥니다"
+        - "`-n` — 이름 해석을 끕니다"
+        - "`-s 0` — 패킷 전체를 저장합니다"
+        - "`not port 22` — SSH 트래픽을 걸러 냅니다"
+      answer: [3]
+      explain: |
+        내가 보는 tcpdump 출력이 SSH 로 다시 나가면서 **또 캡처됩니다.** 되먹임이 걸립니다.
+        `not port 22` 하나로 사라집니다.
+        (관리망 인터페이스에서 뜨는 것이 아니라면 덜 심하지만, **습관으로 붙이는 편이 안전하다**)
+
+    - id: q4
+      type: multi
+      text: "`tcpdump` 옵션의 뜻으로 **옳은 것**을 모두 고르시오."
+      choices:
+        - "`-nn` — 이름과 포트를 해석하지 않습니다"
+        - "`-r file` — 저장한 파일을 다시 읽습니다"
+        - "`-w file` — 화면 대신 파일로 저장합니다 (분석은 나중에)"
+        - "`-v` — 패킷을 더 빨리 잡습니다"
+        - "`-e` — 이더넷(링크 계층) 헤더까지 보여 줍니다"
+      answer: [0, 1, 2, 4]
+      explain: |
+        `-n` 을 안 붙이면 **tcpdump 가 DNS 조회를 합니다.** 그 조회 트래픽이 다시 캡처되고,
+        DNS 가 느리면 출력까지 느려집니다. **진단 중에는 항상 `-nn`.**
+        `-v` 는 상세도(verbosity)이지 성능과 무관합니다.
+
+    - id: q5
+      type: single
+      text: |
+        r1 의 `eth1`(sw1 과 연결된 **트렁크**)에서 `tcpdump -i eth1 icmp` 를 걸었는데
+        **한 줄도 안 잡힙니다.** 통신은 정상입니다. 왜인가?
+      choices:
+        - "라우터에서는 커널이 패킷을 가로채므로 tcpdump 가 볼 수 없습니다"
+        - "ICMP 는 커널이 직접 처리해 캡처 대상이 되지 않습니다"
+        - "인터페이스를 promiscuous 모드로 바꾸지 않아 자기 앞으로 온 프레임만 보고 있기 때문"
+        - "802.1Q 태그가 붙어 헤더 위치가 밀리는 바람에 필터가 못 찾습니다"
+      answer: [3]
+      explain: |
+        태그 4바이트가 끼어들면 그 뒤 모든 오프셋이 밀립니다. BPF 는 오프셋으로 판단하므로 못 찾습니다.
+        `vlan` 키워드가 "여기서부터 태그가 있다" 고 알려 줘 기준점을 옮겨 줍니다.
+        → **"트래픽이 없다" 와 "필터가 못 찾는다" 는 완전히 다릅니다.** M2 에서 한 번 겪은 함정입니다.
+
+    - id: q6
+      type: single
+      text: |
+        **SYN 패킷만** (SYN-ACK 은 제외) 잡으려면?
+      choices:
+        - "`tcp[tcpflags] & tcp-syn == tcp-syn` — SYN 비트를 검사합니다"
+        - "`tcp and syn` — 플래그 이름을 그대로 써서 고릅니다"
+        - "`port 80 and syn` — 포트 조건을 함께 써서 고릅니다"
+        - "`tcp[tcpflags] & (tcp-syn|tcp-ack) == tcp-syn` — 두 비트의 조합을 검사합니다"
+      answer: [3]
+      explain: |
+        첫 번째는 **SYN 과 SYN-ACK 을 모두** 잡습니다 (둘 다 SYN 비트가 켜져 있습니다).
+        "SYN 은 켜져 있고 ACK 은 꺼져 있다" 를 표현해야 **연결 시도만** 남습니다.
+        → "누가 연결을 시도했는가" 를 보는 데 자주 씁니다 (스캔 탐지 · 세션 수 집계).
+
+    - id: q7
+      type: single
+      text: |
+        "가끔 느립니다" 라는 신고를 받았습니다. 통신은 됩니다. 캡처에서 **무엇을 찾아야** 하는가?
+      choices:
+        - "SYN 패킷의 개수 — 연결이 몇 번 시도되고 몇 번 성공했는지 세어 봅니다"
+        - "재전송 · 중복 ACK · 창 크기 변화 — 느림의 흔적이 여기 남습니다"
+        - "MAC 주소 — 경로가 바뀌었는지 확인합니다"
+        - "DNS 질의 — 이름 해석에 시간이 걸리는지 봅니다"
+      answer: [1]
+      explain: |
+        "안 된다" 가 아니라 "느리다" 는 **손실과 재전송**의 신호입니다.
+        같은 seq 가 반복해서 나가면 재전송이고, 그것은 중간 어딘가에서 패킷이 버려지고 있다는 뜻입니다.
+        → 그다음 할 일은 **구간을 나눠 어디서 사라지는지 찾는 것**입니다 (다중 지점 캡처).
+
+    - id: q8
+      type: single
+      text: |
+        운영 중인 링크에서 몇 시간 동안 캡처를 걸어 둬야 합니다. 디스크가 가득 차지 않게 하려면?
+      choices:
+        - "`-C <크기> -W <개수>` 로 링 버퍼를 만듭니다. 오래된 파일을 덮어씁니다"
+        - "`-c 100` 으로 100개만 잡고 자동으로 멈추게 한 뒤 필요하면 다시 겁니다"
+        - "`-n` 을 붙여 이름 해석을 끄면 파일이 작아집니다"
+        - "방법이 없습니다. 사람이 지켜보다가 적당할 때 끊어야 합니다"
+      answer: [0]
+      explain: |
+        `-C 100 -W 10` 이면 100MB 짜리 파일 10개를 돌려 씁니다 (최대 1GB).
+        **간헐적 장애를 잡는 표준 방법**입니다 — 걸어 두고, 증상이 나면 그 시각의 파일을 봅니다.
+        `-c` 는 개수 제한이라 "언제 일어날지 모르는" 문제에는 못 씁니다.
+
+    - id: q9
+      type: single
+      text: |
+        캡처를 뜰 때 **snaplen**(`-s`)을 줄이면 어떻게 되는가?
+      choices:
+        - "잡는 패킷 수가 줄어듭니다 — 앞쪽 몇 개만 저장되고 나머지는 버려집니다"
+        - "커널이 매번 잘라내야 합니다 — 그만큼 캡처 속도가 느려집니다"
+        - "패킷마다 앞부분만 저장합니다 — 헤더 분석은 되지만 페이로드는 잘립니다"
+        - "저장 크기만 달라집니다 — 잡히는 내용에는 차이가 없습니다"
+      answer: [2]
+      explain: |
+        요즘 tcpdump 는 기본이 전체 저장이라 `-s 0` 을 따로 붙일 필요가 없습니다.
+        반대로 **일부러 줄이는** 경우가 있습니다 — 고속 링크에서 헤더만 보면 될 때,
+        또는 **페이로드에 민감 정보가 담기는 것을 피할 때**. 실무에서는 후자가 더 중요합니다.
+
+    - id: q10
+      type: single
+      text: |
+        pc1 에서 뜬 프레임의 앞부분이 아래와 같습니다. **IP 헤더가 시작되는 위치**는?
+        `0x0000:  5254 0031 0001 5254 0011 0001 0800 4500`
+      choices:
+        - "0바이트 — 캡처가 IP 헤더부터 시작하므로 맨 앞"
+        - "20바이트 — IP 헤더 길이 20 만큼 뒤"
+        - "14바이트 — MAC 6 + MAC 6 + 타입 2 를 지난 뒤"
+        - "54바이트 — 이더넷 14 + IP 20 + TCP 20 을 지난 뒤"
+      answer: [2]
+      explain: |
+        `0800` 이 EtherType(IPv4)이고 그 바로 뒤 `45` 가 IP 헤더의 첫 바이트입니다
+        (`4` = 버전 4, `5` = 헤더 길이 5×4 = 20바이트).
+        그래서 **Ethernet 14 + IP 20 + TCP 20 = 54바이트 뒤부터 페이로드**다.
+        캡슐화를 눈으로 짚는 훈련입니다 — 이걸 할 수 있으면 캡처 해석에서 헤매지 않습니다.
+
+checks:
+  required: true
+  # 랩 상태가 아니라 **교육생이 만든 pcap** 을 검사한다. tcpdump -r 로 직접 열어 본다.
+  items:
+    - id: http-pcap-exists
+      kind: state
+      title: "과제 1 의 pcap 이 만들어졌는가 (`/tmp/m08-http.pcap`)"
+      host: pc1
+      run: "echo pkt=$(tcpdump -r /tmp/m08-http.pcap -nn 2>/dev/null | wc -l)"
+      expect_regex: "pkt=[1-9]"
+      hint: |
+        pc1 에서:
+          sudo tcpdump -i eth1 -w /tmp/m08-http.pcap 'host {{ ip.web }} and tcp port 80 and not port 22'
+        다른 창에서 curl 을 한 번 돌린 뒤 Ctrl-C 로 캡처를 끝낼 것.
+        **Ctrl-C 로 끝내지 않으면 파일이 비어 있을 수 있다** (버퍼가 안 비워집니다).
+
+    - id: http-pcap-syn
+      kind: state
+      title: "그 pcap 에 연결 시도(SYN)가 담겨 있는가"
+      host: pc1
+      run: "echo syn=$(tcpdump -r /tmp/m08-http.pcap -nn 'tcp[tcpflags] & tcp-syn != 0 and port 80' 2>/dev/null | wc -l)"
+      expect_regex: "syn=[1-9]"
+      hint: |
+        캡처를 **먼저 걸고** curl 을 돌려야 handshake 가 담깁니다.
+        curl 을 먼저 돌리면 이미 끝난 뒤라 SYN 이 없습니다.
+
+    - id: http-pcap-clean
+      kind: state
+      title: "그 pcap 에 관리 트래픽(SSH)이 섞이지 않았는가 ★"
+      host: pc1
+      run: "echo ssh=$(tcpdump -r /tmp/m08-http.pcap -nn 'port 22' 2>/dev/null | wc -l)"
+      expect: "ssh=0"
+      hint: |
+        `not port 22` 를 필터에 넣지 않으면 내 SSH 세션이 통째로 섞여 들어갑니다.
+        (그리고 tcpdump 출력이 SSH 로 나가면서 다시 캡처되는 되먹임까지 생깁니다)
+        **필터는 "무엇을 잡을까" 만이 아니라 "무엇을 뺄까" 이기도 합니다.**
+
+    - id: trunk-pcap-vlan
+      kind: state
+      title: "트렁크에서 뜬 pcap 에 VLAN 태그 프레임이 있는가 (`/tmp/m08-trunk.pcap`)"
+      host: r1
+      run: "echo vlan=$(tcpdump -r /tmp/m08-trunk.pcap -nn vlan 2>/dev/null | wc -l)"
+      expect_regex: "vlan=[1-9]"
+      hint: |
+        r1 에서 **eth1**(트렁크)에 걸어야 합니다. eth1.10 에서 뜨면 태그가 이미 벗겨져 있습니다.
+          sudo tcpdump -i eth1 -w /tmp/m08-trunk.pcap vlan
+        아무것도 안 잡히면 필터에 `vlan` 을 빠뜨린 것입니다 (M2 의 함정).
+
+    - id: icmp-pcap-bidir
+      kind: state
+      title: "목적지에서 뜬 pcap 에 **요청과 응답이 둘 다** 있는가 (`/tmp/m08-icmp.pcap`)"
+      host: web
+      run: >-
+        echo req=$(tcpdump -r /tmp/m08-icmp.pcap -nn 'icmp[icmptype]==8' 2>/dev/null | wc -l)
+        rep=$(tcpdump -r /tmp/m08-icmp.pcap -nn 'icmp[icmptype]==0' 2>/dev/null | wc -l)
+      expect_none: ["req=0", "rep=0"]
+      hint: |
+        web 에서:
+          sudo tcpdump -i eth1 -w /tmp/m08-icmp.pcap icmp
+        pc1 에서 ping 을 돌린 뒤 Ctrl-C.
+        한쪽만 있다면 **가는 길과 오는 길 중 하나가 없다**는 뜻입니다 (M3 의 리턴 경로).
+
+    - id: ring-buffer
+      kind: state
+      title: "링 버퍼로 나눠 저장한 파일이 2개 이상 있는가 (`/tmp/m08-ring*`)"
+      host: pc1
+      run: "echo files=$(ls /tmp/m08-ring* 2>/dev/null | wc -l)"
+      # 2개 이상. 10개 이상도 통과해야 하므로 두 자리 수를 함께 허용한다.
+      expect_regex: "files=([2-9]|[1-9][0-9]+)"
+      hint: |
+        sudo tcpdump -i eth1 -w /tmp/m08-ring -C 1 -W 3 'not port 22'
+        그리고 트래픽을 만들어 파일이 넘어가게 합니다 (`ping -f` 또는 큰 curl 반복).
+        `-C` 단위는 **MB** 다. 파일 이름은 m08-ring0, m08-ring1 … 로 붙습니다.
+
+    - id: no-stray-tcpdump
+      kind: config
+      title: "돌려 둔 tcpdump 를 모두 종료했는가"
+      host: pc1
+      run: "pgrep -c tcpdump || true"
+      expect: "0"
+      hint: |
+        캡처를 켜 둔 채로 두면 디스크가 계속 찹니다.
+        각 터미널에서 Ctrl-C 로 끝낼 것. 남았다면: sudo pkill tcpdump
+
+written:
+  items:
+    - id: capture-point
+      title: "캡처 지점을 왜 거기로 잡았는가 ★"
+      kind: text
+      review: optional
+      auto_pass: true
+      min_chars: 300
+      prompt: |
+        장애 주입(m08-01 또는 m08-02) 중 하나를 골라, **캡처 지점을 정한 과정**을 적을 것.
+        결과가 아니라 **판단**을 남깁니다.
+
+          1. 증상 — 무엇이 어떻게 안 됐는가
+          2. **무엇을 증명하고 싶었는가** — 그래서 첫 캡처를 어디에 걸었는가
+          3. 그 결과를 보고 **다음 지점을 어떻게 골랐는가** (이등분했는가?)
+          4. 쓴 BPF 필터와, 거기에 **무엇을 일부러 뺐는지**
+          5. 최종 결론과 그 근거가 된 캡처 (어느 지점의 어느 패킷)
+      rubric:
+        - key: 지점선정
+          desc: "어디에 걸었는지 노드 이름으로 밝혔는가"
+          any: ["pc1", "r1", "r2", "r3", "r4", "web", "sw1", "출발지", "목적지"]
+        - key: 판단근거
+          desc: "왜 그 지점인지 이유를 댔는가"
+          any: ["이등분", "절반", "가운데", "증명", "확인하려", "어디까지", "나가는지"]
+        - key: 필터
+          desc: "실제로 쓴 BPF 필터를 적었는가"
+          any: ["tcpdump", "host ", "port ", "icmp", "tcp[", "vlan", "not port"]
+        - key: 배제
+          desc: "무엇을 일부러 뺐는지 짚었는가"
+          any: ["not port 22", "제외", "빼", "섞이", "관리망", "SSH"]
+        - key: 결론
+          desc: "캡처를 근거로 결론을 냈는가"
+          any: ["재전송", "사라", "소실", "도달", "안 보", "구간", "원인", "결론", "버리", "특정", "drop", "DROP"]

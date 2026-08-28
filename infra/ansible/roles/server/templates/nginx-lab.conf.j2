@@ -12,7 +12,7 @@ server {
     # nginx 의 add_header 는 **상속되다 말고 통째로 덮인다.** 하위 블록에
     # add_header 가 하나라도 있으면 상위 블록의 것은 전부 버려진다.
     # 그래서 여기서 Content-Type 만 넣으면 위의 X-Lab-Node 가 사라진다 —
-    # 교재가 설명하고 검사 셋(M3·M4·M8)이 기대하는 그 헤더가.
+    # 교재가 설명하고 검사 셋(M3·M4·M9)이 기대하는 그 헤더가.
     # 필요한 것을 이 자리에 다시 적는다.
     location /health {
         default_type text/plain;

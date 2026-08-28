@@ -56,40 +56,40 @@
       failed_when: ospf_nb.stdout | int < 1
       when: node_role == 'router' and si | int >= stages.index('m4')
 
-    # ---- M5 : IPv6 ----
-    - name: "[M5+] pc1 -> web (IPv6)"
+    # ---- M6 : IPv6 ----
+    - name: "[M6+] pc1 -> web (IPv6)"
       ansible.builtin.command: ping6 -c2 -W2 {{ ipv6.segments.vlan40.hosts.web }}
       changed_when: false
-      when: inventory_hostname == 'pc1' and si | int >= stages.index('m5')
+      when: inventory_hostname == 'pc1' and si | int >= stages.index('m6')
 
-    # ---- M8 : DNS / FTP ----
-    - name: "[M8+] DNS 이름 해석"
+    # ---- M9 : DNS / FTP ----
+    - name: "[M9+] DNS 이름 해석"
       ansible.builtin.command: dig +short @{{ dns.server }} web.{{ dns.zone }} A
       register: dig_out
       changed_when: false
       failed_when: ipv4.segments.vlan40.hosts.web not in dig_out.stdout
-      when: inventory_hostname == 'pc1' and si | int >= stages.index('m8')
+      when: inventory_hostname == 'pc1' and si | int >= stages.index('m9')
 
-    - name: "[M8+] FTP 제어 채널 응답"
+    - name: "[M9+] FTP 제어 채널 응답"
       ansible.builtin.shell: |
         exec 3<>/dev/tcp/{{ ipv4.segments.vlan40.hosts.ftp }}/21 && head -1 <&3
       args: {executable: /bin/bash}
       register: ftp_banner
       changed_when: false
       failed_when: "'220' not in ftp_banner.stdout"
-      when: inventory_hostname == 'pc1' and si | int >= stages.index('m8')
+      when: inventory_hostname == 'pc1' and si | int >= stages.index('m9')
 
-    # ---- M9 : NAT ----
-    - name: "[M9] pc1 -> 외부 사이트 (NAT 경유)"
+    # ---- M10 : NAT ----
+    - name: "[M10] pc1 -> 외부 사이트 (NAT 경유)"
       ansible.builtin.command: curl -sS -m5 -o /dev/null -w '%{http_code}' http://{{ public.ipv4.external_site.inet_loopback }}/
       register: ext
       changed_when: false
       failed_when: ext.stdout != '200'
-      when: inventory_hostname == 'pc1' and si | int >= stages.index('m9')
+      when: inventory_hostname == 'pc1' and si | int >= stages.index('m10')
 
-    - name: "[M9] 외부 -> web 공개 IP (DNAT)"
+    - name: "[M10] 외부 -> web 공개 IP (DNAT)"
       ansible.builtin.command: curl -sS -m5 -o /dev/null -w '%{http_code}' http://{{ public.ipv4.nat_pool.dnat[0].public }}/
       register: dnat
       changed_when: false
       failed_when: dnat.stdout != '200'
-      when: inventory_hostname == 'inet' and si | int >= stages.index('m9')
+      when: inventory_hostname == 'inet' and si | int >= stages.index('m10')

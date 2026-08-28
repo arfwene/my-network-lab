@@ -2,7 +2,7 @@
 """
 설계 -> Ansible 인벤토리 생성.
 
-usage:  python3 tools/gen-inventory.py --lab 1 [--stage m10] [--config-stage m9]
+usage:  python3 tools/gen-inventory.py --lab 1 [--stage m11] [--config-stage m10]
 
   --stage         어떤 장비·링크가 존재하는가
   --config-stage  어느 모듈의 목표 설정까지 올릴 것인가 (없으면 --stage 와 같다)
@@ -162,5 +162,5 @@ def main(lab_id, stage, config_stage=None):
 if __name__ == "__main__":
     a = sys.argv
     main(int(a[a.index("--lab") + 1]) if "--lab" in a else 1,
-         a[a.index("--stage") + 1] if "--stage" in a else "m10",
+         a[a.index("--stage") + 1] if "--stage" in a else "m11",
          a[a.index("--config-stage") + 1] if "--config-stage" in a else None)

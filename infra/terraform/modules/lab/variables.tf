@@ -7,9 +7,9 @@ variable "lab_id" {
 }
 
 variable "lab_stage" {
-  description = "이 시점까지의 모듈 단계 (m1~m10). 해당 단계에 등장하는 노드/링크만 만든다."
+  description = "이 시점까지의 모듈 단계 (m1~m11). 해당 단계에 등장하는 노드/링크만 만든다."
   type        = string
-  default     = "m10"
+  default     = "m11"
 }
 
 variable "template_vmid" {

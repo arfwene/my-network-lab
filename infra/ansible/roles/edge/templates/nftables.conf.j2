@@ -31,7 +31,7 @@ table inet filter {
         iifname "eth1" accept
 
         # 바깥에서 자신에게 오는 것은 ping 만 받는다. 경로 확인은 되어야 하고,
-        # 그 밖에는 조용히 버린다(reject 가 아니라 drop — M6 감별표 ②).
+        # 그 밖에는 조용히 버린다(reject 가 아니라 drop — M7 감별표 ②).
         iifname "eth2" icmp type echo-request limit rate 5/second accept
         iifname "eth2" icmpv6 type echo-request limit rate 5/second accept
     }

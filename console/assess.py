@@ -355,7 +355,7 @@ def module_state(username, module, is_admin=False):
         "quiz_passed": bool(pr.get("quiz_passed")), "checks_passed": bool(pr.get("checks_passed")),
         "need_quiz": need_quiz, "need_checks": need_checks,
         "need_drill": need_drill, "drill_passed": bool(pr.get("drill_passed")),
-        # 이 모듈의 장애 실습이 **중간 점검으로만** 인정되는가 (M3 · M6)
+        # 이 모듈의 장애 실습이 **중간 점검으로만** 인정되는가 (M3 · M7)
         "drill_checkpoint": bool(_checkpoint_for(module.get("stage"))),
         "need_written": bool(items), "need_review": bool(must),
         "written": subs,

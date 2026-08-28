@@ -32,7 +32,7 @@ import db                  # noqa: E402
 import docs                # noqa: E402
 import state               # noqa: E402
 
-DEFAULTS = {"module": "m10", "minutes": 45, "faults": 3,
+DEFAULTS = {"module": "m11", "minutes": 45, "faults": 3,
             "sweep_seconds": 20, "pool": []}
 
 # 진행 중에도 허용 — 검사는 곧 제출이다.
@@ -114,7 +114,7 @@ def drill_pick(checkpoint, all_ids, n=None):
 
 
 def _family(sid):
-    """m06-03 -> m06. 같은 계층의 장애를 한 회차에 겹쳐 넣지 않기 위한 묶음."""
+    """m07-03 -> m07. 같은 계층의 장애를 한 회차에 겹쳐 넣지 않기 위한 묶음."""
     return sid.split("-")[0]
 
 
@@ -125,7 +125,7 @@ def pick(all_ids, n=None):
 
     계층을 겹치지 않게 하는 이유가 둘이다.
       ① 같은 서비스에 두 장애가 겹치면 서로를 지운다.
-         m08-02 가 named 를 멈춘 뒤 m08-01 이 `state: restarted` 로 다시 켜 버린다 —
+         m09-02 가 named 를 멈춘 뒤 m09-01 이 `state: restarted` 로 다시 켜 버린다 —
          주입은 성공했다고 나오는데 실제 장애는 하나뿐인 회차가 된다.
       ② 세 개가 전부 같은 계층이면 캡스톤이 그 계층 하나의 문제로 줄어든다.
          3-step 을 끝까지 밟게 하려면 층이 흩어져 있어야 한다.

@@ -1,33 +1,24 @@
 ---
-# M9-02 : web 의 DNAT 규칙만 제거
-#   증상  : 외부에서 web 공개 IP 만 안 된다. ftp 공개 IP 는 정상.
-#   한줄  : web 공개 IP 만 안 됨
-#   목표  : 외부에서 web 의 공개 IP 로 접속된다
-#   정답  : prerouting 체인에서 web 용 dnat 규칙이 빠졌다.
-#           두 서비스를 비교하면 차이가 바로 보인다.
-#   노림수: "되는 것" 이 있는 장애에서는 **되는 쪽과의 차이**가 가장 빠른 단서다. (G1)
-- name: "scenario m09-02 :: 공개 서비스 하나만 안 된다"
-  hosts: edge
+# M9-02 : DNS 서버 중지
+#   증상  : 이름으로는 아무것도 안 된다. IP 로는 전부 정상이다.
+#   한줄  : 이름으로는 아무것도 안 됨
+#   목표  : 이름 해석이 된다
+#   정답  : 판별표의 첫 줄 — 이름 해석 X / IP 직접 O = DNS 문제.
+#           dig 가 응답 없이 타임아웃 난다.
+#   노림수: 두 줄의 명령으로 범위를 반 가르는 훈련. (F1)
+- name: "scenario m09-02 :: DNS 서버 장애"
+  hosts: dns
   become: true
   gather_facts: false
-  vars:
-    pub: "{{ (public.ipv4.nat_pool.dnat | selectattr('node','equalto','web') | first).public }}"
   tasks:
-    - name: web 용 DNAT 규칙 삭제 (handle 로 지정)
-      ansible.builtin.shell: |
-        h=$(nft -a list chain ip nat prerouting | awk '/{{ pub }}/ {print $NF}' | head -1)
-        [ -n "$h" ] && nft delete rule ip nat prerouting handle "$h"
-      changed_when: true
-      when: scenario_action | default('break') == 'break'
-
-    - name: 설정 파일 기준으로 복구
-      ansible.builtin.command: "nft -f /etc/nftables.conf"
-      changed_when: true
-      when: scenario_action | default('break') != 'break'
+    - name: named 중지 / 기동
+      ansible.builtin.systemd:
+        name: named
+        state: "{{ 'stopped' if scenario_action | default('break') == 'break' else 'started' }}"
 
     - name: 안내
       ansible.builtin.debug:
         msg: >-
-          {{ 'edge 에서 ' ~ pub ~ ' 의 DNAT 을 지웠다. ftp 공개 IP 는 정상이라는 점을 알려 줄 것.'
+          {{ 'dns 노드의 named 를 내렸다. 교육생에게는 "이름으로 아무것도 안 된다" 고만 알릴 것.'
              if scenario_action | default('break') == 'break'
-             else 'edge 규칙 복구 완료.' }}
+             else 'named 복구 완료.' }}

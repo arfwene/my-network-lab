@@ -1,32 +1,45 @@
 ---
-# M9-03 : stateful 허용 규칙 제거  ★ 이 모듈의 핵심
-#   증상  : 내부에서 나가는 것은 되는데 **아무 응답도 돌아오지 않는다**.
-#           캡처를 보면 SYN 은 나가고 SYN-ACK 이 안 들어온다.
-#   한줄  : 나가긴 하는데 응답이 안 옴
-#   목표  : 내부에서 나간 통신의 응답이 돌아온다
-#   정답  : forward 체인의 `ct state established,related accept` 한 줄이 사라졌다.
-#           리턴 트래픽을 허용하는 규칙은 원래 그것 하나뿐이었다.
-#   노림수: stateful 방화벽의 실체. 규칙 한 줄이 무엇을 하고 있었는지. (G2) ★
-- name: "scenario m09-03 :: 리턴 트래픽이 사라졌다"
-  hosts: edge
+# M9-03 : 클라이언트의 이름 서버 설정 오류
+#   증상  : 이름 해석이 **느리게** 실패한다 (타임아웃). IP 는 정상.
+#           m09-02 와 증상이 비슷하다.
+#   한줄  : 이름 해석이 느리게 실패
+#   목표  : 이름 해석이 지체 없이 된다
+#   정답  : pc1 의 /etc/resolv.conf 가 없는 주소를 가리킨다.
+#           `dig @<진짜 DNS>` 는 되는데 그냥 `dig` 는 안 된다 — 이 차이가 결정적이다.
+#   노림수: 서버 문제와 클라이언트 문제를 가르는 한 가지 확인법. (F1)
+- name: "scenario m09-03 :: 클라이언트 DNS 설정 오류"
+  hosts: pc1
   become: true
   gather_facts: false
+  vars:
+    bad: "{{ dns.server.split('.')[:3] | join('.') }}.99"
   tasks:
-    - name: established 허용 규칙 삭제 (handle 로 지정)
-      ansible.builtin.shell: |
-        h=$(nft -a list chain inet filter forward | awk '/ct state established/ {print $NF}' | head -1)
-        [ -n "$h" ] && nft delete rule inet filter forward handle "$h"
-      changed_when: true
+    - name: resolv.conf 를 없는 서버로 바꾼다
+      ansible.builtin.copy:
+        dest: /etc/resolv.conf
+        follow: false
+        mode: "0644"
+        content: |
+          # 장애 주입 (m09-03)
+          search {{ lab_domain }}
+          nameserver {{ bad }}
       when: scenario_action | default('break') == 'break'
 
-    - name: 설정 파일 기준으로 복구
-      ansible.builtin.command: "nft -f /etc/nftables.conf"
-      changed_when: true
+    - name: resolv.conf 복구
+      ansible.builtin.copy:
+        dest: /etc/resolv.conf
+        follow: false
+        mode: "0644"
+        content: |
+          # 자동 생성 (Ansible / roles/host)
+          search {{ lab_domain }}
+          nameserver {{ dns.server }}
+          nameserver {{ dns.server_v6 }}
       when: scenario_action | default('break') != 'break'
 
     - name: 안내
       ansible.builtin.debug:
         msg: >-
-          {{ 'edge 의 ct state established 규칙을 지웠다. 못 찾으면 "응답을 허용하는 규칙이 원래 몇 개였죠?" 라고만 물을 것.'
+          {{ 'pc1 의 nameserver 를 ' ~ bad ~ ' 로 바꿨다. m09-02 와 증상이 비슷하니 dig @<서버> 와 dig 의 차이를 스스로 찾게 할 것.'
              if scenario_action | default('break') == 'break'
-             else 'edge 규칙 복구 완료.' }}
+             else 'pc1 resolv.conf 복구 완료 (' ~ dns.server ~ ').' }}

@@ -1,24 +1,35 @@
 ---
-# M8-02 : DNS 서버 중지
-#   증상  : 이름으로는 아무것도 안 된다. IP 로는 전부 정상이다.
-#   한줄  : 이름으로는 아무것도 안 됨
-#   목표  : 이름 해석이 된다
-#   정답  : 판별표의 첫 줄 — 이름 해석 X / IP 직접 O = DNS 문제.
-#           dig 가 응답 없이 타임아웃 난다.
-#   노림수: 두 줄의 명령으로 범위를 반 가르는 훈련. (F1)
-- name: "scenario m08-02 :: DNS 서버 장애"
-  hosts: dns
+# M8-02 : r4 에서 특정 출발지의 HTTP 만 버린다
+#   증상  : **pc1 에서만** web 의 HTTP 가 안 된다. ping 은 정상이고 pc2 는 멀쩡하다.
+#   한줄  : pc1 에서만 HTTP 안 됨
+#   목표  : pc1 에서 web 의 HTTP 가 응답한다
+#   정답  : r4 의 forward 체인에서 pc1 출발 tcp/80 이 DROP 된다.
+#           r4 의 **들어오는 인터페이스에는 보이는데 나가는 인터페이스에는 안 보인다**.
+#   노림수: 다중 지점 캡처 + 이등분. 한 장비에서도 양쪽을 봐야 한다는 것. (H1, H3) ★
+- name: "scenario m08-02 :: 어느 구간에서 사라진다"
+  hosts: r4
   become: true
   gather_facts: false
+  vars:
+    src: "{{ ipv4.segments.vlan10.hosts.pc1 }}"
   tasks:
-    - name: named 중지 / 기동
-      ansible.builtin.systemd:
-        name: named
-        state: "{{ 'stopped' if scenario_action | default('break') == 'break' else 'started' }}"
+    - name: forward 체인에 DROP 규칙 추가
+      ansible.builtin.shell: |
+        nft add table inet labbreak
+        nft add chain inet labbreak forward '{ type filter hook forward priority 0; }'
+        nft add rule inet labbreak forward ip saddr {{ src }} tcp dport 80 drop
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: 규칙 제거
+      ansible.builtin.command: "nft delete table inet labbreak"
+      changed_when: true
+      failed_when: false
+      when: scenario_action | default('break') != 'break'
 
     - name: 안내
       ansible.builtin.debug:
         msg: >-
-          {{ 'dns 노드의 named 를 내렸다. 교육생에게는 "이름으로 아무것도 안 된다" 고만 알릴 것.'
+          {{ 'r4 에서 ' ~ src ~ ' 출발 HTTP 만 버리게 했다. ping 과 pc2 는 정상이다. show 명령 금지 규칙을 반드시 붙일 것.'
              if scenario_action | default('break') == 'break'
-             else 'named 복구 완료.' }}
+             else 'r4 방화벽 규칙 제거 완료 (nft list ruleset 으로 확인).' }}

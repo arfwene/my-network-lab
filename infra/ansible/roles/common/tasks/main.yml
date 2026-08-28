@@ -4,7 +4,7 @@
 - name: 단계 인덱스 계산
   ansible.builtin.set_fact:
     stage_idx: "{{ stages.index(config_stage | default(lab_stage)) }}"
-    ipv6_enabled: "{{ stages.index(config_stage | default(lab_stage)) >= stages.index('m5') }}"
+    ipv6_enabled: "{{ stages.index(config_stage | default(lab_stage)) >= stages.index('m6') }}"
 
 - name: 호스트명 설정 (랩 번호는 게스트 안에서 보이지 않는다 — 교재 일관성)
   ansible.builtin.hostname:

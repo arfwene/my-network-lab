@@ -1,0 +1,1241 @@
+<!-- 자동 생성. 원본: modules/m06-ipv6/README.md.j2  ·  생성: make modules -->
+
+# M6. IPv6 — 주소가 넉넉하면 무엇이 달라지는가
+
+> **소요 시간** {{ meta.duration }} · **랩 단계** `{{ stage }}` · **역량** {{ meta.competencies | join(', ') }}
+
+새 노드는 하나도 추가되지 않는다. 지금까지 만든 망을 IPv6 로 한 번 더 훑는다.
+
+이 모듈의 목적은 "IPv6 문법 배우기"가 아니다.
+M2 부터 배운 것들 — 사설 주소, ARP, DHCP, 브로드캐스트, NAT — 이 전부 주소 부족 때문에 생긴 것이었음을
+주소가 넉넉한 세계와 대조해 보는 것이다.
+
+## 학습 목표
+
+{% for o in meta.objectives %}
+{{ loop.index }}. {{ o }}
+{% endfor %}
+
+## 사전 지식 체크 (M2 · M4 복습)
+
+- 사설 IP 는 왜 생겼는가? 사설 IP 로 인터넷에 나가려면 무엇이 필요한가?
+- ARP Request 는 어디까지 가는가? 그 범위를 무엇이라 부르는가?
+- OSPF 인접이 안 맺힐 때 점검하는 네 가지는?
+
+---
+
+## 1. 이 모듈에서 만들 것
+
+**[이 모듈 적용]** 을 누르면 랩이 **M4 를 마친 모습**으로 맞춰집니다.
+IPv4 는 다 돌아가고, IPv6 는 **한 줄도 설정돼 있지 않습니다.**
+같은 선 위에 두 번째 망을 얹는 것이 이 모듈입니다.
+
+### 1.1 지금 랩에 있는 장비
+
+```mermaid
+{{ topology }}
+```
+
+토폴로지는 M4 와 같습니다. 새 노드도 새 케이블도 없습니다.
+
+### 1.2 초기 구성 — IPv4 만 있습니다
+
+```labdiagram
+kind: mini
+cols: [r1, [r2, r3], r4]
+links:
+  - { a: r1, b: r2, label: IPv4 만 }
+  - { a: r1, b: r3, label: IPv4 만 }
+  - { a: r2, b: r4, label: IPv4 만 }
+  - { a: r3, b: r4, label: IPv4 만 }
+marks:
+  r1: ["OSPFv2 O", "OSPFv3 X"]
+  r2: ["OSPFv2 O", "OSPFv3 X"]
+  r3: ["OSPFv2 O", "OSPFv3 X"]
+  r4: ["OSPFv2 O", "OSPFv3 X"]
+notes:
+  - 인터페이스마다 IPv6 링크로컬(fe80::) 은 이미 있습니다. OS 가 자동으로 붙입니다
+  - 그러나 통신에 쓸 주소도, IPv6 경로도 없습니다
+```
+
+**아무 설정도 안 했는데 IPv6 주소가 하나 있습니다.** 링크로컬입니다.
+IPv6 는 인터페이스가 올라오는 순간 `fe80::/64` 주소를 스스로 만듭니다.
+같은 선에 붙은 이웃끼리는 그것만으로 이미 말을 걸 수 있습니다 — IPv4 에는 없던 성질입니다.
+
+### 1.3 목표 구성 — 같은 선 위에 두 번째 망
+
+```labdiagram
+kind: mini
+cols: [r1, [r2, r3], r4]
+links:
+  - { a: r1, b: r2, label: "IPv4 + IPv6" }
+  - { a: r1, b: r3, label: "IPv4 + IPv6" }
+  - { a: r2, b: r4, label: "IPv4 + IPv6" }
+  - { a: r3, b: r4, label: "IPv4 + IPv6" }
+marks:
+  r1: ["OSPFv2 + OSPFv3"]
+  r2: ["OSPFv2 + OSPFv3"]
+  r3: ["OSPFv2 + OSPFv3"]
+  r4: ["OSPFv2 + OSPFv3"]
+notes:
+  - 라우팅 테이블이 두 벌이 됩니다. 인접도 두 벌입니다
+  - 한쪽이 죽어도 다른 쪽은 살아 있습니다. 그것이 dual-stack 의 함정입니다
+```
+
+| 무엇이 | 초기 구성 | 목표 구성 |
+|---|---|---|
+| 인터페이스 주소 | IPv4 + 링크로컬 | IPv4 + 링크로컬 + ULA |
+| 라우팅 프로토콜 | OSPFv2 | OSPFv2 + OSPFv3 |
+| `pc1` → `web` | IPv4 로만 |  IPv4 · IPv6 둘 다 |
+
+### 1.4 그래서 할 일은 네 가지
+
+| # | 할 일 | 어디서 | 무엇이 달라지나 |
+|---|---|---|---|
+| ① | 사용자망 · 서버망에 IPv6 주소를 붙입니다 | `pc1` `pc2` `web` `r1` `r4` | 같은 대역 안에서 IPv6 통신이 됩니다 |
+| ② | 라우터 사이 링크와 루프백에 붙입니다 | `r1` ~ `r4` | 이웃끼리 IPv6 로 말할 수 있습니다 |
+| ③ | OSPFv3 를 켭니다 | `r1` ~ `r4` | 사이트를 넘어 IPv6 경로가 생깁니다 |
+| ④ | 단말에 IPv6 기본 경로를 줍니다 | `pc1` `pc2` `web` | 왕복이 완성됩니다 |
+
+### 1.5 만들 때 쓸 값
+
+주소를 읽는 규칙이 보이나요? IPv4 `{{ cidr.vlan10 }}` 이 IPv6 `{{ v6.vlan10 }}` 입니다.
+VLAN 번호를 그대로 subnet id 로 썼습니다. 주소만 보고 어느 VLAN 인지 알 수 있습니다.
+
+| 구간 | IPv4 | IPv6 (ULA) |
+|---|---|---|
+| `pc1` | `{{ ipc.pc1 }}` | `{{ ip6c.pc1 }}` |
+| `pc2` | `{{ ipc.pc2 }}` | `{{ ip6c.pc2 }}` |
+| `web` | `{{ ipc.web }}` | `{{ ip6c.web }}` |
+| `r1` VLAN{{ vlans[10].id }} GW | `{{ gw.vlan10 }}` | `{{ gw6.vlan10 }}` |
+| `r1` VLAN{{ vlans[20].id }} GW | `{{ gw.vlan20 }}` | `{{ gw6.vlan20 }}` |
+| `r4` 서버망 GW | `{{ gw.vlan40 }}` | `{{ gw6.vlan40 }}` |
+| r1 ↔ r2 | `{{ p2p['r1-r2'].cidr }}` | `{{ p2p6['r1-r2'].prefix }}` |
+| r1 ↔ r3 | `{{ p2p['r1-r3'].cidr }}` | `{{ p2p6['r1-r3'].prefix }}` |
+| r2 ↔ r4 | `{{ p2p['r2-r4'].cidr }}` | `{{ p2p6['r2-r4'].prefix }}` |
+| r3 ↔ r4 | `{{ p2p['r3-r4'].cidr }}` | `{{ p2p6['r3-r4'].prefix }}` |
+
+| 라우터 | 루프백 IPv4 | 루프백 IPv6 |
+|---|---|---|
+| `r1` | `{{ loopback.r1 }}/32` | `{{ loopback6.r1 }}` |
+| `r2` | `{{ loopback.r2 }}/32` | `{{ loopback6.r2 }}` |
+| `r3` | `{{ loopback.r3 }}/32` | `{{ loopback6.r3 }}` |
+| `r4` | `{{ loopback.r4 }}/32` | `{{ loopback6.r4 }}` |
+
+P2P 링크를 보세요. IPv4 는 `/30`(주소 2개)까지 아꼈는데 IPv6 는 `/64` 를 통째로 줍니다.
+라우터 두 대가 쓰는 링크에 1800경 개의 주소를 배정한 셈입니다.
+IPv4 는 아껴 쓰고 IPv6 는 읽기 쉽게 씁니다 — 주소 고갈이 설계를 어떻게 비틀었는지 보여 주는 대비입니다.
+
+---
+
+## 2. 개념
+
+### 2.1 왜 IPv6 인가
+
+| | IPv4 | IPv6 |
+|---|---|---|
+| 주소 길이 | 32비트 | 128비트 |
+| 개수 | 약 43억 | 약 340간 (3.4 × 10³⁸) |
+| 표기 | 점 십진 `10.0.0.1` | 콜론 16진 `fd00::1` |
+| 헤더 | 가변 (20~60바이트) | 고정 40바이트 |
+
+숫자 감각으로 옮기면: 지구 표면 1m² 당 약 6.7 × 10²³ 개입니다. 부족할 일이 없습니다.
+
+M2 에서 배운 것들이 전부 "부족" 때문에 생겼다는 점을 다시 보자.
+
+| 우회로 | 왜 생겼나 | IPv6 에서는 |
+|---|---|---|
+| 사설 IP (RFC1918) | 공인 주소가 모자라서 | 필요 없습니다 (다만 ULA 는 다른 이유로 있습니다) |
+| NAT | 사설 주소로 밖에 나가려고 | 기본적으로 필요 없습니다 |
+| CGNAT (`100.64/10`) | ISP 조차 공인 주소가 모자라서 | 필요 없습니다 |
+| DHCP 의존 | 주소를 아껴 돌려 쓰려고 | SLAAC 로 스스로 만듭니다 |
+
+그래서 IPv6 를 배우는 것은 "새 프로토콜 하나"를 배우는 일이 아닙니다.
+지금까지 당연하게 여긴 것들이 **원래는 당연하지 않았다**는 것을 아는 일입니다.
+
+### 2.2 표기와 축약
+```
+fd00:0010:0010:0010:0000:0000:0000:0011      ← 완전 표기 (16진수 4자리 × 8그룹)
+fd00:  10:  10:  10:   0 :   0 :   0 :  11   ← ① 각 그룹의 앞쪽 0 을 뺀다
+fd00:  10:  10:  10::11                      ← ② 연속된 0 그룹을 :: 로 (한 번만)
+{{ ip6.pc1 }}
+```
+
+#### 규칙은 두 개뿐이다.
+
+| # | 규칙 | 예 |
+|---|---|---|
+| ① | 각 그룹의 앞쪽 0 은 생략 | `0db8` → `db8` (뒤쪽 0 은 못 뺀다: `db80` ≠ `db8`) |
+| ② | 연속된 0 그룹을 `::` 로. 딱 한 번만 | `2001:db8:0:0:0:0:0:1` → `2001:db8::1` |
+
+`::` 를 두 번 쓰면 안 되는 이유: `2001::1::1` 은 어디에 0 이 몇 개 들어갈지 알 수 없습니다.
+0 그룹이 두 군데면 **더 긴 쪽**에 `::` 를 씁니다.
+
+포트 번호를 붙일 때는 대괄호로 감싼다 — 콜론이 겹치기 때문입니다.
+
+```
+http://[{{ ip6.web }}]/          ← URL
+ssh -6 lab@{{ ip6.web }}          ← 대괄호 불필요 (콜론이 안 겹침)
+```
+
+### 2.3 주소 유형
+| 유형 | 대역 | 성격 | 이 랩 |
+|---|---|---|---|
+| Link-local | `fe80::/10` | 같은 링크 안에서만. 항상 자동으로 붙습니다 | 모든 인터페이스 |
+| ULA | `fd00::/8` | 조직 내부용 (= 사설 IP) | `{{ v6.vlan10 }}` 등 |
+| GUA | `2000::/3` | 인터넷에서 라우팅됨 (= 공인 IP) | M10 의 외부 구간 |
+| Multicast | `ff00::/8` | 그룹에게. 브로드캐스트를 대신합니다 | `ff02::1`, `ff02::2` |
+| Anycast | (형식 없음) | 여럿 중 가장 가까운 하나에게 | — |
+| Loopback | `::1` | 자기 자신 (= `127.0.0.1`) | — |
+
+IPv6 에는 브로드캐스트가 없습니다. 대신 목적이 분명한 멀티캐스트가 쓰입니다.
+
+| 주소 | 누구에게 |
+|---|---|
+| `ff02::1` | 링크의 모든 노드 (IPv4 의 브로드캐스트에 가장 가깝습니다) |
+| `ff02::2` | 링크의 모든 라우터 |
+| `ff02::1:ffXX:XXXX` | Solicited-node — 주소 끝 24비트가 같은 소수에게 (NDP 가 씁니다) |
+
+Link-local 을 `169.254`(APIPA)와 헷갈리지 마세요.
+`169.254` 는 "DHCP 를 못 받아서 생긴 사고"다. `fe80` 은 **정상 동작의 일부**이며,
+글로벌 주소가 하나도 없어도 NDP 와 OSPFv3 는 이 주소로 정상 동작합니다.
+
+### 2.4 ★ 사설/공인의 IPv6 대응
+| IPv4 | IPv6 | 공통점 | 차이 |
+|---|---|---|---|
+| 사설 (RFC1918) | ULA `fd00::/8` | 인터넷에서 라우팅 안 됨 · 조직마다 겹칠 수 있음 | ULA 는 `fd` 뒤 40비트를 난수로 만들어 충돌 확률을 낮춥니다 |
+| 공인 | GUA `2000::/3` | 인터넷에서 라우팅됨 | IPv6 는 모든 단말이 가질 수 있습니다 |
+
+#### 핵심 차이는 이것이다.
+
+```
+IPv4 : 사내 단말은 사설 주소 → 밖으로 나가려면 NAT 로 공인 주소를 빌린다
+IPv6 : 사내 단말이 그냥 GUA 를 갖는다 → 주소가 끝까지 그대로 간다
+```
+
+그러면 보안은 무엇이 담당하는가? — **방화벽**입니다.
+
+IPv4 에서 "외부에서 사내 PC 로 못 들어온다"는 것은 NAT 의 **부작용**이었습니다.
+의도된 보안이 아니라 "주소 변환 테이블에 항목이 없어서 못 들어온" 것뿐입니다.
+IPv6 로 가면 그 우연한 방벽이 사라집니다. 원래부터 방화벽이 했어야 할 일이 드러나는 것입니다.
+
+"NAT 는 보안 기능이 아니다" — 이 문장을 여기서 확실히 새겨 주세요. M10 에서 다시 확인합니다.
+
+그런데 왜 이 랩은 ULA 를 쓰는가? 실제 GUA 를 받아 올 수 없기 때문입니다.
+실무에서도 인터넷에 나가지 않는 내부망(관리망 · 백업망)에는 ULA 를 씁니다.
+`design/ipam.yml` 의 `rationale` 에 이 랩의 선택 근거가 적혀 있습니다.
+
+### 2.5 ★ ARP 는 어디로 갔나 — NDP
+IPv6 에는 ARP 가 없습니다. 대신 NDP(Neighbor Discovery Protocol) 가 ICMPv6 위에서 같은 일을 합니다.
+
+| IPv4 | IPv6 | 하는 일 |
+|---|---|---|
+| ARP Request (브로드캐스트) | NS (Neighbor Solicitation, 멀티캐스트) | "이 주소 쓰는 사람 누구?" |
+| ARP Reply (유니캐스트) | NA (Neighbor Advertisement) | "나야. 내 MAC 은…" |
+| — | RS / RA (Router Solicitation / Advertisement) | "라우터 있나요?" / "나 여기 있고 prefix 는 이거야" |
+| Gratuitous ARP | DAD (Duplicate Address Detection) | "이 주소 이미 쓰는 사람 있나?" |
+
+#### 결정적 차이는 NS 가 브로드캐스트가 아니라는 것이다.
+
+```
+IPv4 : ARP Request → ff:ff:ff:ff:ff:ff  → 세그먼트의 모든 장비가 처리한다
+IPv6 : NS         → ff02::1:ffXX:XXXX  → 주소 끝 24비트가 같은 소수만 처리한다
+```
+
+`{{ ip6.pc1 }}` 의 solicited-node 주소를 만들어 보자.
+
+```
+{{ ip6.pc1 }} 의 마지막 24비트  →  {{ sol6.pc1.addr }}
+                    프레임의 목적지 MAC  →  {{ sol6.pc1.mac }}   (33:33: + 주소의 뒤 32비트)
+```
+
+세그먼트에 장비가 1000대 있어도 ARP 는 1000대를 전부 깨웁니다.
+NS 는 사실상 1~2대만 깨웁니다. 대규모 세그먼트에서 IPv6 가 유리한 이유 중 하나입니다.
+
+**DAD** 는 IPv4 에 없던 안전장치입니다. 주소를 붙이기 전에 자기 주소로 NS 를 보내
+누가 응답하면 그 주소를 쓰지 않습니다 (`dadfailed`). IPv4 의 IP 충돌은 그냥 둘 다 쓰다가 사고가 났습니다.
+
+### 2.6 DHCP 는 어디로 갔나 — SLAAC
+**SLAAC** (Stateless Address Autoconfiguration) — 서버 없이 스스로 주소를 만듭니다.
+
+```
+① 단말: "라우터 계세요?"           RS  →  ff02::2 (모든 라우터)
+② 라우터: "나 있고, prefix 는 …/64"  RA  →  ff02::1 (모든 노드)
+③ 단말: prefix + 인터페이스 ID 를 붙여 스스로 주소를 만든다
+④ 단말: DAD 로 중복 확인 → 사용 시작
+```
+
+#### 인터페이스 ID 만드는 법
+
+| 방식 | 설명 | 문제 |
+|---|---|---|
+| EUI-64 | MAC 에서 만듭니다 (`{{ mac.pc1 }}` → `{{ eui64.pc1[2:] }}`) | MAC 이 주소에 그대로 노출 → 어디를 가도 추적당합니다 |
+| 프라이버시 확장 | 난수로 만들고 주기적으로 바꿉니다 | 오늘날의 기본값. 로그 추적이 어려워집니다 |
+
+| | DHCP (IPv4) | SLAAC | DHCPv6 |
+|---|---|---|---|
+| 서버 필요 | ○ | ✗ | ○ |
+| 누가 배정 | 서버 | 단말 스스로 | 서버 |
+| DNS 주소 전달 | ○ | RA 옵션(RDNSS) 또는 DHCPv6 | ○ |
+| 누가 썼는지 기록 | 남습니다 | 안 남습니다 | 남습니다 |
+
+실무에서는 SLAAC 만으로 안 끝나는 경우가 많습니다. 어느 단말이 어느 주소를 썼는지
+**기록이 남아야** 하는 조직에서는 DHCPv6 를 함께 씁니다.
+RA 의 `M`(Managed) / `O`(Other) 플래그가 "주소는 DHCPv6 로 받아라 / DNS 만 받아라" 를 알립니다.
+
+이 랩은 주소를 전부 고정으로 줍니다 (netplan `accept-ra: false`).
+교재 · 검사 · 정답을 하나로 유지하기 위해서입니다. SLAAC 는 6.6 에서 직접 켜 봅니다.
+
+### 2.7 Dual-stack — 같은 선 위의 두 개의 망
+
+IPv4 와 IPv6 를 동시에 쓰는 것을 dual-stack 이라 합니다. 핵심은 이것입니다.
+
+```
+같은 랜선  ·  같은 인터페이스  ·  그러나 라우팅 테이블은 두 벌
+```
+
+| IPv4 | IPv6 |
+|---|---|
+| `ip route show` | `ip -6 route show` |
+| `ip neigh show` | `ip -6 neigh show` |
+| `show ip ospf neighbor` | `show ipv6 ospf6 neighbor` |
+| `ping` / `traceroute` | `ping6` / `traceroute6` |
+
+그래서 한쪽만 고장 날 수 있습니다.
+"IPv4 는 되는데 IPv6 만 안 된다" 는 신고가 실제로 들어옵니다.
+링크가 살아 있으니 L1/L2 는 이미 배제된 상태이고, IPv6 쪽 주소 → 경로 → 이웃 만 따라가면 됩니다.
+
+이름으로 접속할 때 어느 쪽이 먼저 쓰이나? 대개 IPv6 가 우선입니다 (`getaddrinfo` 의 정렬 규칙).
+그래서 IPv6 경로가 조용히 망가져 있으면 "어떤 사이트만 느리다" 는 증상이 나옵니다
+— 브라우저가 IPv6 를 먼저 시도했다가 실패하고 IPv4 로 넘어가기 때문입니다
+(이 지연을 줄이려는 것이 Happy Eyeballs 다).
+
+### 2.8 OSPFv3 는 무엇이 다른가
+
+| | OSPF (v2) | OSPFv3 |
+|---|---|---|
+| 대상 | IPv4 | IPv6 |
+| 프로세스 | `router ospf` | `router ospf6` (완전히 별개) |
+| 인접 통신 | 인터페이스 IPv4 주소 | link-local (`fe80::`) |
+| router-id | 32비트 | 32비트 그대로 (IPv4 형식) |
+| 인터페이스 설정 | `ip ospf area …` | `ipv6 ospf6 area …` |
+
+프로세스가 별개라는 것이 실무적으로 가장 중요합니다.
+IPv4 인접이 `Full` 이어도 IPv6 인접은 안 서 있을 수 있습니다. 따로 확인해야 합니다.
+
+그리고 인접이 link-local 로 맺어지므로 글로벌 주소가 없어도 OSPFv3 는 돕니다.
+반대로 말하면, 인접은 멀쩡한데 주소 배정이 빠져 통신만 안 되는 상황이 가능합니다.
+
+---
+
+## 3. 직접 만든다 — 같은 선 위에 두 번째 망을 얹습니다
+
+터미널을 일곱 개 엽니다 — `pc1` `pc2` `r1` `r2` `r3` `r4` `web`.
+
+### 3.0 IPv6 명령은 `-6` 하나 차이입니다
+
+지금까지 쓰던 명령에 `-6` 을 붙이면 IPv6 쪽을 봅니다. 라우터 안에서는 `ip` 자리에 `ipv6` 가 들어갑니다.
+
+| 하려는 것 | IPv4 | IPv6 |
+|---|---|---|
+| 주소 보기 | `ip -br addr show` | `ip -6 -br addr show` |
+| 주소 붙이기 | `ip addr add` | `ip -6 addr add` |
+| 경로 보기 | `ip route show` | `ip -6 route show` |
+| 이웃 캐시 | `ip neigh show` | `ip -6 neigh show` |
+| 통신 확인 | `ping` | `ping6` (또는 `ping -6`) |
+| 라우터 안에서 | `show ip route` | `show ipv6 route` |
+| 라우터 안에서 | `show ip ospf neighbor` | `show ipv6 ospf6 neighbor` |
+
+라우터 설정은 M3 · M4 와 똑같이 `sudo vtysh` 로 들어가서 합니다.
+
+```bash
+# r1 의 셸에서
+sudo vtysh
+```
+
+되돌리려면 `sudo systemctl restart frr`(라우터) · `sudo netplan apply`(단말) 입니다.
+랩 전체는 웹 콘솔의 **[이 모듈 적용]** 이 되돌립니다.
+
+### 3.1 시작 상태를 눈으로 확인합니다
+
+```bash
+# pc1
+ip -6 -br addr show eth1
+```
+
+```
+eth1   UP   fe80::5054:ff:fe11:1/64
+```
+
+**아무 설정도 안 했는데 주소가 하나 있습니다.** `fe80::` 로 시작하는 링크로컬입니다.
+인터페이스가 올라오는 순간 OS 가 스스로 만듭니다. 이 선 밖으로는 나가지 못하지만,
+같은 선에 붙은 이웃과는 이것만으로 말을 걸 수 있습니다.
+
+```bash
+# pc1 — 같은 선에 누가 있는지 물어본다
+ping6 -c 3 -I eth1 ff02::1
+```
+
+```
+64 bytes from fe80::5054:ff:fe21:3%eth1: icmp_seq=1 ttl=64 time=0.6 ms
+64 bytes from fe80::5054:ff:fe12:1%eth1: icmp_seq=1 ttl=64 time=0.9 ms
+```
+
+`ff02::1` 은 "이 선의 모든 노드" 라는 뜻의 멀티캐스트 주소입니다.
+IPv4 라면 브로드캐스트로 했을 일인데, IPv6 에는 브로드캐스트가 없어 멀티캐스트가 그 자리를 대신합니다.
+`%eth1` 은 "어느 선의 fe80 인가" 를 밝히는 것입니다. 링크로컬은 선마다 겹칠 수 있기 때문입니다.
+
+```bash
+# pc1
+ip -6 route show
+```
+
+기본 경로가 없습니다. 링크로컬 말고는 갈 곳이 없다는 뜻입니다.
+
+```
+r1# show ipv6 route
+```
+
+`r1` 도 마찬가지입니다. `show ipv6 ospf6 neighbor` 는 아무것도 내놓지 않습니다.
+
+### 3.2 1단계 — 사용자망에 IPv6 주소를 붙입니다 (할 일 ①)
+
+먼저 한 대역만 살려 봅니다. VLAN {{ vlans[10].id }} 의 게이트웨이와 `pc1` 입니다.
+
+```
+r1# configure terminal
+r1(config)# interface eth1.{{ vlans[10].id }}
+r1(config-if)# ipv6 address {{ gw6.vlan10 }}/64
+r1(config-if)# end
+r1# show ipv6 interface eth1.{{ vlans[10].id }}
+```
+
+```bash
+# pc1
+sudo ip -6 addr add {{ ip6c.pc1 }} dev eth1
+ip -6 -br addr show eth1
+```
+
+**확인**
+
+```bash
+# pc1
+ping6 -c 2 {{ gw6.vlan10 }}
+```
+
+같은 대역 안이라 이것만으로 통합니다. 무슨 일이 일어났는지 봅니다.
+
+```bash
+# pc1
+ip -6 neigh show dev eth1
+```
+
+```
+{{ gw6.vlan10 }} lladdr {{ mac.r1 }} router REACHABLE
+```
+
+ARP 가 아니라 **NDP** 가 채운 것입니다. `router` 라는 표시에 주목하세요.
+IPv4 의 ARP 테이블에는 없던 정보입니다 — 상대가 라우터인지 아닌지를 IPv6 는 알고 있습니다.
+
+### 3.3 2단계 — 나머지 단말과 게이트웨이 (할 일 ①)
+
+```bash
+# pc2
+sudo ip -6 addr add {{ ip6c.pc2 }} dev eth1
+```
+
+```
+r1# configure terminal
+r1(config)# interface eth1.{{ vlans[20].id }}
+r1(config-if)# ipv6 address {{ gw6.vlan20 }}/64
+r1(config-if)# end
+```
+
+```bash
+# web
+sudo ip -6 addr add {{ ip6c.web }} dev eth1
+```
+
+```
+r4# configure terminal
+r4(config)# interface {{ port.r4.sw2 }}
+r4(config-if)# ipv6 address {{ gw6.vlan40 }}/64
+r4(config-if)# end
+```
+
+**확인** — 각 단말이 자기 게이트웨이를 봅니다.
+
+```bash
+# pc2
+ping6 -c 2 {{ gw6.vlan20 }}
+```
+
+```bash
+# web
+ping6 -c 2 {{ gw6.vlan40 }}
+```
+
+여기까지는 **대역 안**입니다. `pc1` 에서 `web` 으로는 아직 못 갑니다. 사이가 비어 있기 때문입니다.
+
+```labdiagram
+kind: mini
+cols: [r1, [r2, r3], r4]
+links:
+  - { a: r1, b: r2, tone: dash, label: IPv6 없음 }
+  - { a: r1, b: r3, tone: dash, label: IPv6 없음 }
+  - { a: r2, b: r4, tone: dash, label: IPv6 없음 }
+  - { a: r3, b: r4, tone: dash, label: IPv6 없음 }
+marks:
+  r1: ["사용자망 IPv6 O", "코어 쪽 X"]
+  r2: ["IPv6 없음"]
+  r3: ["IPv6 없음"]
+  r4: ["서버망 IPv6 O", "코어 쪽 X"]
+notes:
+  - 양 끝의 대역은 IPv6 로 살아났습니다
+  - 그 사이를 잇는 링크에는 아직 주소가 없습니다
+```
+
+### 3.4 3단계 — 라우터 사이 링크와 루프백 (할 일 ②)
+
+네 라우터의 p2p 인터페이스와 루프백에 주소를 붙입니다.
+
+```
+r1# configure terminal
+r1(config)# interface {{ port.r1.r2 }}
+r1(config-if)# ipv6 address {{ p2p6['r1-r2'].addresses.r1 }}/64
+r1(config-if)# exit
+r1(config)# interface {{ port.r1.r3 }}
+r1(config-if)# ipv6 address {{ p2p6['r1-r3'].addresses.r1 }}/64
+r1(config-if)# exit
+r1(config)# interface lo0
+r1(config-if)# ipv6 address {{ loopback6.r1 }}
+r1(config-if)# end
+```
+
+```
+r2# configure terminal
+r2(config)# interface {{ port.r2.r1 }}
+r2(config-if)# ipv6 address {{ p2p6['r1-r2'].addresses.r2 }}/64
+r2(config-if)# exit
+r2(config)# interface {{ port.r2.r4 }}
+r2(config-if)# ipv6 address {{ p2p6['r2-r4'].addresses.r2 }}/64
+r2(config-if)# exit
+r2(config)# interface lo0
+r2(config-if)# ipv6 address {{ loopback6.r2 }}
+r2(config-if)# end
+```
+
+```
+r3# configure terminal
+r3(config)# interface {{ port.r3.r1 }}
+r3(config-if)# ipv6 address {{ p2p6['r1-r3'].addresses.r3 }}/64
+r3(config-if)# exit
+r3(config)# interface {{ port.r3.r4 }}
+r3(config-if)# ipv6 address {{ p2p6['r3-r4'].addresses.r3 }}/64
+r3(config-if)# exit
+r3(config)# interface lo0
+r3(config-if)# ipv6 address {{ loopback6.r3 }}
+r3(config-if)# end
+```
+
+```
+r4# configure terminal
+r4(config)# interface {{ port.r4.r2 }}
+r4(config-if)# ipv6 address {{ p2p6['r2-r4'].addresses.r4 }}/64
+r4(config-if)# exit
+r4(config)# interface {{ port.r4.r3 }}
+r4(config-if)# ipv6 address {{ p2p6['r3-r4'].addresses.r4 }}/64
+r4(config-if)# exit
+r4(config)# interface lo0
+r4(config-if)# ipv6 address {{ loopback6.r4 }}
+r4(config-if)# end
+```
+
+**확인** — 이웃끼리 직접 통하는지 봅니다.
+
+```
+r1# ping {{ p2p6['r1-r2'].addresses.r2 }}
+```
+
+```
+r1# show ipv6 route
+```
+
+`C` 로 시작하는 줄들이 늘었습니다. 직접 붙은 대역이라 저절로 생긴 것입니다.
+하지만 `r1` 은 아직 서버망(`{{ v6.vlan40 }}`)을 모릅니다. 아무도 알려 주지 않았기 때문입니다.
+
+### 3.5 4단계 — OSPFv3 를 켭니다 (할 일 ③)
+
+**OSPFv3 는 OSPFv2 와 별개의 프로세스입니다.** 인접도 따로 서고 지도도 따로 만듭니다.
+설정하는 자리만 비슷합니다.
+
+```
+r1# configure terminal
+r1(config)# router ospf6
+r1(config-ospf6)# ospf6 router-id {{ loopback.r1 }}
+r1(config-ospf6)# exit
+r1(config)# interface eth1.{{ vlans[10].id }}
+r1(config-if)# ipv6 ospf6 area {{ routing.ospf6.area }}
+r1(config-if)# ipv6 ospf6 passive
+r1(config-if)# exit
+r1(config)# interface eth1.{{ vlans[20].id }}
+r1(config-if)# ipv6 ospf6 area {{ routing.ospf6.area }}
+r1(config-if)# ipv6 ospf6 passive
+r1(config-if)# exit
+r1(config)# interface {{ port.r1.r2 }}
+r1(config-if)# ipv6 ospf6 area {{ routing.ospf6.area }}
+r1(config-if)# exit
+r1(config)# interface {{ port.r1.r3 }}
+r1(config-if)# ipv6 ospf6 area {{ routing.ospf6.area }}
+r1(config-if)# exit
+r1(config)# interface lo0
+r1(config-if)# ipv6 ospf6 area {{ routing.ospf6.area }}
+r1(config-if)# ipv6 ospf6 passive
+r1(config-if)# end
+```
+
+**router-id 가 IPv4 주소 모양인 것에 주목하세요.** OSPFv3 는 IPv6 를 나르지만
+지도 위의 이름표는 여전히 32비트입니다. IPv6 전용 망에서도 router-id 는 손으로 정해 줘야 합니다.
+
+`r2` · `r3` · `r4` 도 같은 방식입니다. 값만 다릅니다.
+
+| 라우터 | router-id | area 에 넣을 것 | passive |
+|---|---|---|---|
+| `r2` | `{{ loopback.r2 }}` | `{{ port.r2.r1 }}` `{{ port.r2.r4 }}` `lo0` | `lo0` |
+| `r3` | `{{ loopback.r3 }}` | `{{ port.r3.r1 }}` `{{ port.r3.r4 }}` `lo0` | `lo0` |
+| `r4` | `{{ loopback.r4 }}` | `{{ port.r4.r2 }}` `{{ port.r4.r3 }}` `{{ port.r4.sw2 }}` `lo0` | `{{ port.r4.sw2 }}` `lo0` |
+
+**확인** — 인접이 두 벌이 됩니다.
+
+```
+r1# show ip ospf neighbor
+r1# show ipv6 ospf6 neighbor
+```
+
+앞은 M4 에서 만든 것이고, 뒤는 방금 만든 것입니다. **둘은 서로를 모릅니다.**
+IPv4 인접이 살아 있어도 IPv6 인접은 따로 확인해야 합니다.
+
+```
+r1# show ipv6 route ospf6
+```
+
+서버망 `{{ v6.vlan40 }}` 이 나타났습니다.
+
+```labdiagram
+kind: mini
+cols: [r1, [r2, r3], r4]
+links:
+  - { a: r1, b: r2, label: "IPv4 + IPv6" }
+  - { a: r1, b: r3, label: "IPv4 + IPv6" }
+  - { a: r2, b: r4, label: "IPv4 + IPv6" }
+  - { a: r3, b: r4, label: "IPv4 + IPv6" }
+marks:
+  r1: ["OSPFv2 + OSPFv3"]
+  r2: ["OSPFv2 + OSPFv3"]
+  r3: ["OSPFv2 + OSPFv3"]
+  r4: ["OSPFv2 + OSPFv3"]
+notes:
+  - 인접이 두 벌, 라우팅 테이블도 두 벌입니다
+  - 단말은 아직 IPv6 기본 경로가 없습니다
+```
+
+### 3.6 5단계 — 단말에 IPv6 기본 경로를 줍니다 (할 일 ④)
+
+```bash
+# pc1
+sudo ip -6 route add default via {{ gw6.vlan10 }}
+```
+
+```bash
+# pc2
+sudo ip -6 route add default via {{ gw6.vlan20 }}
+```
+
+```bash
+# web
+sudo ip -6 route add default via {{ gw6.vlan40 }}
+```
+
+**확인**
+
+```bash
+# pc1
+ping6 -c 3 {{ ip6c.web.split('/')[0] }}
+```
+
+통했습니다. IPv4 와 IPv6 가 같은 선 위에서 각자 돌아갑니다.
+
+### 3.7 두 벌을 나란히 확인합니다
+
+| 확인할 것 | IPv4 | IPv6 |
+|---|---|---|
+| 주소 | `ip -br addr show` | `ip -6 -br addr show` |
+| 이웃 | `show ip ospf neighbor` | `show ipv6 ospf6 neighbor` |
+| 경로 | `show ip route` | `show ipv6 route` |
+| 단말 기본 경로 | `ip route show default` | `ip -6 route show default` |
+| 통신 | `ping {{ ip.web }}` | `ping6 {{ ip6c.web.split('/')[0] }}` |
+
+**저장하지 마세요** — `write memory` 를 하면 되돌리기가 번거로워집니다.
+
+---
+
+## 4. 만든 것이 도는지 확인합니다
+
+```bash
+# pc1
+ping6 -c 3 {{ ip6c.web.split('/')[0] }}
+traceroute6 -n {{ ip6c.web.split('/')[0] }}
+```
+
+```
+ 1  {{ gw6.vlan10 }}
+ 2  {{ p2p6['r1-r2'].addresses.r2 }}
+ 3  {{ p2p6['r2-r4'].addresses.r4 }}
+ 4  {{ ip6c.web.split('/')[0] }}
+```
+
+IPv4 와 같은 길로 갑니다. 두 프로토콜이 각자 계산했는데 결과가 같은 것입니다.
+같은 링크에 같은 cost 를 줬기 때문입니다. 6.7 에서 일부러 다르게 만들어 봅니다.
+
+```bash
+# pc1 — 이름으로 부르면 어느 쪽으로 가나
+curl -sS -o /dev/null -w '%{remote_ip}\n' "http://[{{ ip6c.web.split('/')[0] }}]/"
+```
+
+IPv6 주소를 URL 에 쓸 때는 대괄호로 감쌉니다. 콜론이 포트 구분자와 겹치기 때문입니다.
+
+### 4.1 안 될 때 좁히는 순서
+
+| 증상 | 먼저 볼 것 | 어디에 설명이 있는가 |
+|---|---|---|
+| 같은 대역인데 안 됩니다 | 양쪽 주소와 prefix 길이 | 5.1 |
+| 게이트웨이는 되는데 밖이 안 됩니다 | IPv6 기본 경로 · OSPFv3 인접 | 5.2 |
+| IPv4 는 되는데 IPv6 만 안 됩니다 | OSPFv3 인접을 따로 확인 | 5.3 |
+| 이웃이 안 보입니다 | 링크로컬로 먼저 확인 | 5.4 |
+| 주소가 두 개 이상 붙어 있습니다 | SLAAC 와 수동 설정이 겹쳤습니다 | 5.5 |
+
+---
+
+## 5. 자주 나는 장애 — 증상에서 원인까지
+
+| # | 증상 한 줄 | 가장 흔한 원인 |
+|---|---|---|
+| 5.1 | 같은 대역인데 안 통합니다 | prefix 길이가 다릅니다 |
+| 5.2 | 대역 밖으로 못 나갑니다 | IPv6 기본 경로가 없습니다 |
+| 5.3 | IPv4 만 되고 IPv6 는 안 됩니다 | OSPFv3 인접이 안 섰습니다 |
+| 5.4 | 이웃이 아예 안 보입니다 | 링크로컬조차 안 통합니다 |
+| 5.5 | 주소가 여러 개 붙어 있습니다 | SLAAC 와 수동 설정이 겹쳤습니다 |
+| 5.6 | 이름으로는 되는데 주소로는 안 됩니다 | 대괄호를 빼먹었습니다 |
+| 5.7 | 한쪽 방향만 IPv6 로 갑니다 | 두 프로토콜의 cost 가 다릅니다 |
+
+### 5.1 같은 대역인데 안 통한다
+
+**왜** — prefix 길이가 다릅니다. IPv6 는 거의 항상 `/64` 인데 `/128` 이나 `/48` 로 적어 놓으면
+같은 대역이라는 판단이 서로 달라집니다.
+
+```bash
+ip -6 -br addr show eth1
+```
+
+**조치** — 단말 대역은 `/64` 로 맞춥니다. 루프백만 `/128` 입니다.
+IPv6 에서 `/64` 가 아닌 단말 대역은 SLAAC 가 동작하지 않으므로 특별한 이유가 없으면 쓰지 않습니다.
+
+### 5.2 대역 밖으로 못 나간다
+
+게이트웨이는 `ping6` 이 되는데 그 너머가 안 됩니다.
+
+```bash
+ip -6 route show default
+```
+
+**왜** — IPv6 기본 경로가 없습니다. IPv4 기본 경로가 있어도 IPv6 에는 아무 소용이 없습니다.
+**두 망은 완전히 별개입니다.**
+
+**조치** — `sudo ip -6 route add default via <게이트웨이>` 를 넣습니다.
+실무에서는 라우터가 RA 로 자동으로 알려 주게 합니다 (6.6).
+
+### 5.3 IPv4 만 되고 IPv6 는 안 된다
+
+가장 흔한 dual-stack 장애입니다. IPv4 가 멀쩡해서 아무도 눈치채지 못합니다.
+
+```
+r1# show ip ospf neighbor
+r1# show ipv6 ospf6 neighbor
+```
+
+**왜** — OSPFv2 와 OSPFv3 는 별개의 프로세스입니다. 한쪽만 살아 있을 수 있습니다.
+인터페이스에 `ipv6 ospf6 area` 를 빠뜨렸거나, `router ospf6` 의 router-id 를 안 줬거나입니다.
+
+**조치** — 두 명령을 항상 **나란히** 칩니다. 점검표에 두 줄로 적어 둡니다.
+"OSPF 가 붙었다" 는 말은 IPv6 에서는 절반만 맞는 말입니다.
+
+### 5.4 이웃이 아예 안 보인다
+
+**왜** — 물리 · L2 문제이거나 인터페이스가 내려가 있습니다.
+IPv6 는 링크로컬이 자동으로 붙으므로, **링크로컬이 안 통하면 그보다 아래가 문제**입니다.
+
+```bash
+ping6 -c 3 -I eth1 ff02::1
+```
+
+아무 응답도 없으면 링크 · VLAN · 포트를 봅니다. 응답이 있으면 L2 는 정상이고 주소 설계 문제입니다.
+이 순서가 IPv6 진단을 크게 줄여 줍니다.
+
+### 5.5 주소가 여러 개 붙어 있다
+
+```
+eth1  UP  fd00:10:10:10::11/64  fd00:10:10:10:5054:ff:fe11:1/64  fe80::5054:ff:fe11:1/64
+```
+
+**왜** — 수동으로 붙인 주소와 SLAAC 로 받은 주소가 함께 있습니다.
+IPv6 는 인터페이스에 주소가 여럿인 것이 **정상**입니다. IPv4 의 감각과 다릅니다.
+
+**조치** — 문제는 아니지만 어느 주소로 나가는지는 정해집니다.
+
+```bash
+ip -6 route get <목적지>
+```
+
+출발지 주소를 확인하고, 의도와 다르면 원치 않는 쪽을 지우거나 RA 를 끕니다.
+
+### 5.6 이름으로는 되는데 주소로는 안 된다
+
+```
+curl: (3) URL rejected: Bad hostname
+```
+
+**왜** — URL 에 IPv6 주소를 쓸 때 대괄호를 빼먹었습니다. 콜론이 포트 구분자로 읽힙니다.
+
+**조치** — `http://[주소]/` 처럼 감쌉니다. 포트까지 쓰면 `http://[주소]:8080/` 입니다.
+
+### 5.7 한쪽 방향만 IPv6 로 간다
+
+**왜** — OSPFv2 와 OSPFv3 의 cost 를 따로 주기 때문에, 한쪽만 바꾸면 IPv4 와 IPv6 가
+다른 길로 갑니다. 방화벽이 경로에 있으면 이것만으로 세션이 깨집니다.
+
+```
+r1# show ipv6 ospf6 interface {{ port.r1.r2 }}
+```
+
+**조치** — 두 프로토콜의 cost 를 함께 관리합니다. 6.7 에서 일부러 어긋나게 만들어 봅니다.
+
+---
+
+## 6. 실습
+
+터미널 5개: `pc1`, `pc2`, `r1`, `r4`, `web`.
+모든 확인은 `eth1` 기준으로 합니다. 관리망(`{{ mgmt_if }}`)에는 IPv6 가 없습니다 (M0 의 함정).
+
+### 6.1 주소를 읽는다
+```bash
+# pc1
+ip -6 addr show dev eth1
+```
+
+```
+2: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP
+    inet6 {{ ip6c.pc1 }} scope global
+       valid_lft forever preferred_lft forever
+    inet6 {{ lladdr6.pc1 }}/64 scope link
+       valid_lft forever preferred_lft forever
+```
+
+주소가 두 개입니다. 하나만 설정했는데도.
+
+| 주소 | scope | 어디까지 유효한가 |
+|---|---|---|
+| `{{ ip6.pc1 }}` | `global` | 라우터를 넘어 어디든 |
+| `{{ lladdr6.pc1 }}` | `link` | 이 랜선 안에서만 |
+
+link-local 은 지울 수 없고 지워서도 안 됩니다. NDP 와 라우팅이 그 위에서 돕니다.
+
+`{{ lladdr6.pc1 }}` 가 어디서 왔는지 보자. pc1 의 MAC 은 `{{ mac.pc1 }}` 입니다.
+
+```
+{{ mac.pc1 }}
+  ↓ 가운데에 ff:fe 를 끼워 넣는다
+  5254:00ff:fe11:0001
+  ↓ 첫 바이트의 7번째 비트를 뒤집는다 (52 → 50)
+  5054:00ff:fe11:0001
+  ↓ 축약
+  {{ eui64.pc1[2:] }}
+```
+
+이것이 **EUI-64** 입니다. MAC 주소가 IPv6 주소 안에 그대로 들어 있습니다.
+
+그래서 프라이버시 문제가 생깁니다 — 노트북을 들고 어디를 가든 뒤 64비트가 같으면 추적됩니다.
+요즘 단말은 글로벌 주소에 **난수 인터페이스 ID**(프라이버시 확장)를 씁니다.
+다만 link-local 은 여전히 EUI-64 인 경우가 많습니다.
+
+```bash
+# 이 인터페이스가 듣고 있는 멀티캐스트 그룹
+ip maddr show dev eth1
+```
+
+`ff02::1`(모든 노드)과 `{{ sol6.pc1.addr }}`(solicited-node)가 보입니다. 뒤엣것이 2.5 에서 계산한 그 주소입니다.
+
+### 6.2 축약을 검증한다
+손으로 축약한 뒤 기계에게 채점받습니다.
+
+```bash
+# pc1
+python3 -c "import ipaddress as i; print(i.ip_address('2001:0db8:0000:0000:0008:0800:200c:417a'))"
+python3 -c "import ipaddress as i; print(i.ip_address('{{ ip6.pc1 }}').exploded)"
+```
+
+```
+2001:db8::8:800:200c:417a
+{{ ip6.pc1 }} 의 완전 표기가 출력된다
+```
+
+먼저 손으로 하고 나서 확인해 주세요. 도구로 시작하면 규칙이 안 붙습니다.
+**[퀴즈] 탭**에 문제 세트가 있습니다.
+
+### 6.3 ★ ARP 대신 NDP 를 본다
+**터미널 pc1** — 캡처를 먼저 것입니다.
+
+```bash
+sudo tcpdump -i eth1 -e -n icmp6
+```
+
+터미널 pc1 (다른 창) — 이웃 캐시를 비우고 게이트웨이로 보냅니다.
+
+```bash
+sudo ip -6 neigh flush dev eth1
+ping6 -c 1 {{ gw6.vlan10 }}
+```
+
+#### 보이는 것
+
+```
+{{ mac.pc1 }} > {{ sol6gw.vlan10.mac }}, ethertype IPv6 (0x86dd):
+    {{ ip6.pc1 }} > {{ sol6gw.vlan10.addr }}: ICMP6, neighbor solicitation, who has {{ gw6.vlan10 }}
+{{ mac.r1 }} > {{ mac.pc1 }}, ethertype IPv6 (0x86dd):
+    {{ gw6.vlan10 }} > {{ ip6.pc1 }}: ICMP6, neighbor advertisement, tgt is {{ gw6.vlan10 }}
+{{ mac.pc1 }} > {{ mac.r1 }}, ethertype IPv6 (0x86dd):
+    {{ ip6.pc1 }} > {{ gw6.vlan10 }}: ICMP6, echo request
+```
+
+#### M1 의 ARP 캡처와 나란히 놓고 봐 주세요.
+
+| | IPv4 (M1) | IPv6 (지금) |
+|---|---|---|
+| 질문 | ARP Request | NS |
+| 목적지 MAC | `ff:ff:ff:ff:ff:ff` (브로드캐스트) | `{{ sol6gw.vlan10.mac }}` (멀티캐스트) |
+| 목적지 IP | — (ARP 는 IP 헤더가 없습니다) | `{{ sol6gw.vlan10.addr }}` (solicited-node) |
+| 답 | ARP Reply (유니캐스트) | NA (유니캐스트) |
+| 캐시 | `ip neigh` | `ip -6 neigh` |
+
+`33:33:` 으로 시작하는 MAC 을 기억해 두세요. IPv6 멀티캐스트 프레임의 목적지 MAC 은
+언제나 `33:33:` + IPv6 주소의 뒤 32비트입니다. 캡처에서 이것만 봐도 "IPv6 멀티캐스트구나" 를 압니다.
+
+```bash
+# pc1 — 이웃 캐시
+ip -6 neigh show dev eth1
+```
+
+```
+{{ gw6.vlan10 }} lladdr {{ mac.r1 }} router REACHABLE
+```
+
+`router` 라는 표시가 붙습니다. IPv4 의 ARP 테이블에는 없던 정보입니다 —
+NA 안에 "나는 라우터다" 플래그가 들어 있기 때문입니다.
+
+#### M2 의 결론이 IPv6 에서도 그대로인지 확인한다.
+
+```bash
+ping6 -c 1 {{ ip6.web }}
+ip -6 neigh show dev eth1
+```
+
+`{{ ip6.web }}` 은 여전히 목록에 없습니다. 다른 대역이므로 게이트웨이에게만 물었습니다.
+IP 는 엔드투엔드, MAC 은 홉 단위 — 이 원칙은 IPv6 에서도 똑같습니다.
+
+### 6.4 브로드캐스트가 없다면
+M1 에서 `arping` 으로 세그먼트 전체를 깨워 봤습니다. IPv6 에는 그 방법이 없습니다. 대신 —
+
+```bash
+# pc1
+ping6 -c 2 ff02::1%eth1
+```
+
+```
+64 bytes from {{ ip6.pc1 }}: icmp_seq=1 ttl=64 time=0.03 ms
+64 bytes from {{ gw6.vlan10 }}: icmp_seq=1 ttl=64 time=0.5 ms (DUP!)
+```
+
+같은 링크의 모든 노드가 응답합니다. `(DUP!)` 는 "여러 곳에서 답이 왔다"는 표시입니다.
+
+```bash
+# 라우터만 부르기
+ping6 -c 2 ff02::2%eth1
+```
+
+`%eth1` 이 필요한 이유: 멀티캐스트와 link-local 주소는 어느 링크인지가 주소에 없습니다.
+인터페이스가 여러 개면 어디로 보낼지 알 수 없으므로 반드시 지정해야 합니다.
+이것을 zone index 라 합니다. IPv4 에는 없던 개념입니다.
+
+실무 활용: `ping6 ff02::1%eth1` 은 "이 링크에 누가 붙어 있나" 를 즉시 보여 줍니다.
+IPv4 에서 대역 전체를 스캔하던 것보다 훨씬 빠르고 정확합니다.
+
+### 6.5 두 벌의 라우팅 테이블
+```bash
+# pc1
+ip route show          # IPv4
+ip -6 route show       # IPv6
+```
+
+```
+r1# show ip ospf neighbor
+r1# show ipv6 ospf6 neighbor
+```
+
+```
+Neighbor ID     Pri  DeadTime  State/IfState   Duration  I/F
+{{ loopback.r2 }}         1  00:00:34  Full/PointToPoint  00:12:03  eth2
+{{ loopback.r3 }}         1  00:00:32  Full/PointToPoint  00:12:01  eth3
+```
+
+Neighbor ID 가 IPv4 주소입니다. OSPFv3 의 router-id 는 여전히 32비트이기 때문입니다.
+그리고 인접은 link-local 주소로 맺어져 있습니다 — `show ipv6 ospf6 neighbor detail` 로 확인할 수 있습니다.
+
+```
+r1# show ipv6 route ospf6
+```
+
+```bash
+# 경로 비교
+traceroute {{ ip.web }}
+traceroute6 {{ ip6.web }}
+```
+
+여기서 무엇을 발견했는가?
+IPv4 경로에는 우리가 cost 를 명시했지만(M4), IPv6 쪽에는 cost 를 지정하지 않았습니다.
+그래서 두 경로의 cost 가 같아 보이거나 IPv4 와 다른 길로 갈 수 있습니다.
+
+이것이 dual-stack 설계의 함정입니다. 라우팅 테이블이 두 벌이면 설계도 두 벌이어야 합니다.
+IPv4 만 신경 쓰고 IPv6 를 방치하면, 어느 날 "IPv6 트래픽만 이상한 길로 간다" 는 신고를 받게 됩니다.
+라우터 안에서 `show ipv6 ospf6 route` 로 OSPFv3 가 계산한 cost 를 직접 확인해 봐 주세요.
+
+### 6.6 SLAAC 를 직접 켜 본다
+이 랩은 주소를 고정으로 줍니다. 일부러 자동 배정을 켜서 무슨 일이 일어나는지 봅니다.
+
+**터미널 pc1** — 캡처를 걸어 둡니다.
+
+```bash
+sudo tcpdump -i eth1 -n 'icmp6 and ip6[40] == 134'      # 134 = Router Advertisement
+```
+
+**터미널 r1** — RA 를 켭니다. (FRR 은 기본적으로 RA 를 억제합니다)
+
+```
+r1# configure terminal
+r1(config)# interface eth1.{{ vlans[10].id }}
+r1(config-if)# no ipv6 nd suppress-ra
+r1(config-if)# end
+```
+
+**터미널 pc1** — RA 를 받아들이게 합니다.
+
+```bash
+sudo sysctl -w net.ipv6.conf.eth1.accept_ra=1
+ip -6 addr show dev eth1
+```
+
+```
+inet6 {{ slaac6.pc1 }}/64 scope global dynamic mngtmpaddr
+   valid_lft 2591998sec preferred_lft 604798sec
+inet6 {{ ip6c.pc1 }} scope global
+inet6 {{ lladdr6.pc1 }}/64 scope link
+```
+
+주소가 하나 더 생겼습니다. 아무도 배정해 주지 않았는데.
+
+| 관찰 | 의미 |
+|---|---|
+| prefix 가 `{{ v6.vlan10 }}` | 라우터가 알려 준 것 (RA) |
+| 뒤 64비트가 `{{ eui64.pc1[2:] }}` | 단말이 자기 MAC 으로 만든 것 (EUI-64) |
+| `valid_lft` 가 유한 | RA 가 끊기면 이 주소는 만료됩니다 |
+| `dynamic` | 설정이 아니라 자동 생성 |
+
+```bash
+# 기본 경로도 자동으로 생겼는지 본다
+ip -6 route show default
+```
+
+RA 하나로 주소와 기본 경로가 동시에 배정됐습니다. DHCP 서버도, 릴레이도 없이.
+M2 에서 "DHCP 브로드캐스트는 라우터를 넘지 못한다" 며 릴레이가 필요했던 것과 대조해 볼 것 —
+**SLAAC 는 애초에 라우터가 알려 주는 것이므로 넘을 필요가 없습니다.**
+
+그런데 문제도 보입니다. 누가 이 주소를 쓰는지 아무 기록도 남지 않습니다.
+보안 사고 추적이 필요한 조직이 DHCPv6 를 함께 쓰는 이유입니다.
+
+#### 정리 (반드시 할 것)
+
+```bash
+# pc1
+sudo sysctl -w net.ipv6.conf.eth1.accept_ra=0
+sudo ip -6 addr del {{ slaac6.pc1 }}/64 dev eth1
+ip -6 addr show dev eth1 scope global      # 주소가 하나만 남아야 한다
+```
+
+```
+r1# configure terminal
+r1(config)# interface eth1.{{ vlans[10].id }}
+r1(config-if)# ipv6 nd suppress-ra
+r1(config-if)# end
+```
+
+검사 항목이 글로벌 주소가 하나뿐인지 확인합니다.
+주소가 둘이면 출발지 주소 선택이 상황에 따라 달라져 "어떨 때만 안 된다" 는 장애가 됩니다.
+
+### 6.7 IPv4 와 IPv6 를 다른 길로 보낸다
+dual-stack 이 정말 두 벌인지를 확인하는 가장 확실한 방법입니다.
+
+```
+r1# configure terminal
+r1(config)# interface {{ port.r1.r2 }}
+r1(config-if)# ipv6 ospf6 cost 200
+r1(config-if)# end
+```
+
+```bash
+# pc1 — 두 경로를 나란히 본다
+traceroute  -n {{ ip.web }}
+traceroute6 -n {{ ip6.web }}
+```
+
+```
+# IPv4 — r2 경유 (M4 에서 설계한 대로)
+ 1  {{ gw.vlan10 }}
+ 2  {{ p2p['r1-r2'].addresses.r2 }}
+ 3  {{ p2p['r2-r4'].addresses.r4 }}
+ 4  {{ ip.web }}
+
+# IPv6 — r3 경유
+ 1  {{ gw6.vlan10 }}
+ 2  {{ p2p6['r1-r3'].addresses.r3 }}
+ 3  {{ p2p6['r3-r4'].addresses.r4 }}
+ 4  {{ ip6.web }}
+```
+
+같은 랜선 위에서 두 프로토콜이 다른 길로 갑니다.
+IPv4 쪽 설정은 하나도 건드리지 않았습니다. 완전히 독립된 두 개의 망이라는 말의 실물이 이것입니다.
+
+실무에서 이것이 왜 위험한가: IPv6 경로에만 있는 방화벽·낡은 장비를 아무도 모르고 지나가게 됩니다.
+**"IPv4 로 확인했으니 괜찮다"는 검증은 dual-stack 환경에서 절반짜리입니다.**
+
+#### 정리 (반드시 할 것)
+
+```
+r1# configure terminal
+r1(config)# interface {{ port.r1.r2 }}
+r1(config-if)# no ipv6 ospf6 cost
+r1(config-if)# end
+r1# show running-config
+```
+
+`ipv6 ospf6 cost` 줄이 한 곳도 없어야 합니다.
+
+```bash
+# r1 의 셸에서 — 세어 보고 싶으면
+sudo vtysh -c 'show running-config' | grep -c 'ipv6 ospf6 cost'
+```
+
+헷갈리면 `sudo systemctl restart frr`.
+
+---
+
+## 7. 관찰 포인트 정리
+
+| 확인할 것 | 명령 | 정상이라면 |
+|---|---|---|
+| IPv6 주소가 있는가 | `ip -6 addr show dev eth1` | global 1개 + link 1개 |
+| 글로벌 주소가 하나뿐인가 | `ip -6 addr show dev eth1 scope global` | 1개 (SLAAC 잔여 없음) |
+| 기본 경로 | `ip -6 route show default` | `via {{ gw6.vlan10 }}` |
+| 이웃을 찾았는가 | `ip -6 neigh show` | 게이트웨이가 `REACHABLE router` |
+| 링크에 누가 있나 | `ping6 ff02::1%eth1` | 온링크 노드가 전부 응답 |
+| OSPFv3 인접 | `show ipv6 ospf6 neighbor` (vtysh) | 이웃 수만큼 `Full` |
+| IPv6 경로 | `show ipv6 route ospf6` | 의도한 next-hop |
+| 양쪽이 다 되는가 | `ping` 그리고 `ping6` | 둘 다 성공 |
+
+IPv6 진단은 IPv4 진단과 명령이 다를 뿐 순서는 같습니다.
+① 주소 → ② 경로 → ③ 이웃 → ④ 상대.
+> 주의 — `-6` 를 빼먹으면 IPv4 를 보고 있으면서 IPv6 를 봤다고 착각합니다.
+> 이 모듈에서 가장 흔한 실수입니다.
+
+---
+
+## 8. 장애 연습 — 증상만 보고 원인 찾기
+
+**언제 하나** — [과제] 탭의 마지막 과제입니다. 실습을 다 끝낸 뒤에 오세요.
+설정이 손에 익기 전에는 증상을 봐도 무엇이 이상한지 보이지 않습니다.
+
+실행 패널의 [장애 연습] 에서 아래 중 하나를 고르고 [주입] 을 누릅니다.
+목록에 증상이 함께 나오니, 표의 힌트 칸은 막혔을 때만 펴 보세요.
+
+| # | 증상 | 힌트 |
+|---|---|---|
+| m06-01 | pc1 에서 IPv4 는 되는데 IPv6 만 안 됩니다 | 스택은 두 벌입니다. 어느 쪽 무엇이 없는가 |
+| m06-02 | pc1 에서 서버망만 IPv6 로 못 갑니다. 게이트웨이까지는 갑니다 | 경로를 누가 알려 줬어야 하는가 |
+| m06-03 | pc1 의 IPv6 주소가 아예 동작하지 않습니다. 설정은 분명히 있습니다 | `ip -6 addr` 출력에 평소 없던 단어가 붙어 있습니다 |
+
+**규칙**: 복구하기 전에 원인을 먼저 말합니다. 근거(명령어 출력 · 캡처)를 함께 제시해 주세요.
+
+다 찾았으면 **[복구]** 로 되돌립니다.
+여기저기 건드려서 엉킨 것 같으면 [이 모듈 적용] 이 더 확실합니다 — 주입한 장애까지 한 번에 풉니다.
+
+m06-03 은 IPv4 에는 없던 종류의 장애입니다. IPv6 가 스스로를 지키는 장치가 작동한 결과입니다.
+
+---
+
+## 9. 흔한 오해 · 실무 팁
+
+| 오해 | 사실 |
+|---|---|
+| "IPv6 는 보안이 강하다" | 주소가 많을 뿐입니다. 보안은 방화벽이 합니다. NAT 의 우연한 방벽이 사라지므로 오히려 정책이 더 중요해집니다. |
+| "IPv6 에도 NAT 를 써야 한다" | 기본적으로 필요 없습니다. (NPTv6 같은 특수 용도는 있습니다) |
+| "ULA 는 겹치지 않는다" | 겹칠 수 있습니다. `fd` 뒤 40비트를 난수로 만들어야 확률이 낮아집니다. |
+| "fe80 주소는 지워도 된다" | 지우면 NDP·OSPFv3 가 죽습니다. 정상 동작의 일부입니다. |
+| "ICMP 는 막아도 된다" | IPv4 시절의 습관입니다. IPv6 에서는 ICMPv6 를 막으면 망이 안 돕니다 (NDP·PMTUD). |
+| "IPv4 가 되니 IPv6 도 될 것" | 라우팅 테이블이 두 벌입니다. 따로 확인해야 합니다. |
+| "dual-stack 이면 안전하다" | 한쪽만 망가지면 "어떤 사이트만 느리다" 같은 진단하기 어려운 증상이 나옵니다. |
+| "SLAAC 면 관리가 편하다" | 누가 어느 주소를 썼는지 기록이 안 남습니다. 추적이 필요하면 DHCPv6. |
+
+#### 실무 팁
+
+- 명령에 `-6` 를 붙였는지 항상 확인해 주세요. IPv4 를 보면서 IPv6 를 봤다고 착각하는 것이 1위 실수입니다.
+- `ping6 ff02::1%eth1` 로 링크의 이웃을 즉시 확인할 수 있습니다. IPv4 스캔보다 빠릅니다.
+- 방화벽 정책을 쓸 때 IPv6 정책을 따로 쓰지 않으면 통째로 열려 있습니다. 정책도 두 벌입니다.
+- 주소 설계는 VLAN 번호 = subnet id 처럼 규칙을 세우세요. IPv6 는 길어서 규칙이 없으면 못 읽습니다.
+- 실장비 명령 대응:
+
+  | 이 랩 (Linux / FRR) | Cisco IOS |
+  |---|---|
+  | `ip -6 addr show` | `show ipv6 interface brief` |
+  | `ip -6 route show` | `show ipv6 route` |
+  | `ip -6 neigh show` | `show ipv6 neighbors` |
+  | `show ipv6 ospf6 neighbor` | `show ipv6 ospf neighbor` |
+  | `ipv6 nd suppress-ra` | `ipv6 nd suppress-ra` |
+  | `ping6` / `traceroute6` | `ping ipv6` / `traceroute ipv6` |
+
+---
+
+### 여기서 끝이 아니다
+
+위쪽 탭에서 [퀴즈](#quiz) → [과제](#tasks) → [검증](#verify) 순으로 진행합니다.
+퀴즈로 개념을 확인하고, 과제에서 랩에 직접 만들고, 검증에서 그 결과를 기계가 봅니다.
+
+## 다음 — [퀴즈]
+
+교재는 여기까지입니다. 이 모듈은 아직 안 끝났습니다 — 순서는 이렇습니다.
+
+**교재 → [퀴즈] → [과제] → [검증] → 다음 모듈**
+
+웹 콘솔 위쪽의 **[퀴즈]** 탭을 눌러 개념부터 확인해 주세요.
+횟수 제한은 없고, 틀린 문항은 그 자리에서 해설이 나옵니다.
+
+[검증]까지 통과하면 다음 모듈이 열립니다 — M7. 전송 계층. 지금까지는 "패킷이 그 장비까지 갔는가"만 다뤘습니다.
+이제 "그 장비 안의 어느 프로그램까지 갔는가" 를 다룹니다.
+그리고 실무에서 가장 자주 받는 질문에 답하는 도구를 만듭니다 —
+"접속이 안 된다" 를 네 가지 원인으로 감별하는 표.

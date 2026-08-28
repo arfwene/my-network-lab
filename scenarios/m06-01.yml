@@ -1,33 +1,32 @@
 ---
-# M6-01 : web 의 80 포트를 방화벽에서 조용히 버린다 (DROP)
-#   증상  : ping 은 되는데 HTTP 만 매달리다 타임아웃. 즉시 실패가 아니다.
-#   한줄  : ping 은 되고 HTTP 만 매달림
-#   목표  : pc1 에서 web 의 HTTP 가 응답한다
-#   정답  : 감별표 ② — 어딘가에서 DROP 되고 있다.
-#           캡처에 SYN 만 여러 번 나가고 아무것도 안 돌아온다.
-#   노림수: "오래 걸린다"는 것 자체가 단서다. 즉시 거부와 구분하기. (E3)
-- name: "scenario m06-01 :: 방화벽이 조용히 버린다"
-  hosts: web
+# M6-01 : pc1 의 IPv6 기본 경로 삭제
+#   증상  : IPv4 는 전부 정상. IPv6 만 게이트웨이 밖으로 못 나간다.
+#           ping6 <게이트웨이> 는 되고, ping6 <web> 은 안 된다.
+#   한줄  : IPv6 만 밖으로 못 나감
+#   목표  : pc1 에서 web 으로 IPv6 통신이 된다
+#   정답  : ip -6 route show default 가 비어 있다. IPv4 기본 경로와는 별개다.
+#   노림수: dual-stack 은 라우팅 테이블이 두 벌이다. 한쪽만 죽을 수 있다. (C4)
+- name: "scenario m06-01 :: IPv6 기본 경로 누락"
+  hosts: pc1
   become: true
   gather_facts: false
+  vars:
+    gw6: "{{ ipv6.segments.vlan10.gateway }}"
   tasks:
-    - name: 80 포트 DROP 규칙 추가
-      ansible.builtin.shell: |
-        nft add table inet labbreak
-        nft add chain inet labbreak input '{ type filter hook input priority 0; }'
-        nft add rule inet labbreak input tcp dport 80 drop
-      changed_when: true
-      when: scenario_action | default('break') == 'break'
-
-    - name: 규칙 제거
-      ansible.builtin.command: "nft delete table inet labbreak"
+    - name: IPv6 기본 경로 삭제
+      ansible.builtin.command: "ip -6 route del default"
       changed_when: true
       failed_when: false
+      when: scenario_action | default('break') == 'break'
+
+    - name: IPv6 기본 경로 복구
+      ansible.builtin.command: "ip -6 route replace default via {{ gw6 }} dev eth1"
+      changed_when: true
       when: scenario_action | default('break') != 'break'
 
     - name: 안내
       ansible.builtin.debug:
         msg: >-
-          {{ 'web 의 80 포트를 DROP 으로 막았다. ping 은 되고 HTTP 만 매달린다. nginx 는 정상이다.'
+          {{ 'pc1 의 IPv6 기본 경로를 지웠다. IPv4 는 멀쩡하므로 "IPv6 만 안 된다"고만 알릴 것.'
              if scenario_action | default('break') == 'break'
-             else 'web 방화벽 규칙 제거 완료 (nft list ruleset 으로 확인할 것).' }}
+             else 'pc1 IPv6 기본 경로 복구 완료 (via ' ~ gw6 ~ ').' }}

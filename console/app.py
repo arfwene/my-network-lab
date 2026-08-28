@@ -672,7 +672,7 @@ def drill_verdict(lab_id, module, checks_passed):
     # 중간 점검이 있는 모듈은 **그것만** 장애 실습으로 친다.
     #   여기를 열어 두면 스스로 고른 장애를 넣고 검사를 통과하는 것으로 가려 놓고
     #   푸는 연습을 통째로 건너뛸 수 있다. 그 모듈의 과제가 중간 점검 하나이므로
-    #   (M3 · M6) 그 문을 지나야 통과다.
+    #   (M3 · M7) 그 문을 지나야 통과다.
     #   중간 점검 통과는 _job_done 의 drill-check 쪽에서 따로 인정한다.
     if exam.checkpoint_for(module["stage"]):
         return None
@@ -921,12 +921,12 @@ async def history(request: Request, who: str = "", module: str = ""):
 
 
 @app.get("/topology.svg")
-async def topology(request: Request, stage: str = "m10"):
+async def topology(request: Request, stage: str = "m11"):
     user, redir = require(request)
     if redir:
         return redir
     if stage not in L.STAGES:
-        stage = "m10"
+        stage = "m11"
     return HTMLResponse(topology_svg.render(stage, standalone=True),
                         media_type="image/svg+xml")
 
@@ -956,7 +956,7 @@ async def diagram_drawio(request: Request, module: str = "", n: int = 0):
 
 
 @app.get("/topology.drawio")
-async def topology_drawio(request: Request, stage: str = "m10"):
+async def topology_drawio(request: Request, stage: str = "m11"):
     """구성도를 draw.io 파일로 내려준다 (그림을 크게 본 화면의 내려받기 단추).
 
     화면에 뜬 SVG 와 같은 배치에서 나온다 — 열어서 손보거나, 발표 자료로
@@ -966,7 +966,7 @@ async def topology_drawio(request: Request, stage: str = "m10"):
     if redir:
         return redir
     if stage not in L.STAGES:
-        stage = "m10"
+        stage = "m11"
     return PlainTextResponse(
         topodrawio.drawio(stage), media_type="application/xml",
         headers={"Content-Disposition":
@@ -1580,7 +1580,7 @@ async def admin_setup_run(request: Request, action: str):
         done = lambda j: j.status == "ok" and (db.mark_jump_applied(started),   # noqa: E731
                                                autokey.clear(jump=True))
     try:
-        job = await runner.submit(jobs.SETUP_LAB, action, "m10", None,
+        job = await runner.submit(jobs.SETUP_LAB, action, "m11", None,
                                   user.get("username"), on_done=done)
     except jobs.NotReady as e:
         return JSONResponse({"error": e.message, "health": e.health}, status_code=503)

@@ -1,0 +1,276 @@
+# M6 평가 — 퀴즈(축약·대조·개념) + 검사(dual-stack 이 실제로 도는가 · 뒷정리)
+#   서술 과제는 두지 않는다 (PLAN 6.6). M6 는 대조 학습이 중심이고,
+#   진단 서술은 M7 의 "연결 실패 4종 감별" 에서 받는다.
+quiz:
+  pass_score: 100
+  questions:
+    - id: q1
+      type: short
+      text: |
+        `2001:0db8:0000:0000:0008:0800:200c:417a` 를 **가장 짧게 축약**해 써 주세요.
+      # 표기 자체를 묻는 문항. 채점이 주소로 견주면 축약을 안 해도 맞게 되어
+      # 문제가 사라진다 — 여기서는 글자 그대로 본다.
+      notation: true
+      answer: ["2001:db8::8:800:200c:417a"]
+      explain: |
+        규칙 두 개뿐입니다.
+          ① 각 그룹의 **앞쪽 0 은 생략** (0db8 → db8)
+          ② **연속된 0 그룹**은 `::` 로 (단 한 번만)
+        `::` 를 두 번 쓰면 어디에 몇 개가 들어갈지 알 수 없어 주소가 모호해집니다.
+
+
+    - id: q2
+      type: single
+      text: |
+        인터페이스에 `fe80::5054:ff:fe11:1` 이라는 주소가 자동으로 붙어 있습니다. 이것은 무엇인가?
+      choices:
+        - "Link-local 주소 — 같은 링크 안에서만 쓰이는 자동 주소라서"
+        - "DHCPv6 서버에서 받은 주소 — 임대 기간이 지나면 사라집니다"
+        - "설정 오류로 생긴 주소 — 지우고 정식 주소를 넣어야 통신이 시작됩니다"
+        - "인터넷에서 쓰는 공인 주소(GUA) — 라우터가 광고해 준 것입니다"
+      answer: [0]
+      explain: |
+        `fe80::/10` 은 링크 로컬입니다. **주소를 하나도 설정하지 않아도 자동으로 생깁니다.**
+        NDP 와 OSPFv3 가 이 주소로 대화합니다 — 즉 글로벌 주소가 없어도 이웃 탐색과 라우팅은 돌아갑니다.
+        IPv4 의 `169.254`(APIPA)와 비슷해 보이지만 **성격이 다르다**:
+        169.254 는 "주소를 못 받아서 생긴 사고" 이고, fe80 은 **정상 동작의 일부**다.
+
+    - id: q3
+      type: single
+      text: |
+        IPv4 의 **사설 IP(RFC1918)** 에 대응하는 IPv6 주소 유형은?
+      choices:
+        - "Link-local (`fe80::/10`) — 같은 링크 안에서만 쓰는 주소라서"
+        - "GUA (`2000::/3`) — 조직에 배정되는 주소 블록이라서"
+        - "ULA (`fd00::/8`) — 조직 안에서만 쓰는 주소라서"
+        - "Multicast (`ff00::/8`) — 내부 그룹 통신에 쓰는 주소라서"
+      answer: [2]
+      explain: |
+        사설(RFC1918) ↔ **ULA** `fd00::/8` · 공인 ↔ **GUA** `2000::/3` 로 대응됩니다.
+        이 랩의 `{{ v6.vlan10 }}` 이 ULA 입니다.
+        ULA 도 사설과 똑같이 **조직마다 겹칠 수 있습니다.** 그래서 `fd` 뒤 40비트는 **난수**로 만들어야 합니다
+        (이 랩은 교육용 가독성 때문에 일부러 규칙적으로 만들었고, `validate-site.py` 가 그 점을 경고합니다).
+
+    - id: q4
+      type: single
+      text: |
+        "IPv6 에는 NAT 가 기본적으로 필요 없다" 는 말의 근거로 가장 정확한 것은?
+      choices:
+        - "IPv6 는 IPsec 이 필수라 변환 없이도 안전하게 통신할 수 있기 때문"
+        - "주소가 충분해 모든 단말이 공인 주소(GUA)를 가질 수 있기 때문"
+        - "IPv6 라우터가 프리픽스 변환을 자동으로 처리해 주기 때문"
+        - "IPv6 는 상태 기반 방화벽이 표준에 포함돼 있기 때문"
+      answer: [1]
+      explain: |
+        NAT 는 **주소 부족을 메우려고 만든 우회로**다. 부족하지 않으면 필요가 없습니다.
+        여기서 반드시 교정할 오해: **NAT 는 보안 기능이 아닙니다.**
+        IPv4 에서 외부 접속이 막힌 것은 NAT 의 부작용일 뿐이고,
+        IPv6 에서 그 역할을 하는 것은 **방화벽 정책**입니다 (M10).
+
+    - id: q5
+      type: multi
+      text: "IPv4 와 IPv6 의 대응으로 **옳은 것**을 모두 고르시오."
+      choices:
+        - "ICMP  ↔  IPv6 에는 ICMP 가 없습니다"
+        - "DHCP  ↔  SLAAC (또는 DHCPv6)"
+        - "브로드캐스트  ↔  멀티캐스트"
+        - "ARP  ↔  NDP (NS / NA)"
+      answer: [1, 2, 3]
+      explain: |
+        ICMPv6 는 없어진 것이 아니라 **오히려 더 중요해졌습니다.**
+        NDP·SLAAC·PMTUD 가 전부 ICMPv6 위에서 돕니다.
+        → **IPv6 망에서 ICMP 를 통째로 막으면 네트워크가 동작하지 않습니다.**
+        IPv4 시절 "ICMP 는 막아도 된다" 는 습관이 그대로 넘어오면 사고가 납니다.
+
+    - id: q6
+      type: single
+      text: |
+        pc1 이 같은 대역의 상대에게 처음 통신을 시도합니다. IPv4 라면 ARP Request 를 **브로드캐스트**로 뿌립니다.
+        IPv6 는 어떻게 하는가?
+      choices:
+        - "IPv6 에도 브로드캐스트가 있으므로 세그먼트 전체에 뿌리고 해당 노드만 응답합니다"
+        - "기본 게이트웨이에 물어보면 라우터가 대신 상대를 찾아 알려 줍니다"
+        - "DNS 에 역질의를 보내 상대의 링크 계층 주소를 받아 옵니다"
+        - "Solicited-node 멀티캐스트 주소로 Neighbor Solicitation 을 보냅니다"
+      answer: [3]
+      explain: |
+        IPv6 에는 **브로드캐스트가 아예 없습니다.**
+        NS 는 목적지 주소의 **뒤 24비트**로 만든 `ff02::1:ffXX:XXXX` 로 갑니다.
+        → 세그먼트의 모든 장비가 인터럽트를 받던 ARP 와 달리, **주소 끝이 같은 소수만** 처리합니다.
+        이것이 IPv6 가 대규모 세그먼트에서 유리한 이유 중 하나입니다.
+
+    - id: q7
+      type: single
+      text: |
+        pc1 에서 `ping {{ ip.web }}` 은 되는데 `ping6 {{ ip6.web }}` 만 실패합니다.
+        가장 먼저 확인할 것은?
+      choices:
+        - "케이블과 링크 상태 — 물리 계층이 흔들리면 한쪽만 실패해서"
+        - "IPv6 쪽 주소와 경로 — 라우팅 테이블이 IPv4 와 별개라서"
+        - "스위치의 MAC 테이블 — IPv6 프레임만 학습이 안 될 수 있어서"
+        - "DNS 설정 — AAAA 레코드가 없으면 IPv6 로 못 가서"
+      answer: [1]
+      explain: |
+        **dual-stack 은 "하나의 망"이 아니라 같은 선 위를 도는 두 개의 망입니다.**
+        `ip -6 route`, `ip -6 neigh`, `show ipv6 ospf6 neighbor` 는 IPv4 쪽과 **완전히 별개**다.
+        링크가 살아 있으니 L1/L2 는 이미 배제된 상태입니다 — 그 위부터 IPv6 쪽만 따라가면 됩니다.
+
+    - id: q8
+      type: single
+      text: |
+        IPv6 에서는 **경로 중간의 라우터가 패킷을 쪼개지 않습니다.** 이것이 뜻하는 바는?
+      choices:
+        - "송신자가 PMTUD 로 알아서 크기를 맞춰야 합니다. ICMPv6 를 막으면 큰 전송이 조용히 실패합니다"
+        - "IPv6 는 MTU 를 넘는 패킷 자체를 만들 수 없으므로 큰 파일 전송은 애초에 불가능해집니다"
+        - "IPv6 에는 MTU 개념이 없어져 링크마다 크기를 맞출 필요가 없습니다"
+        - "라우터 성능이 좋아져 쪼갤 필요가 없어졌고, 필요하면 스위치가 대신 쪼갭니다"
+      answer: [0]
+      explain: |
+        IPv4 는 필요하면 라우터가 쪼개 줬습니다(느리지만 갔습니다). IPv6 는 **송신자만** 쪼갤 수 있습니다.
+        따라서 `Packet Too Big`(ICMPv6) 통지가 오지 않으면 **큰 전송만 조용히 멈춥니다.**
+        M2 에서 본 "ping 은 되는데 파일 전송만 실패" 가 IPv6 에서는 **더 잘 일어납니다.**
+        (IPv6 최소 MTU 는 1280 입니다)
+
+    - id: q9
+      type: single
+      text: |
+        OSPFv3(IPv6용 OSPF)에 대한 설명으로 옳은 것은?
+      choices:
+        - "주소가 128비트가 되면서 router-id 도 128비트로 바뀌었습니다"
+        - "IPv4 의 OSPF 와 같은 프로세스를 공유해 하나의 LSDB 로 두 프로토콜을 함께 관리합니다"
+        - "OSPFv3 에는 area 개념이 없어져 전 구간이 하나의 도메인이 됩니다"
+        - "인접은 link-local 주소로 맺고, router-id 는 여전히 32비트(IPv4 형식)다"
+      answer: [3]
+      explain: |
+        OSPFv3 는 **완전히 별도의 프로세스**다 (`router ospf` 와 `router ospf6`).
+        그래서 IPv4 인접은 Full 인데 IPv6 인접만 안 서는 상황이 얼마든지 생깁니다.
+        router-id 는 32비트 그대로여서 이 랩도 **IPv4 루프백 주소**를 그대로 씁니다.
+
+    # ── 계산으로 답이 하나로 정해지는 것들 ──────────────────────────
+    #    답이 주소 하나로 정해지는 것들이다. 정답 칸에도 랩 값을 쓸 수 있으므로
+    #    (assess.grade_quiz 가 answer 를 렌더한다) 랩이 바뀌면 정답도 따라 바뀐다.
+
+    - id: q10
+      type: short
+      text: "`2001:db8:0:0:1:0:0:1` 을 **가장 짧게** 축약하면? (주소만)"
+      notation: true
+      answer: ["2001:db8::1:0:0:1"]
+      explain: |
+        0 구간이 **두 군데**이고 길이가 같습니다(각 2그룹). 이럴 때는 **앞쪽**에 `::` 를 씁니다(RFC 5952).
+        `::` 는 주소 하나에 한 번만 쓸 수 있으므로 뒤쪽은 `0:0` 으로 남깁니다.
+
+
+    - id: q11
+      type: short
+      text: |
+        `{{ ip6.web }}` 에게 NS(Neighbor Solicitation)를 보낼 때, 그 프레임의 **목적지 MAC** 은? (콜론 표기)
+      answer: ["{{ sol6.web.mac }}"]
+      explain: |
+        `33:33:` 뒤에 멀티캐스트 주소의 **끝 32비트**를 붙입니다.
+        ARP 가 브로드캐스트로 전 포트를 깨우는 것과 달리, NDP 는 이 주소를 듣는 장비만 깨웁니다.
+
+    - id: q12
+      type: short
+      text: "`{{ mac.pc2 }}` 를 EUI-64 로 만들어 붙인 **링크로컬 주소**는? (주소만)"
+      answer: ["{{ lladdr6.pc2 }}"]
+      explain: |
+        MAC 을 반으로 갈라 가운데에 `ff:fe` 를 끼우고, 7번째 비트(U/L)를 뒤집습니다.
+        앞에 `fe80::` 를 붙이면 링크로컬 주소가 됩니다 — 그래서 **주소를 안 줘도 이웃과는 통합니다.**
+
+
+
+
+checks:
+  required: true
+  items:
+    - id: pc1-v6-addr
+      kind: config
+      title: "pc1 에 IPv6 주소가 배정됐는가"
+      host: pc1
+      run: "ip -6 -br addr show eth1"
+      expect: "{{ ip6.pc1 }}"
+      hint: |
+        관리망(mgmt0)에는 IPv6 가 없습니다. **반드시 eth1 기준**으로 확인해 주세요.
+        sudo netplan apply 로 되돌릴 수 있습니다.
+
+    - id: pc1-v6-default
+      kind: config
+      title: "pc1 의 IPv6 기본 경로가 있는가"
+      host: pc1
+      run: "ip -6 route show default"
+      expect: "via {{ gw6.vlan10 }}"
+      hint: |
+        IPv4 기본 경로와 **별개**다. IPv4 가 멀쩡해도 이쪽만 없을 수 있습니다.
+        sudo netplan apply
+
+    - id: r1-ospf6-neighbors
+      kind: state
+      title: "r1 의 OSPFv3 인접 2개가 Full 인가 ★"
+      host: r1
+      run: "vtysh -c 'show ipv6 ospf6 neighbor' | grep -c Full"
+      expect: "2"
+      hint: |
+        OSPF(v2)와 **다른 프로세스**다. IPv4 인접이 Full 이어도 이쪽은 따로 확인해야 합니다.
+          r1# show ipv6 ospf6 neighbor
+          r1# show ipv6 ospf6 interface eth2
+
+    - id: r1-ospf6-routes
+      kind: config
+      title: "서버망 IPv6 대역을 OSPFv3 로 학습했는가"
+      host: r1
+      run: "vtysh -c 'show ipv6 route ospf6'"
+      expect: "{{ v6.vlan40 }}"
+      hint: "아무것도 없으면 인접부터 확인해 주세요. 인접이 없으면 배울 수도 없습니다."
+
+    - id: v6-cross-site
+      kind: connectivity
+      title: "pc1 → web IPv6 통신이 되는가 ★"
+      host: pc1
+      run: "ping6 -c2 -W2 {{ ip6.web }} >/dev/null && echo REACHABLE"
+      expect: "REACHABLE"
+      hint: |
+        순서대로 봐 주세요.
+          ① ip -6 addr show eth1      내 주소가 있는가
+          ② ip -6 route show          기본 경로가 있는가
+          ③ ping6 {{ gw6.vlan10 }}    게이트웨이까지 가는가
+          ④ traceroute6 {{ ip6.web }} 어디까지 가는가
+
+    - id: v6-http
+      kind: connectivity
+      title: "IPv6 로 HTTP 응답이 오는가"
+      host: pc1
+      run: "curl -sS -m5 -i -6 'http://[{{ ip6.web }}]/health'"
+      expect_all: ["200", "X-Lab-Node: web", "ok"]
+      hint: |
+        IPv6 주소를 URL 에 쓸 때는 **대괄호**로 감싼다: http://[주소]/
+        ping6 은 되는데 이것만 안 되면 경로가 아니라 서비스 문제입니다.
+
+    - id: dual-stack
+      kind: connectivity
+      title: "같은 상대에게 IPv4 · IPv6 가 **둘 다** 되는가 (dual-stack)"
+      host: pc1
+      run: "ping -c1 -W2 {{ ip.web }} >/dev/null && ping6 -c1 -W2 {{ ip6.web }} >/dev/null && echo BOTH"
+      expect: "BOTH"
+      hint: "한쪽만 되면 그쪽 스택만 따라가면 됩니다. 둘은 완전히 별개의 경로를 갖습니다."
+
+    - id: pc1-no-extra-v6
+      kind: config
+      title: "6.6(SLAAC)에서 생긴 임시 주소를 정리했는가"
+      host: pc1
+      run: "ip -6 addr show dev eth1 scope global | grep -c 'inet6' || true"
+      expect: "1"
+      hint: |
+        SLAAC 로 생긴 주소가 남아 있습니다.
+          sudo sysctl -w net.ipv6.conf.eth1.accept_ra=0
+          sudo ip -6 addr del <자동생성된주소>/64 dev eth1
+        (또는 sudo netplan apply 후 인터페이스 재기동)
+
+    - id: r1-no-leftover
+      kind: config
+      title: "실습에서 넣은 임시 설정(RA · OSPFv3 cost)을 정리했는가"
+      host: r1
+      run: "vtysh -c 'show running-config'"
+      expect_none: ["ipv6 ospf6 cost", "no ipv6 nd suppress-ra"]
+      hint: |
+        sudo systemctl restart frr 로 설정 파일 기준으로 되돌릴 수 있습니다.
+        cost 가 남으면 IPv4 와 IPv6 가 계속 다른 길로 다니고, 그때는 아무도 이상하다고 느끼지 못합니다.

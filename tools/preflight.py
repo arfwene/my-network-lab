@@ -356,7 +356,7 @@ def check_mgmt(lab_id):
             ok("경로", detail)
 
     # 노드가 아직 없으면 닫혀 있는 게 정상이다. 그래서 오류로 올리지 않는다.
-    nodes = [L.node_config(lab_id, n, "m10") for n in L.TOPO["nodes"]]
+    nodes = [L.node_config(lab_id, n, "m11") for n in L.TOPO["nodes"]]
 
     # 13대를 **동시에** 두드린다. 하나씩 돌면 랩이 없을 때 13초를 통째로 기다린다 —
     # 그게 [설치] 화면이 느린 이유의 대부분이었다. 기다리는 시간은 소켓이 쓰지,

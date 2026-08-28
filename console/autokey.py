@@ -116,7 +116,7 @@ async def _jump_apply(runner):
     # 등록된 키는 반영되지 않았다. 끝난 시각으로 적으면 그 키를 삼킨다.
     started = await asyncio.to_thread(db.now_utc)
     try:
-        job = await runner.submit(jobs.SETUP_LAB, "setup-jump-apply", "m10", None, None,
+        job = await runner.submit(jobs.SETUP_LAB, "setup-jump-apply", "m11", None, None,
                                   on_done=lambda j: j.status == "ok" and db.mark_jump_applied(started))
     except Exception as e:                                  # noqa: BLE001
         _fail["jump"] = str(e)

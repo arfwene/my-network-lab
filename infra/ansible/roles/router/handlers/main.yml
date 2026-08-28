@@ -5,7 +5,7 @@
 #
 #   Unable to restart service frr: Job for frr.service failed ... start-limit-hit
 #
-# 으로 거부당하고 그 노드만 라우팅 없이 남는다. 실제로 M3 → M4 → M5 를 이어서
+# 으로 거부당하고 그 노드만 라우팅 없이 남는다. 실제로 M3 → M4 → M6 를 이어서
 # 돌렸더니 r2·r4 가 그렇게 죽었고, 화면에는 "적용 실패" 만 떴다.
 #
 # 이 카운터는 **크래시 루프**를 막으려는 것이지, 사람이 일부러 누른 재시작을

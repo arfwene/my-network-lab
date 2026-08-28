@@ -246,7 +246,7 @@ CDN 을 쓰지 않는다 — 토폴로지는 서버에서 SVG 로 직접 그리�
 ansible-playbook -i inventory/lab1 playbooks/site.yml -e lab_stage=m2
 ```
 
-### 캡스톤 (M10)
+### 캡스톤 (M11)
 
 마지막 모듈은 **제한 시간 시험**이다. 웹 콘솔에서 `[캡스톤 시작]` 을 누르면
 랩이 초기화되고 **서버가 무작위로 고른 장애**가 주입된다 (무엇인지 알려주지 않는다).
@@ -255,7 +255,7 @@ ansible-playbook -i inventory/lab1 playbooks/site.yml -e lab_stage=m2
 못 고친 것은 **인계 보고서**에 남기는 것까지가 과제다.
 
 설정은 `config/site.yml` 의 `console.capstone` 에 있다 (제한 시간 · 장애 개수 · 출제 범위).
-운영 방법과 장애 대응표는 M10 의 **해설 탭**(관리자 전용)에 있다.
+운영 방법과 장애 대응표는 M11 의 **해설 탭**(관리자 전용)에 있다.
 
 ## 부록
 

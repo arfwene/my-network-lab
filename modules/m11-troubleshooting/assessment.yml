@@ -1,0 +1,424 @@
+# M11 평가 — 퀴즈(방법론·판단) + 검사(앞 모듈 전체 재사용) + 서술(체크리스트·인계 보고서·최종 문서)
+#
+#   검사는 **앞 모듈에서 그대로 가져온다** (PLAN 6.6).
+#   복사하지 않고 참조로 가져오는 이유: 원본 검사를 고쳤을 때 캡스톤만 낡는 것을 막는다.
+#   가져오지 않은 것들과 그 이유는 answers.md 의 「검사 구성」 절에 적어 두었다.
+quiz:
+  pass_score: 100
+  questions:
+    - id: q1
+      type: single
+      text: |
+        `사내 인터넷이 안 돼요` 라는 신고를 받았습니다.
+        **가장 먼저** 해야 할 일은?
+      choices:
+        - "경계 라우터에 접속해 정책과 경로 설정부터 확인합니다"
+        - "영향 범위를 규정합니다. 누가·어디서·언제부터·전부인가 일부인가·최근 변경이 있었나"
+        - "출발지와 목적지 양쪽에 패킷 캡처를 걸어 둡니다"
+        - "가장 흔한 원인부터 지우기 위해 경로상의 장비를 앞에서부터 순서대로 재부팅해 봅니다"
+      answer: [1]
+      explain: |
+        범위를 모르면 **어디를 볼지도 정할 수 없습니다.**
+        `전부 안 된다` 와 `한 사람만 안 된다` 는 완전히 다른 장애이고, 봐야 할 장비도 다릅니다.
+        신고 문장은 거의 항상 부정확합니다 — `인터넷` 이 실제로는 특정 사이트 하나인 경우가 대부분입니다.
+        범위 규정은 시간을 쓰는 것이 아니라 **가장 크게 아끼는 단계**다.
+
+    - id: q2
+      type: multi
+      text: |
+        `pc1 에서 web 에 접속이 안 된다` 는 신고를 받고 확인해 보니
+        **pc2 에서는 같은 web 에 정상 접속**됩니다.
+        이 한 가지 사실만으로 **배제할 수 있는** 것을 모두 고르시오.
+      choices:
+        - "pc1 자신의 주소·경로 설정 문제"
+        - "web 서버의 nginx 가 죽었을 가능성"
+        - "r4 와 web 사이 구간의 단절"
+        - "web 을 향하는 경로 전체가 끊겼을 가능성"
+      answer: [1, 2, 3]
+      explain: |
+        pc2 가 된다는 것은 **web 서버부터 pc2 까지의 경로가 전부 살아 있다**는 뜻입니다.
+        따라서 공용 구간(서버·서버망·r4 이후)은 모두 배제됩니다.
+        남는 것은 **pc1 에만 해당하는 것** — pc1 의 설정, pc1 이 속한 VLAN10 구간,
+        그리고 `pc1 출발지만 걸리는 정책`(M8-02 가 그것이었습니다)입니다.
+        되는 것 하나가 후보를 절반 이하로 자릅니다. 이것이 범위 규정의 힘입니다.
+
+    - id: q3
+      type: single
+      text: |
+        표준 3-step 체크리스트의 **순서**로 올바른 것은?
+      choices:
+        - "① 포트·서비스 응답 → ② L3 도달 → ③ 링크"
+        - "① L3 도달 → ② 링크 → ③ 포트·서비스"
+        - "① 링크 살아있나 → ② L3 도달하나 → ③ 포트·서비스 응답하나"
+        - "정해진 순서는 없습니다. 증상에 따라 가장 의심스러운 계층부터 보는 것이 빠릅니다"
+      answer: [2]
+      explain: |
+        **아래에서 위로.** 아래가 깨져 있으면 위는 볼 필요조차 없습니다.
+        링크가 죽었는데 방화벽 정책을 뒤지는 것이 가장 흔한 시간 낭비입니다.
+        순서를 정해 두는 진짜 이유는 빠르기가 아니라 **재현성**입니다 —
+        같은 순서를 밟으면 누가 해도 같은 결론에 도달하고, 남에게 인계할 수 있습니다.
+
+    - id: q4
+      type: single
+      text: |
+        `특정 웹 애플리케이션만 느리다. 같은 PC 에서 다른 사이트·다른 서비스는 전부 정상이다.`
+        이 상황에 가장 알맞은 접근은?
+      choices:
+        - "Bottom-up — 케이블과 링크부터 순서대로 올라갑니다"
+        - "Divide-and-Conquer — 가운데 계층부터 위아래로 갈라 봅니다"
+        - "Top-down — 응용 계층부터 아래로 내려옵니다"
+        - "재부팅 — 장비를 하나씩 껐다 켜며 어디서 달라지는지 봅니다"
+      answer: [2]
+      explain: |
+        아래 계층은 **다른 통신이 정상이라는 사실로 이미 검증됐습니다.**
+        그런데도 Bottom-up 으로 시작하면 이미 정상인 것을 확인하는 데 시간을 씁니다.
+        반대로 `한 사람만, 전부 안 된다` 면 Bottom-up 이 맞습니다 — 그 PC 의 링크부터 의심스럽습니다.
+        **접근법은 취향이 아니라 범위 규정 결과가 정해 줍니다.**
+
+    - id: q5
+      type: single
+      text: |
+        pc1 → web 무응답. web 서버에서 캡처를 떴더니
+        **요청(ICMP echo request)은 도착했고, 응답(reply)도 나가는 것이 보입니다.**
+        절단 지점은 어디인가?
+      choices:
+        - "web 에서 pc1 로 돌아오는 경로 어딘가"
+        - "pc1 에서 web 으로 가는 경로 어딘가"
+        - "web 서버 자체"
+        - "이 정보만으로는 아무것도 알 수 없습니다"
+      answer: [0]
+      explain: |
+        요청이 도착했다 = **가는 길은 끝까지 살아 있습니다.**
+        응답이 나갔다 = **서버도 정상입니다.**
+        남은 것은 돌아오는 길뿐입니다. 캡처 한 번으로 후보의 절반과 서버를 동시에 지웠습니다 —
+        이것이 Divide-and-Conquer 입니다. (M3 의 리턴 경로, M10 의 stateful 규칙이 모두 이 자리에 있습니다)
+
+    - id: q6
+      type: multi
+      text: |
+        장애 보고서에 **근거로 쓸 수 있는 것**을 모두 고르시오.
+      choices:
+        - "`tcpdump` 캡처에서 SYN 만 반복되고 SYN-ACK 이 없는 구간"
+        - "`vtysh -c 'show ip route'` 출력 중 해당 경로가 없는 부분"
+        - "`ip -br link` 출력의 `NO-CARRIER` 표시와 그 시각"
+        - "장비가 오래돼서 그런 것 같다는 담당자의 판단"
+      answer: [0, 1, 2]
+      explain: |
+        근거는 **다시 실행하면 같은 것이 나오는 것**입니다. 명령 출력·캡처·로그·시각.
+        `~인 것 같다` 는 근거가 아니라 가설입니다. 가설은 적어도 되지만
+        반드시 **가설이라고 표시**하고, 그것을 확인·배제할 방법을 함께 적어야 합니다.
+        추측을 사실처럼 적은 보고서는 다음 사람을 엉뚱한 곳으로 보냅니다.
+
+    - id: q7
+      type: single
+      text: |
+        제한 시간 안에 여러 장애를 고쳐야 합니다. 설정을 바꾸기 **직전에** 반드시 할 일은?
+      choices:
+        - "바꾸기 전 상태를 저장하고, 되돌리는 명령을 미리 적어 둡니다"
+        - "의심스러운 설정을 지우고 처음부터 차례로 다시 넣습니다"
+        - "변경 내용을 기억해 두었다가 끝나고 한꺼번에 정리합니다"
+        - "빠른 복구가 우선이므로 기록은 끝난 뒤로 미룹니다"
+      answer: [0]
+      explain: |
+        시간이 없을수록 롤백이 필요합니다. **고치려다 더 크게 만드는 사고**는 대부분
+        `무엇을 바꿨는지 기억나지 않아서` 생깁니다.
+        `show running-config` 한 번, `ip route show` 한 번을 파일로 남기는 데는 5초가 걸리고,
+        그 5초가 없으면 원래 상태로 못 돌아갑니다.
+        캡스톤 통과 조건에 **복구 과정에서 새 장애를 만들지 않을 것** 이 들어 있는 이유입니다.
+
+    - id: q8
+      type: single
+      text: |
+        백업 경로의 OSPF 인접이 서지 않습니다.
+        Area 번호 · 양쪽 주소 대역 · MTU 를 확인했고 **전부 정상**이었습니다.
+        다음에 볼 것은?
+      choices:
+        - "라우터를 재부팅합니다"
+        - "케이블을 교체합니다"
+        - "Hello / Dead 간격이 양쪽에서 같은가"
+        - "OSPF 를 지우고 정적 경로로 바꿔 우회합니다"
+      answer: [2]
+      explain: |
+        인접이 서기 위한 조건은 정해져 있습니다 — **Area · 서브넷 · MTU · 타이머 · 인증**.
+        앞의 셋이 정상이면 남은 것은 타이머와 인증뿐입니다.
+        체크리스트를 **순서대로 끝까지** 밟는 훈련이 여기서 값을 합니다.
+        같은 증상(인접 미형성)에 원인은 다섯 가지이고, 순서 없이 보면 반드시 하나를 빠뜨립니다.
+
+    - id: q9
+      type: single
+      text: |
+        제한 시간이 끝났는데 장애 하나를 끝내 복구하지 못했습니다.
+        인계 보고서에서 **가장 가치 있는** 내용은?
+      choices:
+        - "복구에 성공한 항목들의 목록과, 각 항목에 대해 무엇을 어떻게 바꿨는지의 기록"
+        - "무엇을 확인해 배제했고, 남은 후보는 무엇이며, 다음 사람이 어디서부터 보면 되는가"
+        - "각 작업에 걸린 시간과 전체 소요 시간의 분석"
+        - "사용한 명령어 전체 목록과 그 출력을 붙인 부록"
+      answer: [1]
+      explain: |
+        고친 것은 검사 결과가 이미 말해 줍니다. 보고서가 아니면 알 수 없는 것은 **머릿속에서 일어난 일**입니다.
+        `링크와 L3 는 확인해 배제했고, 캡처상 SYN 은 나가는데 SYN-ACK 이 없으므로
+        경계의 리턴 정책이 남은 후보다` — 이 한 문장이 다음 사람의 30분을 아낍니다.
+        못 고친 것은 감점 요소가 아닙니다. **못 고친 채로 인계하지 못하는 것**이 감점 요소입니다.
+
+    - id: q10
+      type: single
+      text: |
+        장애 A 를 고치는 도중, 원래 잘 되던 통신 B 가 깨졌습니다.
+        올바른 대응은?
+      choices:
+        - "A 를 마저 고치고 나서 B 를 봅니다. 하던 일을 끝내는 것이 먼저입니다"
+        - "B 는 원래 문제였을 수도 있으니 일단 기록만 하고 넘어갑니다"
+        - "방금 한 변경을 되돌려 B 를 먼저 복구한 뒤, A 에 다시 접근합니다"
+        - "전체를 초기화하고 깨끗한 상태에서 처음부터 다시 시작합니다"
+      answer: [2]
+      explain: |
+        원인이 명확할 때(=방금 내가 한 변경) 되돌리는 것이 가장 빠르고 안전합니다.
+        그대로 두고 진행하면 **장애가 두 개로 늘어난 상태에서** 판단해야 하고,
+        나중에는 어느 것이 원래 장애이고 어느 것이 내가 만든 것인지 구분할 수 없게 됩니다.
+        롤백 계획을 미리 적어 두는 이유가 바로 이 순간을 위해서입니다.
+
+# ---------------------------------------------------------------------------
+# 랩 상태 검사 — M1~M10 를 한 번에 (PLAN 6.6)
+#   가져오지 않은 것:
+#     · M8 전체        학생이 만든 pcap 파일을 확인하는 검사다. 캡스톤은 pcap 을 요구하지 않는다
+#     · M3 정적 경로    m11 은 OSPF 로 라우팅한다. `show ip route static` 은 비어 있는 것이 정상이다
+#     · 각 모듈의 실습 흔적 정리 검사 중 그 모듈 고유의 것 (M2 pc2-no-leftover, M6 임시주소 등)
+#   가져온 검사에 붙는 `M0x ·` 접두사는 **어느 계층이 깨졌는지** 한눈에 보이라고 붙인 것이다.
+checks:
+  include:
+    - from: m00
+      only: [pc1-lab-link, pc2-lab-link, pc1-mgmt-link]
+    - from: m01
+      # same-subnet-ping 은 뺐다 — m11 에서 pc1·pc2 는 **다른 대역**이라
+      # 제목("같은 대역 통신")이 거짓말이 되고, 명령 자체는 m02.cross-subnet-ping 과 같다.
+      # links-up 도 뺐다 — 명령이 m00.pc1-lab-link 와 완전히 같은데
+      # 제목만 "pc1·pc2" 라서 pc2 까지 본다고 착각하게 만든다 (실제로는 pc1 만 본다).
+      only: [switch-learned, switch-ports, no-static-arp]
+    - from: m02
+      only: [r1-vlan-gateway, r1-forwarding, sw1-trunk, pc1-default-route,
+             pc2-default-route, cross-subnet-ping, mac-differs, mtu-restored]
+    - from: m03
+      # cross-site-http 는 m07.web-http 와 **같은 명령**이다. 하나만 돌린다.
+      only: [web-default-route, cross-site-ping, path-as-designed]
+    - from: m04
+      only: [ospf-neighbors-r1, ospf-neighbors-r4, ospf-learned, no-static-left,
+             primary-cost, backup-cost, backup-mtu]
+    - from: m06
+      only: [pc1-v6-addr, pc1-v6-default, r1-ospf6-neighbors, r1-ospf6-routes,
+             v6-cross-site, v6-http, dual-stack]
+    - from: m07
+      only: [web-listening, web-http, closed-port-refused, established-session,
+             no-drop-rules, no-temp-listeners, port-range-restored, nginx-not-stopped]
+    - from: m09
+      only: [resolv-conf, dns-a-record, dns-via-resolver, dns-cname, http-by-name,
+             ftp-banner, ftp-passive-transfer, vsftpd-config-restored]
+    - from: m10
+      only: [snat-outbound, default-via-ospf, dnat-web, dnat-ftp-passive,
+             private-not-routable, closed-port-dropped, nat-rules, conntrack-session,
+             ftp-pasv-address]
+
+  # 가져온 검사만으로는 손이 닿지 않는 자리를 메운다.
+  # 어느 노드도 **검사 하나 없이 남겨두지 않는다** — 죽은 줄 모르는 장비가 생기면 안 된다.
+  items:
+    - id: r2-links
+      title: r2 의 링크가 모두 살아 있는가
+      kind: state
+      host: r2
+      run: |
+        for i in $(ls /sys/class/net | grep -E '^eth'); do
+          s=$(cat /sys/class/net/$i/operstate)
+          [ "$s" = up ] || echo "$i=$s"
+        done
+        echo END
+      expect: END
+      expect_none: ["="]
+      hint: "`ip -br link` 로 어느 인터페이스가 내려갔는지 봅니다. `ip link set <if> up` 으로 올립니다."
+
+    - id: r3-links
+      title: r3 의 링크가 모두 살아 있는가 (백업 경로 라우터)
+      kind: state
+      host: r3
+      run: |
+        for i in $(ls /sys/class/net | grep -E '^eth'); do
+          s=$(cat /sys/class/net/$i/operstate)
+          [ "$s" = up ] || echo "$i=$s"
+        done
+        echo END
+      expect: END
+      expect_none: ["="]
+      hint: "r3 은 평상시 트래픽이 지나지 않습니다. 통신이 정상이어도 여기가 죽어 있을 수 있습니다."
+
+    - id: r4-links
+      title: r4 의 링크가 모두 살아 있는가
+      kind: state
+      host: r4
+      run: |
+        for i in $(ls /sys/class/net | grep -E '^eth'); do
+          s=$(cat /sys/class/net/$i/operstate)
+          [ "$s" = up ] || echo "$i=$s"
+        done
+        echo END
+      expect: END
+      expect_none: ["="]
+
+    - id: sw2-ports
+      title: sw2 의 서버망 포트가 브리지에 다 꽂혀 있는가
+      kind: config
+      host: sw2
+      run: bridge link show
+      expect_all: [eth1, eth2, eth3, eth4]
+      hint: "서버 셋(web·ftp·dns)과 r4 가 이 스위치에 붙어 있습니다. 하나가 빠지면 그 서버만 고립됩니다."
+
+    - id: dns-reachable
+      title: dns 노드가 살아 있고 53 포트를 듣고 있는가
+      kind: state
+      host: dns
+      run: ss -lnH 'sport = :53' | wc -l
+      expect_regex: "^[1-9]"
+      hint: "이 검사가 실행조차 되지 않으면 노드가 죽은 것입니다. 0 이면 named 가 내려갔습니다."
+
+    - id: edge-links
+      title: edge 의 안팎 링크가 모두 살아 있는가
+      kind: state
+      host: edge
+      run: |
+        for i in $(ls /sys/class/net | grep -E '^eth'); do
+          s=$(cat /sys/class/net/$i/operstate)
+          [ "$s" = up ] || echo "$i=$s"
+        done
+        echo END
+      expect: END
+      expect_none: ["="]
+
+    - id: r1-primary-mtu
+      title: 주 경로(r1 → r2) 링크의 MTU 가 설계값인가
+      kind: config
+      host: r1
+      run: cat /sys/class/net/eth2/mtu
+      expect: "1500"
+      hint: |
+        MTU 가 다르면 OSPF 인접이 ExStart/Exchange 에서 멈춥니다.
+        인접이 안 서는데 Area·주소가 정상이면 여기를 봅니다 (M4).
+
+    - id: r4-no-drop
+      title: r4 에 임시로 만든 차단 규칙이 남아 있지 않은가
+      kind: config
+      host: r4
+      become: true
+      run: nft list ruleset 2>/dev/null | grep -c drop || true
+      expect: "0"
+      hint: |
+        r4 는 라우터입니다. 방화벽 정책을 두는 자리가 아닙니다.
+        `sudo nft list ruleset` 에 무언가 보이면 그것이 원인입니다 (`nft delete table inet <이름>`).
+
+# ---------------------------------------------------------------------------
+# 서술 — 최종 산출물 세 가지 (PLAN 5장 M11)
+#   체크리스트는 비차단(자동 통과 가능), 인계 보고서와 최종 문서는 **관리자 승인 필수**다.
+#   졸업 판정은 사람이 한다 (PLAN 6.7 A4).
+written:
+  items:
+    - id: checklist
+      title: "산출물 ① 나만의 트러블슈팅 체크리스트 (1페이지)"
+      review: optional
+      auto_pass: true
+      min_chars: 350
+      prompt: |
+        장애 신고를 받았을 때 **당신이 실제로 따라갈 순서**를 한 페이지로 적어 주세요.
+        교재를 옮겨 적는 것이 아니라, 이 랩에서 직접 겪은 것을 반영해 자기 문장으로 써 주세요.
+
+        반드시 들어가야 하는 것
+          · 범위 규정 항목 (누가 / 어디서 / 언제부터 / 전부인가 일부인가 / 최근 변경)
+          · 표준 3-step 과 각 단계에서 칠 명령
+          · 절단 지점을 좁히는 방법 (어디에 캡처를 걸 것인가)
+          · 설정을 바꾸기 전에 할 일 (백업 · 롤백)
+
+        시험 중에 이 문서를 보면서 진행할 것입니다. **쓸모없으면 당신이 손해입니다.**
+      rubric:
+        - {key: 범위, desc: "영향 범위를 먼저 규정하는 항목이 있는가",
+           any: ["범위", "누가", "언제부터", "전부", "일부"]}
+        - {key: 링크, desc: "1단계 — 링크 확인 명령이 있는가",
+           any: ["ip -br link", "ip link", "operstate", "NO-CARRIER", "링크"]}
+        - {key: L3, desc: "2단계 — L3 도달 확인 명령이 있는가",
+           any: ["ping", "traceroute", "ip route", "show ip route"]}
+        - {key: 서비스, desc: "3단계 — 포트·서비스 확인 명령이 있는가",
+           any: ["telnet", "curl", "ss -", "nc ", "dig"]}
+        - {key: 캡처, desc: "절단 지점을 좁히는 캡처 방법이 있는가",
+           any: ["tcpdump", "캡처", "양쪽", "이등분"]}
+        - {key: 롤백, desc: "변경 전 백업과 롤백을 다루는가",
+           any: ["백업", "롤백", "되돌", "원복", "running-config"]}
+
+    - id: handover
+      title: "산출물 ② ★★ 장애 · 인계 보고서"
+      review: required
+      min_chars: 700
+      prompt: |
+        캡스톤에서 무슨 일이 있었는지 보고서로 써 주세요.
+        **고친 것과 못 고친 것을 모두** 적습니다. 못 고친 것이 있어도 감점이 아닙니다 —
+        못 고친 채로 인계하지 못하는 것이 감점입니다.
+
+        항목 (고친 장애마다 반복)
+          1. 현상        무엇이 안 되었는가 (사용자가 겪은 그대로)
+          2. 영향 범위    누가 / 어디서 / 전부인가 일부인가 — 되는 것도 함께 적을 것
+          3. 타임라인     발견 · 절단 지점 확정 · 원인 확정 · 조치 · 검증 시각
+          4. 근거        명령 출력이나 캡처를 **인용**합니다. `~인 것 같다` 는 근거가 아닙니다
+          5. 원인        무엇이 왜
+          6. 조치        무엇을 어떻게 바꿨는가. 되돌릴 수 있는가
+          7. 재발 방지    같은 일이 또 나지 않으려면
+
+        그리고 **반드시** 아래 절을 둘 것 (복구를 다 했으면 `없음` 이라고 쓰고 이유를 밝힙니다)
+
+        ## 미복구 항목
+          · 증상             지금 무엇이 안 되는가
+          · 배제한 것         무엇을 확인해서 후보에서 지웠는가 (이것이 가장 중요합니다)
+          · 남은 후보         무엇이 남았는가
+          · 다음 사람이 할 일  어느 장비에서 어떤 명령부터 치면 되는가
+      rubric:
+        - {key: 현상, desc: "증상을 사용자 관점으로 기술했는가",
+           any: ["현상", "증상", "안 된다", "안된다", "안 됨", "응답이 없", "무응답",
+                 "실패", "타임아웃", "거부", "느리"]}
+        - {key: 영향범위, desc: "누가·어디서·전부인가 일부인가를 규정했는가",
+           any: ["범위", "영향", "일부", "전부", "pc1 만", "pc2 는", "되는 것"]}
+        - {key: 타임라인, desc: "시각 순서로 정리했는가",
+           any: ["타임라인", "시각", "발견", "분 경", "시 경", "순서로"]}
+        - {key: 근거, desc: "명령 출력이나 캡처를 인용했는가",
+           any: ["tcpdump", "show ip", "ip route", "ip -br", "ss -", "dig", "nft list",
+                 "curl", "traceroute", "출력", "캡처"]}
+        - {key: 절단지점, desc: "어디까지 가고 어디서 끊겼는지 특정했는가",
+           any: ["절단", "어디까지", "구간", "리턴", "돌아오", "도착은", "나가는"]}
+        - {key: 원인, desc: "원인을 단정해 적었는가",
+           any: ["원인", "때문", "누락", "불일치", "삭제", "잘못", "빠져", "꺼져", "중지"]}
+        - {key: 조치, desc: "무엇을 어떻게 바꿨는지 적었는가",
+           any: ["조치", "복구", "추가", "삭제", "수정", "되돌", "고쳤", "고침",
+                 "재시작", "다시 넣"]}
+        - {key: 미복구, desc: "미복구 항목 절이 있고 배제·남은 후보·다음 할 일을 적었는가",
+           any: ["미복구", "배제", "남은 후보", "다음 사람", "없음"]}
+        - {key: 재발방지, desc: "재발 방지를 적었는가",
+           any: ["재발", "방지", "예방", "점검", "모니터링", "문서화"]}
+
+    - id: final-doc
+      title: "산출물 ③ 최종 네트워크 구성 문서"
+      review: required
+      kind: diagram
+      auto_pass: false
+      min_chars: 400
+      prompt: |
+        복구를 마친 시점의 네트워크를 문서로 남기시오. 다음 담당자가 이것만 보고 인수받을 수 있어야 합니다.
+
+          1. 토폴로지     글자로 그립니다 (`pc1 --- sw1 --- r1 === r2 === r4 --- sw2 --- web`)
+                         VLAN 과 사이트 경계를 표시할 것
+          2. 주소 대장     노드 / 인터페이스 / IPv4 / IPv6 / 용도
+                         전부 적을 필요는 없습니다. **경계와 게이트웨이는 반드시** 적을 것
+          3. 라우팅       무엇이 어떤 경로로 흐르는가. 주 경로와 백업 경로, 그리고 그 근거(cost)
+          4. 변경 이력     오늘 당신이 바꾼 것 전부. 바꾼 시각 · 대상 · 되돌리는 명령
+
+        4번을 빠뜨리면 이 문서는 **다음 사람에게 거짓말을 하게 됩니다.**
+      rubric:
+        - {key: 토폴로지, desc: "노드 연결과 사이트 경계를 그렸는가",
+           any: ["pc1", "sw1", "r1", "r4", "web", "---", "==="]}
+        - {key: 주소, desc: "게이트웨이와 경계 주소를 적었는가",
+           any: ["10.10.", "203.0.113.", "fd00:", "게이트웨이", "/24", "/30"]}
+        - {key: 라우팅, desc: "주 경로와 백업 경로를 구분해 적었는가",
+           any: ["OSPF", "주 경로", "백업", "cost", "경로"]}
+        - {key: 변경이력, desc: "오늘 바꾼 것을 되돌릴 수 있게 적었는가",
+           any: ["변경 이력", "변경이력", "되돌", "롤백", "원복", "바꾼"]}

@@ -11,16 +11,16 @@ seccomp_sandbox=NO
 # ---- Passive 모드 ----------------------------------------------------------
 # 데이터 채널 포트를 고정 범위로 묶는다.
 # 이렇게 해야 방화벽에 정책을 쓸 수 있다. 범위를 안 정하면 임의 포트를 쓰므로
-# "FTP 만 안 되는" 전형적 장애가 발생한다 — M9 의 핵심 소재.
+# "FTP 만 안 되는" 전형적 장애가 발생한다 — M10 의 핵심 소재.
 pasv_enable=YES
 pasv_min_port={{ service_ports.ftp.passive_range.split('-')[0] }}
 pasv_max_port={{ service_ports.ftp.passive_range.split('-')[1] }}
-{% if stages.index(config_stage | default(lab_stage)) >= stages.index('m9') %}
+{% if stages.index(config_stage | default(lab_stage)) >= stages.index('m10') %}
 pasv_address={{ public.ipv4.nat_pool.dnat | selectattr('private','equalto', ipv4.segments.vlan40.hosts.ftp) | map(attribute='public') | first }}
 # NAT 뒤에서는 서버가 알려주는 주소가 사설 IP 면 클라이언트가 접속하지 못한다.
 # 그래서 공개 IP 를 명시한다 — 이것이 "FTP 가 NAT 를 싫어하는" 이유의 실체.
 {% endif %}
 
-# ---- Active 모드 (M8 비교 실습용으로 켜 둔다) ------------------------------
+# ---- Active 모드 (M9 비교 실습용으로 켜 둔다) ------------------------------
 port_enable=YES
 connect_from_port_20=YES

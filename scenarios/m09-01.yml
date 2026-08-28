@@ -1,29 +1,41 @@
 ---
-# M9-01 : SNAT 규칙 제거
-#   증상  : 내부에서 외부로 아무것도 안 된다. 내부끼리는 전부 정상.
-#   한줄  : 내부에서 외부로 못 나감
-#   목표  : 내부에서 외부(inet)로 통신이 된다
-#   정답  : 경계 바깥쪽(eth2) 캡처에 **사설 출발지가 그대로** 보인다.
-#           나가긴 나갔는데 그 주소로는 응답이 돌아올 수 없다.
-#   노림수: "나갔는가" 와 "변환됐는가" 는 다른 질문이다. 양쪽 동시 캡처. (G1, C7)
-- name: "scenario m09-01 :: SNAT 이 사라졌다"
-  hosts: edge
+# M9-01 : DNS 레코드가 엉뚱한 IP 를 가리킨다
+#   증상  : 이름은 잘 풀린다. 그런데 접속이 안 된다. IP 로 직접 하면 된다.
+#   한줄  : 이름은 풀리는데 접속 안 됨
+#   목표  : 이름으로 web 에 접속된다
+#   정답  : dig 응답의 **값**이 틀렸다. web 의 A 레코드가 없는 주소를 가리킨다.
+#   노림수: "응답이 왔다" 와 "맞는 답이 왔다" 는 다르다. 가장 놓치기 쉬운 DNS 장애. (F1) ★
+- name: "scenario m09-01 :: DNS 레코드 오류"
+  hosts: dns
   become: true
   gather_facts: false
+  vars:
+    good: "{{ ipv4.segments.vlan40.hosts.web }}"
+    bad: "{{ ipv4.segments.vlan40.hosts.web.split('.')[:3] | join('.') }}.99"
+    zonefile: "/etc/bind/db.{{ dns.zone }}"
   tasks:
-    - name: postrouting 체인 비우기 (SNAT 제거)
-      ansible.builtin.command: "nft flush chain ip nat postrouting"
-      changed_when: true
+    - name: web 의 A 레코드를 바꾼다
+      ansible.builtin.replace:
+        path: "{{ zonefile }}"
+        regexp: '^(web\s+IN\s+A\s+){{ good | regex_escape }}\s*$'
+        replace: '\g<1>{{ bad }}'
       when: scenario_action | default('break') == 'break'
 
-    - name: 설정 파일 기준으로 복구
-      ansible.builtin.command: "nft -f /etc/nftables.conf"
-      changed_when: true
+    - name: A 레코드 복구
+      ansible.builtin.replace:
+        path: "{{ zonefile }}"
+        regexp: '^(web\s+IN\s+A\s+){{ bad | regex_escape }}\s*$'
+        replace: '\g<1>{{ good }}'
       when: scenario_action | default('break') != 'break'
+
+    - name: named 재시작 (존 파일 다시 읽기)
+      ansible.builtin.systemd:
+        name: named
+        state: restarted
 
     - name: 안내
       ansible.builtin.debug:
         msg: >-
-          {{ 'edge 의 SNAT 을 지웠다. "내부에서 밖으로 안 된다" 로만 알리고, 경계 양쪽 캡처를 유도할 것.'
+          {{ 'web 의 A 레코드를 ' ~ bad ~ ' 로 바꿨다. 이름은 풀리므로 "DNS 는 정상" 이라고 넘어가기 쉽다. 힌트를 늦게 줄 것.'
              if scenario_action | default('break') == 'break'
-             else 'edge 규칙 복구 완료 (nft list ruleset 으로 확인).' }}
+             else 'web A 레코드 복구 완료 (' ~ good ~ '). TTL 때문에 최대 5분간 옛 값이 남을 수 있다.' }}

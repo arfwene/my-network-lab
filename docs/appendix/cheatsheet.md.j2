@@ -66,7 +66,7 @@ UP    <...,LOWER_UP,UP>     → 정상
 ```
 r1# show ip route                     전체
 r1# show ip route ospf                OSPF 로 배운 것만
-r1# show ip route static              정적만  <- m10 에서는 비어 있어야 정상
+r1# show ip route static              정적만  <- m11 에서는 비어 있어야 정상
 r1# show ip ospf neighbor             인접 (r1·r4 는 2개가 정상)
 r1# show ip ospf interface eth2
 r1# show running-config
@@ -91,7 +91,7 @@ O   10.10.40.0/24 ...        O=OSPF 로 배움
    ExStart / Exchange 에서 멈춰 있다  →  곧장 ③ MTU
 ```
 
-## 4. IPv6 (M5)
+## 4. IPv6 (M6)
 
 | 무엇을 볼 때 | 명령 | 정상이면 |
 |---|---|---|
@@ -104,7 +104,7 @@ O   10.10.40.0/24 ...        O=OSPF 로 배움
 > `-br` 를 붙이면 `dadfailed` 가 **안 보입니다.** IPv6 주소가 있는데 통신이 안 되면
 > `-br` 를 빼고 다시 봐 주세요.
 
-## 5. 전송 · 포트 (M6)
+## 5. 전송 · 포트 (M7)
 
 | 무엇을 볼 때 | 명령 | 정상이면 |
 |---|---|---|
@@ -113,7 +113,7 @@ O   10.10.40.0/24 ...        O=OSPF 로 배움
 | 포트 열림 확인 | `nc -vz {{ ip.web }} 80` | `succeeded` |
 | ephemeral 범위 | `cat /proc/sys/net/ipv4/ip_local_port_range` | `32768 60999` |
 
-**★★ 연결 실패 4종 감별 — 이 표 하나가 M6 전부입니다**
+**★★ 연결 실패 4종 감별 — 이 표 하나가 M7 전부입니다**
 
 | 증상 | 시간 | 캡처에서 SYN 에 대한 응답 | 원인 |
 |---|---|---|---|
@@ -122,7 +122,7 @@ O   10.10.40.0/24 ...        O=OSPF 로 배움
 | `Connection refused` | 즉시 | `RST` | 포트 미개방 · REJECT |
 | 연결은 되는데 응답 없음 | 무한 | `SYN-ACK` 까지 정상, 그 뒤 침묵 | **서비스 행** |
 
-## 6. 서비스 (M8)
+## 6. 서비스 (M9)
 
 | 무엇을 볼 때 | 명령 | 정상이면 |
 |---|---|---|
@@ -138,7 +138,7 @@ O   10.10.40.0/24 ...        O=OSPF 로 배움
 이름 O(값이 틀림)     → DNS 레코드 오류   ← 가장 놓치기 쉽다
 ```
 
-## 7. 경계 · NAT · 방화벽 (M9)
+## 7. 경계 · NAT · 방화벽 (M10)
 
 | 무엇을 볼 때 | 명령 (edge) | 정상이면 |
 |---|---|---|
@@ -152,7 +152,7 @@ DNAT  들어올 때 목적지를 바꾼다  공개 IP → 사설 IP
       ▶ 리턴 트래픽을 여는 것은 ct state established,related accept 한 줄이다
 ```
 
-## 8. 캡처 (M7)
+## 8. 캡처 (M8)
 
 ```bash
 sudo tcpdump -i eth1 -n -e 'not port 22'              # 기본형 (SSH 제외 필수)

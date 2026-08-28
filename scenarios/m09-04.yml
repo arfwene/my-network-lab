@@ -1,21 +1,21 @@
 ---
-# M9-04 : FTP 서버가 사설 주소를 밖에 알려 준다
-#   증상  : 외부에서 FTP 접속(21)은 되는데 전송만 안 된다. **내부에서는 정상.**
-#   한줄  : 외부 FTP 전송만 안 됨
-#   목표  : 외부에서 FTP 파일 전송이 된다
-#   정답  : vsftpd 의 pasv_address 가 빠져 227 응답에 사설 IP 가 실려 나간다.
-#           외부 클라이언트는 그 주소로 갈 방법이 없다 (사설은 라우팅되지 않는다).
-#   노림수: NAT 는 헤더만 바꾼다. 본문에 주소를 실어 나르는 프로토콜의 대가. (F5) ★
-- name: "scenario m09-04 :: 227 응답에 사설 IP 가 실린다"
+# M9-04 : FTP Passive 모드 비활성화
+#   증상  : FTP 접속(21)은 되는데 파일 목록·전송만 안 된다.
+#   한줄  : FTP 접속은 되고 전송만 안 됨
+#   목표  : FTP 로 파일 목록과 전송이 된다
+#   정답  : 데이터 채널 문제다. vsftpd 의 pasv_enable 이 꺼져 있어
+#           클라이언트가 PASV 를 요청해도 거부된다. Active(`curl -P -`)로는 성공한다.
+#   노림수: FTP 는 연결이 **두 개**라는 것. M10 의 NAT 실습 예고편. (F4)
+- name: "scenario m09-04 :: FTP 데이터 채널 장애"
   hosts: ftp
   become: true
   gather_facts: false
   tasks:
-    - name: pasv_address 주석 처리 / 복구
+    - name: Passive 모드 끄기 / 켜기
       ansible.builtin.replace:
         path: /etc/vsftpd.conf
-        regexp: "^{{ '#' if scenario_action | default('break') != 'break' else '' }}pasv_address="
-        replace: "{{ '' if scenario_action | default('break') != 'break' else '#' }}pasv_address="
+        regexp: "^pasv_enable=(YES|NO)$"
+        replace: "pasv_enable={{ 'NO' if scenario_action | default('break') == 'break' else 'YES' }}"
 
     - name: vsftpd 재시작
       ansible.builtin.systemd:
@@ -25,6 +25,6 @@
     - name: 안내
       ansible.builtin.debug:
         msg: >-
-          {{ 'ftp 의 pasv_address 를 껐다. **내부에서는 정상** 이라는 점이 결정적 단서다 — 그 대비를 짚어 줄 것.'
+          {{ 'vsftpd 의 Passive 를 껐다. 21 은 응답하지만 전송이 안 된다. Active(curl -P -)로는 되는 것을 발견하면 대성공.'
              if scenario_action | default('break') == 'break'
-             else 'ftp pasv_address 복구 완료 (grep pasv_address /etc/vsftpd.conf).' }}
+             else 'vsftpd Passive 복구 완료 (pasv_enable=YES).' }}

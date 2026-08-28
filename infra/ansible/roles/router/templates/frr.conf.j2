@@ -9,10 +9,10 @@
 !    show ip ospf interface   <- 인터페이스별 area/cost
 ! =============================================================================
 {% set si = stages.index(config_stage | default(lab_stage)) %}
-{% set v6 = si >= stages.index('m5') %}
+{% set v6 = si >= stages.index('m6') %}
 {% set m3 = stages.index('m3') %}
 {% set m4 = stages.index('m4') %}
-{% set m9 = stages.index('m9') %}
+{% set m10 = stages.index('m10') %}
 frr defaults traditional
 hostname {{ node }}
 log syslog informational
@@ -58,7 +58,7 @@ router ospf
  ospf router-id {{ loopback_ipv4 }}
 ! passive 는 위 interface 절의 `ip ospf passive` 가 정한다.
 ! `passive-interface <이름>` 은 FRR 8 에서 deprecated 다 — VRF 를 못 가리기 때문이다.
-{% if si >= m9 and edge_routing.ospf_default_originate | default(false) %}
+{% if si >= m10 and edge_routing.ospf_default_originate | default(false) %}
 ! 내부 라우터들이 기본 경로를 학습한다
  default-information originate
 {% endif %}
@@ -69,8 +69,8 @@ router ospf6
 !
 {% endif %}
 {% endif %}
-{% if si >= m9 and edge_routing.static is defined %}
-! ---- M9 : 인터넷 경계 ----------------------------------------------------
+{% if si >= m10 and edge_routing.static is defined %}
+! ---- M10 : 인터넷 경계 ----------------------------------------------------
 !  경계는 IGP 로 풀지 않는다. 실무에서도 정적 default 또는 BGP 를 쓴다.
 {% for r in edge_routing.static if r.via %}
 ! {{ r.desc }}

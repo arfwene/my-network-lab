@@ -1,0 +1,13 @@
+id: m07
+title: "전송 계층 — 포트와 세션"
+stage: m7
+duration: "3시간"
+competencies: [E1, E2, E3, E4, E5, A3]
+summary: "\"접속이 안 됩니다\" 를 네 가지 원인으로 감별하는 표를 직접 만듭니다. 실무에서 가장 자주 받는 질문에 답하는 도구입니다."
+objectives:
+  - "TCP 와 UDP 의 차이 및 선택 기준을 설명할 수 있습니다 (E1)"
+  - "소켓 4-tuple 과 세션의 정의를 설명하고 ss 로 TCP 상태 전이를 추적할 수 있습니다 (E2)"
+  - "연결 실패 증상만 보고 원인을 네 가지로 감별할 수 있습니다 — 경로 없음 / DROP / REJECT / 서비스 행 (E3) ★"
+  - "well-known 과 ephemeral 포트 범위를 알고, 포트 고갈이 왜 일어나는지 설명할 수 있습니다 (E4)"
+  - "3-way handshake 와 4-way termination 을 캡처에서 짚고 TIME_WAIT 의 이유를 설명할 수 있습니다 (E5)"
+  - "MAC·IP·포트가 각각 어디까지 유효한 주소인지 구분해 설명할 수 있습니다 (A3)"

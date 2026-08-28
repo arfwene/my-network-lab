@@ -27,8 +27,8 @@ def render(lab_id=1, only=None):
     OUT.mkdir(parents=True, exist_ok=True)
     env = Environment(loader=FileSystemLoader(SRC), undefined=StrictUndefined,
                       keep_trailing_newline=True)
-    # 부록은 랩이 완성된 상태(m10)를 전제로 쓴다 — 과정 내내, 그리고 수료 후에 보는 문서다.
-    ctx = L.doc_context(lab_id, "m10")
+    # 부록은 랩이 완성된 상태(m11)를 전제로 쓴다 — 과정 내내, 그리고 수료 후에 보는 문서다.
+    ctx = L.doc_context(lab_id, "m11")
     out = []
     for d in index():
         if only and d["id"] != only:

@@ -2,7 +2,7 @@
 """
 설계 -> Terraform 변수(JSON) 생성.
 
-usage:  python3 tools/gen-tfvars.py --lab 1 [--stage m10]
+usage:  python3 tools/gen-tfvars.py --lab 1 [--stage m11]
 출력:   infra/terraform/envs/lab<N>/lab.auto.tfvars.json
 
 Terraform 이 YAML 을 직접 파싱하지 않게 한다. 주소 조합 로직은 labdesign.py 한 곳에만 둔다.
@@ -76,4 +76,4 @@ def main(lab_id, stage):
 if __name__ == "__main__":
     a = sys.argv
     main(int(a[a.index("--lab") + 1]) if "--lab" in a else 1,
-         a[a.index("--stage") + 1] if "--stage" in a else "m10")
+         a[a.index("--stage") + 1] if "--stage" in a else "m11")

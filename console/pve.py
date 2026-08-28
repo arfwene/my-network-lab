@@ -862,7 +862,7 @@ def preflight(lab_id, cfg=None):
         else:
             c_mg.set("ok", f"{mgb} (VLAN-aware) · 이 랩 = VLAN {vlan}")
 
-        want = [b["name"] for b in L.all_bridges(lab_id, "m10")]
+        want = [b["name"] for b in L.all_bridges(lab_id, "m11")]
         taken = []
         for name in want:
             i = by_name.get(name)

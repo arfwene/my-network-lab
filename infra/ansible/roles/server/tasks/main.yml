@@ -35,7 +35,7 @@
 
 - block:
     # ---------------- vsftpd (ftp) ----------------
-    # passive 포트 범위를 고정해야 방화벽 정책을 쓸 수 있다 — M9 의 핵심
+    # passive 포트 범위를 고정해야 방화벽 정책을 쓸 수 있다 — M10 의 핵심
     - name: vsftpd 설정
       ansible.builtin.template:
         src: vsftpd.conf.j2

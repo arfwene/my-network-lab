@@ -62,7 +62,7 @@ def appendix_get(doc_id):
 
 
 def render_appendix(doc_id, lab_id):
-    """부록 하나를 마크다운으로. 랩이 완성된 상태(m10) 기준으로 렌더한다."""
+    """부록 하나를 마크다운으로. 랩이 완성된 상태(m11) 기준으로 렌더한다."""
     d = appendix_get(doc_id)
     if not d:
         return None
@@ -71,10 +71,10 @@ def render_appendix(doc_id, lab_id):
         return None
     env = Environment(loader=FileSystemLoader(APX), undefined=StrictUndefined,
                       keep_trailing_newline=True)
-    return env.get_template(src.name).render(**L.doc_context(lab_id, "m10"), meta=d)
+    return env.get_template(src.name).render(**L.doc_context(lab_id, "m11"), meta=d)
 
 
-def lab_map(lab_id=1, stage="m10"):
+def lab_map(lab_id=1, stage="m11"):
     """랩 지도 — 교육생이 상시 참조하는 문서.
 
     **파일을 읽지 않고 그 자리에서 만든다.** 전에는 `make gen` 이 만들어 둔
@@ -94,7 +94,7 @@ def render_markdown(module, lab_id, kind="README"):
     env = Environment(loader=FileSystemLoader(d), undefined=StrictUndefined,
                       keep_trailing_newline=True)
     ctx = {**L.doc_context(lab_id, module["stage"]), "meta": module}
-    ctx["topology_full"] = L.mermaid(lab_id, "m10")
+    ctx["topology_full"] = L.mermaid(lab_id, "m11")
     out = env.get_template(src.name).render(**ctx)
     # 목차는 교재(README)에만. 과제·검증은 짧아서 필요 없다.
     return mdtoc.insert(out) if kind == "README" else out
@@ -112,7 +112,7 @@ def to_html(text, module=None):
     module 이 없으면(부록) 전체 토폴로지 기준으로 그린다.
     """
     stages = []
-    default_stage = module["stage"] if module else "m10"
+    default_stage = module["stage"] if module else "m11"
 
     def swap(m):
         body = m.group(1)

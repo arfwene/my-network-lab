@@ -1,26 +1,26 @@
 ---
-# M7-01 : r2 의 출력 인터페이스에 패킷 손실 주입 (netem)
-#   증상  : 통신은 된다. 그런데 "가끔 느리다". ping 으로는 잘 안 드러난다.
-#   한줄  : 통신은 되는데 가끔 느림
-#   목표  : pc1 → web 에 손실·지연이 없다
-#   정답  : 중간 구간에서 패킷이 버려지고 있고, TCP 가 재전송으로 메우고 있다.
-#           캡처에서 **같은 seq 가 반복**되는 것으로만 보인다.
-#   노림수: "안 된다" 가 아니라 "느리다" 를 캡처로 진단하기. (H1, H3)
-#   ※ sch_netem 커널 모듈이 필요하다. 없는 환경이면 m06-01 로 대체할 것.
-- name: "scenario m07-01 :: 중간 구간 패킷 손실"
-  hosts: r2
+# M7-01 : web 의 80 포트를 방화벽에서 조용히 버린다 (DROP)
+#   증상  : ping 은 되는데 HTTP 만 매달리다 타임아웃. 즉시 실패가 아니다.
+#   한줄  : ping 은 되고 HTTP 만 매달림
+#   목표  : pc1 에서 web 의 HTTP 가 응답한다
+#   정답  : 감별표 ② — 어딘가에서 DROP 되고 있다.
+#           캡처에 SYN 만 여러 번 나가고 아무것도 안 돌아온다.
+#   노림수: "오래 걸린다"는 것 자체가 단서다. 즉시 거부와 구분하기. (E3)
+- name: "scenario m07-01 :: 방화벽이 조용히 버린다"
+  hosts: web
   become: true
   gather_facts: false
-  vars:
-    loss: "30%"
   tasks:
-    - name: 손실 주입
-      ansible.builtin.command: "tc qdisc replace dev eth2 root netem loss {{ loss }}"
+    - name: 80 포트 DROP 규칙 추가
+      ansible.builtin.shell: |
+        nft add table inet labbreak
+        nft add chain inet labbreak input '{ type filter hook input priority 0; }'
+        nft add rule inet labbreak input tcp dport 80 drop
       changed_when: true
       when: scenario_action | default('break') == 'break'
 
-    - name: 손실 제거
-      ansible.builtin.command: "tc qdisc del dev eth2 root"
+    - name: 규칙 제거
+      ansible.builtin.command: "nft delete table inet labbreak"
       changed_when: true
       failed_when: false
       when: scenario_action | default('break') != 'break'
@@ -28,6 +28,6 @@
     - name: 안내
       ansible.builtin.debug:
         msg: >-
-          {{ 'r2 의 eth2 에 ' ~ loss ~ ' 손실을 걸었다. 교육생에게는 "가끔 느리다" 로만 알리고 show 명령을 금지할 것.'
+          {{ 'web 의 80 포트를 DROP 으로 막았다. ping 은 되고 HTTP 만 매달린다. nginx 는 정상이다.'
              if scenario_action | default('break') == 'break'
-             else 'r2 eth2 손실 제거 완료 (tc qdisc show dev eth2 로 확인).' }}
+             else 'web 방화벽 규칙 제거 완료 (nft list ruleset 으로 확인할 것).' }}

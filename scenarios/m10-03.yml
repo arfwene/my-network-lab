@@ -1,0 +1,32 @@
+---
+# M10-03 : stateful 허용 규칙 제거  ★ 이 모듈의 핵심
+#   증상  : 내부에서 나가는 것은 되는데 **아무 응답도 돌아오지 않는다**.
+#           캡처를 보면 SYN 은 나가고 SYN-ACK 이 안 들어온다.
+#   한줄  : 나가긴 하는데 응답이 안 옴
+#   목표  : 내부에서 나간 통신의 응답이 돌아온다
+#   정답  : forward 체인의 `ct state established,related accept` 한 줄이 사라졌다.
+#           리턴 트래픽을 허용하는 규칙은 원래 그것 하나뿐이었다.
+#   노림수: stateful 방화벽의 실체. 규칙 한 줄이 무엇을 하고 있었는지. (G2) ★
+- name: "scenario m10-03 :: 리턴 트래픽이 사라졌다"
+  hosts: edge
+  become: true
+  gather_facts: false
+  tasks:
+    - name: established 허용 규칙 삭제 (handle 로 지정)
+      ansible.builtin.shell: |
+        h=$(nft -a list chain inet filter forward | awk '/ct state established/ {print $NF}' | head -1)
+        [ -n "$h" ] && nft delete rule inet filter forward handle "$h"
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: 설정 파일 기준으로 복구
+      ansible.builtin.command: "nft -f /etc/nftables.conf"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'edge 의 ct state established 규칙을 지웠다. 못 찾으면 "응답을 허용하는 규칙이 원래 몇 개였죠?" 라고만 물을 것.'
+             if scenario_action | default('break') == 'break'
+             else 'edge 규칙 복구 완료.' }}

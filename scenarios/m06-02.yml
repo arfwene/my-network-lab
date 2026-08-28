@@ -1,23 +1,33 @@
 ---
-# M6-02 : nginx 중지
-#   증상  : HTTP 접속이 **즉시** Connection refused.
-#   한줄  : HTTP 가 즉시 refused
-#   목표  : pc1 에서 web 의 HTTP 가 응답한다
-#   정답  : 감별표 ③ — 포트를 듣는 서비스가 없다. 캡처에 SYN -> RST.
-#   노림수: "즉시 거부" 가 **네트워크는 완벽하다**는 증거임을 말할 수 있는가. (E3)
-- name: "scenario m06-02 :: 서비스가 안 떠 있다"
-  hosts: web
+# M6-02 : r4 서버망 인터페이스의 OSPFv3 area 제거
+#   증상  : pc1 에서 IPv6 게이트웨이까지는 가는데 서버망만 못 간다. IPv4 는 정상.
+#   한줄  : IPv6 로 서버망만 못 감
+#   목표  : pc1 에서 web 으로 IPv6 통신이 된다
+#   정답  : r4 의 eth3 가 OSPFv3 에 들어 있지 않아 서버망 IPv6 대역이 광고되지 않는다.
+#           r1 의 show ipv6 route ospf6 에 그 대역이 없다.
+#   노림수: 절단 지점을 찾은 뒤 "이 경로를 누가 알려 줬어야 하는가" 로 거슬러 올라가기. (C4)
+- name: "scenario m06-02 :: 서버망 IPv6 경로가 광고되지 않는다"
+  hosts: r4
   become: true
   gather_facts: false
+  vars:
+    area6: "{{ routing.ospf6.area }}"
   tasks:
-    - name: nginx 중지
-      ansible.builtin.systemd:
-        name: nginx
-        state: "{{ 'stopped' if scenario_action | default('break') == 'break' else 'started' }}"
+    - name: OSPFv3 에서 서버망 인터페이스를 뺀다
+      ansible.builtin.command: >-
+        vtysh -c "conf t" -c "interface eth3" -c "no ipv6 ospf6 area {{ area6 }}"
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: OSPFv3 복구
+      ansible.builtin.command: >-
+        vtysh -c "conf t" -c "interface eth3" -c "ipv6 ospf6 area {{ area6 }}"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
 
     - name: 안내
       ansible.builtin.debug:
         msg: >-
-          {{ 'web 의 nginx 를 내렸다. 교육생이 "즉시 거부 = 네트워크는 정상" 까지 말하는지 볼 것.'
+          {{ 'r4 의 eth3 를 OSPFv3 에서 뺐다. IPv4 는 그대로이므로 IPv6 쪽만 경로가 사라진다.'
              if scenario_action | default('break') == 'break'
-             else 'web nginx 복구 완료.' }}
+             else 'r4 eth3 OSPFv3 복구 완료 (area ' ~ area6 ~ ').' }}
