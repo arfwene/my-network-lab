@@ -271,7 +271,7 @@ r1 에서 Site-B 로 가는 두 길
 (방화벽 · NAT · 로드밸런서)가 있으면 한쪽 방향만 지나가 세션이 깨집니다.
 그래서 실무에서는 양쪽 cost 를 함께 조정합니다. 6.2 에서 일부러 한쪽만 바꿔 봅니다.
 
-### 2.6 passive-interface
+### 2.6 passive — 광고는 하되 Hello 는 안 보낸다
 
 Hello 는 이웃을 찾기 위한 것입니다. 라우터가 없는 곳으로 보내면 아무도 답하지 않습니다.
 사용자망과 서버망이 그런 곳입니다.
@@ -279,14 +279,36 @@ Hello 는 이웃을 찾기 위한 것입니다. 라우터가 없는 곳으로 �
 | | 그 대역이 광고되는가 | Hello 를 보내는가 |
 |---|---|---|
 | 보통 인터페이스 | ○ | ○ |
-| `passive-interface` | ○ | ✗ |
+| **passive** | ○ | ✗ |
 | OSPF 에 안 넣음 | ✗ | ✗ |
 
 가운데 줄이 우리가 원하는 것입니다. 사용자망 대역은 다른 라우터가 알아야 하므로 광고는 하되,
 Hello 는 보내지 않습니다. 이유는 둘입니다. 낭비이고, 누군가 사용자망에 라우터를 꽂아
 인접을 맺는 것을 막습니다.
 
-**passive 로 둘 곳은 셋이다** — `r1` 의 `eth1.10` `eth1.20`, `r4` 의 `eth3`, 그리고 네 대의 `lo0`.
+**passive 로 둘 곳은 셋입니다** — `r1` 의 `eth1.10` `eth1.20`, `r4` 의 `eth3`, 그리고 네 대의 `lo0`.
+
+#### 어디에 적는가 — 인터페이스입니다
+
+예전에는 `router ospf` 절에 `passive-interface eth1.10` 처럼 적었습니다.
+FRR 8 부터 그 명령은 **deprecated** 이고, 치면 이런 경고가 뜹니다.
+
+```
+This command is deprecated, because it is not VRF-aware.
+Please, use "ip ospf passive" on an interface instead.
+```
+
+이름만으로는 어느 VRF 의 `eth1.10` 인지 가릴 수 없기 때문입니다.
+그래서 지금은 **인터페이스 절 안에서** 적습니다. area · cost 와 같은 자리입니다.
+
+```
+r1(config)# interface eth1.10
+r1(config-if)# ip ospf area {{ routing.ospf.area }}
+r1(config-if)# ip ospf passive
+```
+
+Cisco IOS 는 아직 `router ospf` 절의 `passive-interface` 를 씁니다.
+**개념은 같고 적는 자리만 다릅니다** — 벤더를 옮길 때 늘 겪는 종류의 차이입니다.
 
 ### 2.7 경로가 여럿일 때 무엇이 이기는가
 
@@ -481,9 +503,6 @@ FRR 은 "이 인터페이스는 area 0 이다" 를 인터페이스 쪽에 적는
 r1# configure terminal
 r1(config)# router ospf
 r1(config-router)# ospf router-id {{ loopback.r1 }}
-r1(config-router)# passive-interface eth1.10
-r1(config-router)# passive-interface eth1.20
-r1(config-router)# passive-interface lo0
 r1(config-router)# exit
 r1(config)# interface eth2
 r1(config-if)# ip ospf area {{ routing.ospf.area }}
@@ -495,12 +514,15 @@ r1(config-if)# ip ospf cost {{ p2p['r1-r3'].ospf_cost }}
 r1(config-if)# exit
 r1(config)# interface eth1.10
 r1(config-if)# ip ospf area {{ routing.ospf.area }}
+r1(config-if)# ip ospf passive
 r1(config-if)# exit
 r1(config)# interface eth1.20
 r1(config-if)# ip ospf area {{ routing.ospf.area }}
+r1(config-if)# ip ospf passive
 r1(config-if)# exit
 r1(config)# interface lo0
 r1(config-if)# ip ospf area {{ routing.ospf.area }}
+r1(config-if)# ip ospf passive
 r1(config-if)# end
 ```
 
@@ -557,7 +579,6 @@ notes:
 r2# configure terminal
 r2(config)# router ospf
 r2(config-router)# ospf router-id {{ loopback.r2 }}
-r2(config-router)# passive-interface lo0
 r2(config-router)# exit
 r2(config)# interface eth1
 r2(config-if)# ip ospf area {{ routing.ospf.area }}
@@ -569,6 +590,7 @@ r2(config-if)# ip ospf cost {{ p2p['r2-r4'].ospf_cost }}
 r2(config-if)# exit
 r2(config)# interface lo0
 r2(config-if)# ip ospf area {{ routing.ospf.area }}
+r2(config-if)# ip ospf passive
 r2(config-if)# end
 ```
 
@@ -632,7 +654,6 @@ notes:
 r3# configure terminal
 r3(config)# router ospf
 r3(config-router)# ospf router-id {{ loopback.r3 }}
-r3(config-router)# passive-interface lo0
 r3(config-router)# exit
 r3(config)# interface eth1
 r3(config-if)# ip ospf area {{ routing.ospf.area }}
@@ -644,6 +665,7 @@ r3(config-if)# ip ospf cost {{ p2p['r3-r4'].ospf_cost }}
 r3(config-if)# exit
 r3(config)# interface lo0
 r3(config-if)# ip ospf area {{ routing.ospf.area }}
+r3(config-if)# ip ospf passive
 r3(config-if)# end
 ```
 
@@ -685,8 +707,6 @@ notes:
 r4# configure terminal
 r4(config)# router ospf
 r4(config-router)# ospf router-id {{ loopback.r4 }}
-r4(config-router)# passive-interface eth3
-r4(config-router)# passive-interface lo0
 r4(config-router)# exit
 r4(config)# interface eth1
 r4(config-if)# ip ospf area {{ routing.ospf.area }}
@@ -698,9 +718,11 @@ r4(config-if)# ip ospf cost {{ p2p['r3-r4'].ospf_cost }}
 r4(config-if)# exit
 r4(config)# interface eth3
 r4(config-if)# ip ospf area {{ routing.ospf.area }}
+r4(config-if)# ip ospf passive
 r4(config-if)# exit
 r4(config)# interface lo0
 r4(config-if)# ip ospf area {{ routing.ospf.area }}
+r4(config-if)# ip ospf passive
 r4(config-if)# end
 ```
 
@@ -929,7 +951,7 @@ r1# show ip ospf database
 | 5.4 | 가는 길만 있고 오는 길이 없습니다 | 반대쪽 설정이 빠졌습니다 |
 | 5.5 | 통신은 되는데 엉뚱한 길로 갑니다 | cost 를 한쪽만 줬습니다 |
 | 5.6 | 인접이 붙었다 끊겼다 합니다 | router-id 가 겹쳤습니다 |
-| 5.7 | 사용자망으로 Hello 가 나갑니다 | passive 를 안 걸었습니다 |
+| 5.7 | 사용자망으로 Hello 가 나갑니다 | `ip ospf passive` 를 안 걸었습니다 |
 | 5.8 | 링크는 UP 인데 통신이 죽습니다 | 상대만 죽었다 (블랙홀) |
 
 ### 5.1 이웃이 하나도 안 보인다
@@ -995,7 +1017,7 @@ r4# show ip ospf interface
 포트 목록에 그 대역의 포트가 있는지 보세요. 없으면 광고되지 않습니다.
 
 **조치** — 그 포트에 `ip ospf area {{ routing.ospf.area }}` 를 넣습니다.
-서버망처럼 라우터가 없는 곳이면 `passive-interface` 도 함께 겁니다.
+서버망처럼 라우터가 없는 곳이면 `ip ospf passive` 도 함께 겁니다.
 
 이 랩에서 재현해 보려면 `r4` 의 `eth3` 를 area 에서 빼 보세요.
 `{{ cidr.vlan40 }}` 이 다른 라우터에서 통째로 사라집니다.
@@ -1065,7 +1087,7 @@ r1# clear ip ospf process
 
 장애는 아니지만 점검에서 지적되는 항목입니다.
 
-**왜** — 사용자망 포트에 `passive-interface` 를 안 걸었습니다.
+**왜** — 사용자망 포트에 `ip ospf passive` 를 안 걸었습니다.
 
 ```bash
 # pc1 의 셸에서
@@ -1074,7 +1096,7 @@ sudo tcpdump -ni eth1 proto ospf
 
 `{{ gw.vlan10 }}` 에서 `224.0.0.5` 로 가는 패킷이 {{ routing.ospf.timers.hello }}초마다 보이면 새고 있는 것입니다.
 
-**조치** — `router ospf` 절에 `passive-interface eth1.10` 을 넣습니다.
+**조치** — `interface eth1.10` 절에 `ip ospf passive` 를 넣습니다.
 누군가 사용자망에 라우터를 꽂아 인접을 맺는 것을 막는 보안 조치이기도 합니다.
 
 ### 5.8 링크는 UP 인데 통신이 죽는다

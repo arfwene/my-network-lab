@@ -105,7 +105,7 @@ quiz:
 
     - id: q7
       type: single
-      text: "사용자망·서버망 쪽 인터페이스를 `passive-interface` 로 두는 이유는?"
+      text: "사용자망·서버망 쪽 인터페이스에 `ip ospf passive` 를 거는 이유는?"
       choices:
         - "그 대역은 광고하되 Hello 는 보내지 않기 위해 — 이웃이 없는 곳에 보낼 이유가 없습니다"
         - "그 대역을 OSPF 광고 대상에서 빼기 위해 — 사용자망은 밖에 알릴 필요가 없기 때문입니다"

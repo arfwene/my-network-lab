@@ -15,9 +15,9 @@
 그리고 ①④ 는 `show ip ospf interface` 한 번으로 동시에 볼 수 있다.
 
 - `ExStart` 일 때 → **MTU**
-- 상대가 아예 안 보일 때 → **Area ID**, **인증**, (그리고 `passive-interface` 로 지정돼 있지 않은지)
+- 상대가 아예 안 보일 때 → **Area ID**, **인증**, (그리고 `ip ospf passive` 로 지정돼 있지 않은지)
 
-> **추가로 짚어 줄 것**: `passive-interface` 는 4가지 목록에 없지만 현장에서 자주 나온다.
+> **추가로 짚어 줄 것**: passive 는 4가지 목록에 없지만 현장에서 자주 나온다.
 > "설정은 다 맞는데 Hello 가 안 나간다" 면 이것을 의심해야 한다.
 > router-id 중복도 마찬가지다 — 붙었다 끊겼다 하는 증상으로 나타난다.
 
@@ -132,7 +132,7 @@ sudo vtysh -c "conf t" -c "interface eth2" -c "ip ospf cost {{ p2p['r3-r4'].ospf
 **2.** **MTU.** `ExStart`/`Exchange` 는 DBD 를 주고받는 단계이고 거기서 MTU 를 비교하기 때문이다.
 
 **3.** Area ID 불일치 · 인증 불일치 · 타이머 불일치 · 서브넷/마스크 불일치 ·
-`passive-interface` 로 지정됨 · 인터페이스가 OSPF 에 안 들어감. (두 개 이상이면 통과)
+`ip ospf passive` 로 지정됨 · 인터페이스가 OSPF 에 안 들어감. (두 개 이상이면 통과)
 
 **4.** **지도(LSA)** 를 주고받는다. 각자 같은 지도를 갖고 **자기 위치에서** 최단 경로를 계산한다.
 중요한 이유: 전체를 알기 때문에 루프가 잘 안 생기고, 문제 진단 시 **LSDB 비교**가 유효한 방법이 된다.

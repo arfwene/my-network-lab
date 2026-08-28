@@ -45,7 +45,7 @@
 | **인접 (Neighbor / Full)** | 두 라우터가 LSDB 를 교환할 수 있게 된 상태 | M4 | Full 이면 그 경로를 쓴다고 보는 것. **경로 선택은 별개입니다** |
 | **ExStart / Exchange 정체** | 인접이 이 상태에서 멈춘 것 | M4 | 원인은 거의 항상 **MTU 불일치** |
 | **수렴 (convergence)** | 변화 후 모든 라우터가 계산을 마쳐 그림이 같아진 상태 | M4 | 인접이 Full 이 되는 것과 혼동 |
-| **passive-interface** | 그 대역은 광고하되 Hello 는 보내지 않게 하는 설정 | M4 | 광고를 빼는 것으로 아는 것 |
+| **passive (`ip ospf passive`)** | 그 대역은 광고하되 Hello 는 보내지 않게 하는 설정 | M4 | 광고를 빼는 것으로 아는 것. FRR 8 에서 `passive-interface` 는 deprecated 입니다 |
 | **IGP / EGP(BGP)** | 조직 안 최적 경로 / 조직 사이 정책 경로 | M4 | 속도 차이로 이해하는 것 |
 
 ## IPv6  (M5)

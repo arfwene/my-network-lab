@@ -111,7 +111,7 @@ FRR / IOS 공통 표기
 | 프로세스 | `router ospf` | `router ospf 1` |
 | 대역 광고 | `network 10.10.10.0/24 area 0` | `network 10.10.10.0 0.0.0.255 area 0` |
 | router-id | `ospf router-id 10.10.96.1` | `router-id 10.10.96.1` |
-| passive | `passive-interface eth1` | `passive-interface Gi0/1` |
+| passive | `ip ospf passive` (interface 절) | `passive-interface Gi0/1` (router 절) |
 | cost | `ip ospf cost 10` (인터페이스) | `ip ospf cost 10` |
 | 타이머 | `ip ospf hello-interval 10` | `ip ospf hello-interval 10` |
 | 기본 경로 배포 | `default-information originate` | `default-information originate` |
