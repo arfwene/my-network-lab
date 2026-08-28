@@ -91,6 +91,32 @@
     mode: "0600"
   notify: netplan apply
 
+# 반대로, 설정에 **있는데 없는** VLAN 서브인터페이스는 여기서 만든다.
+#
+#   만드는 것은 원래 netplan 의 일이다. 그런데 netplan 은 파일이 바뀔 때만
+#   handler 로 돌기 때문에, 파일은 그대로인데 장치만 사라진 상태에서는
+#   아무도 되살리지 않는다. 그러면 뒤따르는 역할이 이렇게 죽는다:
+#
+#       failed: [r3] (item=eth3.10 -> eth3.10-10)
+#       stderr: Cannot find device "eth3.10"
+#
+#   장치를 지우는 길은 여럿이다 — 아래 정리 작업, 초기화 플레이북, 교육생의 손.
+#   지우는 쪽이 여기 있으니 되살리는 쪽도 여기 있는 편이 맞다.
+- name: 설정에 있는데 없는 VLAN 서브인터페이스를 만든다
+  ansible.builtin.shell: |
+    made=
+    {% for i in lab_interfaces | selectattr('active') | selectattr('parent') %}
+    if [ ! -e /sys/class/net/{{ i.name }} ]; then
+      ip link add link {{ i.parent }} name {{ i.name }} type vlan id {{ i.vlan }}
+      ip link set {{ i.name }} up
+      made="$made {{ i.name }}"
+    fi
+    {% endfor %}
+    [ -n "$made" ] && echo "made:$made"
+    exit 0
+  register: vlan_make
+  changed_when: "'made:' in vlan_make.stdout"
+
 # 설정에서 빠진 VLAN 서브인터페이스를 직접 지운다.
 #
 #   단계를 **거슬러 올라갈 때** 필요하다. M2 의 [이 모듈 적용] 은 config_stage 를
