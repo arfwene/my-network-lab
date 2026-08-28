@@ -191,7 +191,7 @@ checks:
       hint: |
         rc=1  → 즉시 거부(RST). 정상입니다.
         rc=124 → 3초를 다 쓰고 타임아웃 = **누군가 조용히 버리고 있습니다(DROP)**.
-        실습 4 나 장애 주입에서 만든 nft 규칙이 남아 있는지 확인할 것:
+        3.4 나 장애 주입에서 만든 nft 규칙이 남아 있는지 확인할 것:
           sudo nft list ruleset
 
     - id: established-session
