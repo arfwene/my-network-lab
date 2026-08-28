@@ -118,6 +118,16 @@ class NotReady(RuntimeError):
         self.health = health
 
 
+# 교육생이 직접 만드는 단계 (config/site.yml). 그 단계의 [이 모듈 적용] 은
+# 목표가 아니라 **초기 구성**을 놓는다.
+BUILD_STAGES = set(L.SITE.get("console", {}).get("build_stages") or [])
+
+
+def _prev_stage(stage):
+    i = L.STAGES.index(stage)
+    return L.STAGES[i - 1] if i > 0 else stage
+
+
 def scenario_ids():
     return sorted(p.stem for p in (L.ROOT / "scenarios").glob("*.yml"))
 
@@ -206,6 +216,12 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
         raise ValueError(f"허용되지 않은 단계: {stage}")
     inv = f"inventory/lab{lab_id}"
     gen = (L.ROOT, [PY, "tools/gen-inventory.py", "--lab", str(lab_id), "--stage", stage])
+    # 직접 만드는 단계에서는 [이 모듈 적용] 이 **한 단계 앞의 설정**을 올린다.
+    #   장비·링크·주소는 이 단계 그대로 두고, 그 모듈에서 배울 것만 비운다.
+    #   장애 실습·중간 점검·시험은 목표 구성이 서 있어야 성립하므로 gen 을 쓴다.
+    gen_base = (L.ROOT, [PY, "tools/gen-inventory.py", "--lab", str(lab_id),
+                         "--stage", stage, "--config-stage", _prev_stage(stage)]) \
+        if stage in BUILD_STAGES else gen
     gen_tf = (L.ROOT, [PY, "tools/gen-tfvars.py", "--lab", str(lab_id)])
 
     if action == "setup-docs":
@@ -270,8 +286,8 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
         return [(ANSIBLE, [APB, "-i", inv, "playbooks/verify.yml",
                            "-e", f"lab_stage={stage}"])]
     if action == "reset":
-        return [gen, (ANSIBLE, [APB, "-i", inv, "playbooks/reset.yml",
-                                "-e", f"lab_stage={stage}"])]
+        return [gen_base, (ANSIBLE, [APB, "-i", inv, "playbooks/reset.yml",
+                                     "-e", f"lab_stage={stage}"])]
     if action in ("check", "drill-check"):
         if not module:
             raise ValueError("검사에는 모듈이 필요합니다")

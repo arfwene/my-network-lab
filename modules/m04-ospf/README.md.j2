@@ -24,32 +24,95 @@ M3 의 마지막 질문은 이것이었다 — "`r1 ↔ r2` 케이블을 뽑으�
 
 ---
 
-## 1. 이 단계의 랩
+## 1. 이 모듈에서 만들 것
+
+**[이 모듈 적용]** 을 누르면 랩은 아래 **초기 구성**으로 맞춰진다.
+이번 모듈이 끝났을 때의 모습이 **목표 구성**이고, 그 사이를 메우는 것이 이 모듈이다.
 
 ```mermaid
 {{ topology }}
 ```
 
-`r3` 가 들어오면서 Site-A ↔ Site-B 사이에 **길이 두 개**가 됐다.
+`r3` 가 들어오면서 Site-A ↔ Site-B 사이에 **길이 두 개**가 됐다. 배선은 이미 다 돼 있다.
+
+### 1.1 초기 구성 — 지금 랩에 올라와 있는 것
+
+```labdiagram
+kind: mini
+cols: [r1, [r2, r3], r4]
+links:
+  - { label: 링크 넷 다 UP, sub: 주소도 다 붙어 있다 }
+  - {}
+marks:
+  r1: ["정적 경로 1줄"]
+  r2: ["정적 경로 2줄"]
+  r3: ["라우팅 설정 없음"]
+  r4: ["정적 경로 1줄"]
+notes:
+  - r3 를 지나는 길은 아무도 모른다
+```
+
+M3 에서 손으로 넣은 정적 경로가 그대로 있다. 라우터에 적힌 경로는 **넉 줄뿐**이다.
+
+| 라우터 | 지금 적혀 있는 것 |
+|---|---|
+| `r1` | `ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}` |
+| `r2` | `ip route {{ zone['site-a'] }} {{ p2p['r1-r2'].addresses.r1 }}` · `ip route {{ zone['site-b'] }} {{ p2p['r2-r4'].addresses.r4 }}` |
+| `r3` | — |
+| `r4` | `ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}` |
+
+`r3` 는 이번에 새로 들어온 장비다. 링크도 주소도 붙어 있지만 **라우팅 설정이 하나도 없다.**
+지금 `r1 ↔ r2` 를 끊으면 통신은 그대로 죽는다 — M3 의 마지막 질문 그대로다.
+
+### 1.2 목표 구성 — 이 모듈이 끝나면
+
+```labdiagram
+kind: mini
+cols: [r1, [r2, r3], r4]
+links:
+  - { label: OSPF area 0, sub: 서로를 배운다 }
+  - { label: OSPF area 0, sub: 서로를 배운다 }
+marks:
+  r1: ["{{ loopback.r1 }}"]
+  r2: ["{{ loopback.r2 }}"]
+  r3: ["{{ loopback.r3 }}"]
+  r4: ["{{ loopback.r4 }}"]
+notes:
+  - 장비 밑은 router-id (루프백 주소)
+  - 어디로 가라고 적어 주는 줄은 한 줄도 없다
+  - r1↔r2 를 끊으면 스스로 r3 로 옮겨 간다
+```
 
 | 경로 | 구간 | cost | 합계 |
 |---|---|---|---|
 | 주 경로 | r1 →(`{{ p2p['r1-r2'].cidr }}`)→ r2 →(`{{ p2p['r2-r4'].cidr }}`)→ r4 | {{ p2p['r1-r2'].ospf_cost }} + {{ p2p['r2-r4'].ospf_cost }} | {{ p2p['r1-r2'].ospf_cost + p2p['r2-r4'].ospf_cost }} |
 | 백업 경로 | r1 →(`{{ p2p['r1-r3'].cidr }}`)→ r3 →(`{{ p2p['r3-r4'].cidr }}`)→ r4 | {{ p2p['r1-r3'].ospf_cost }} + {{ p2p['r3-r4'].ospf_cost }} | {{ p2p['r1-r3'].ospf_cost + p2p['r3-r4'].ospf_cost }} |
 
+cost 는 사람이 정한 값이다. 두 경로의 물리적 성능은 이 랩에서 똑같다.
+`{{ p2p['r1-r3'].ospf_cost }}` 이라는 숫자에 **"이건 백업이다"** 라는 설계 의도를 담는 것이다.
+
+### 1.3 그래서 할 일은 다섯 가지
+
+| # | 할 일 | 왜 |
+|---|---|---|
+| ① | 정적 경로를 걷어낸다 | AD 1 이라 그대로 두면 OSPF(110)를 이겨 버린다 |
+| ② | 라우터마다 router-id 를 루프백으로 못 박는다 | 안 정하면 장비가 아무 주소나 골라 쓴다 |
+| ③ | 네 라우터의 인터페이스를 area 0 에 넣는다 | 이웃을 찾고 지도를 나눈다 |
+| ④ | cost 로 주 경로와 백업을 가른다 | 두 길의 성능이 같으므로 숫자로 의도를 적는다 |
+| ⑤ | 사용자망·서버망은 passive 로 둔다 | 이웃이 없는 곳에 Hello 를 보낼 이유가 없다 |
+
+**만드는 순서는 3절에 있다.** 먼저 2절에서 무엇을 만드는지 알고 가세요.
+
+### 1.4 주소 참조
+
+만들 때 쓸 값이다. 랩 지도와 같은 값이고, 노드에서는 `lab-whereami` 로도 볼 수 있다.
+
 | 라우터 | 루프백 (router-id) | 인터페이스 |
 |---|---|---|
 | `r1` | `{{ loopback.r1 }}` | `eth2` → r2 `{{ p2p['r1-r2'].addresses.r1 }}` · `eth3` → r3 `{{ p2p['r1-r3'].addresses.r1 }}` |
 | `r2` | `{{ loopback.r2 }}` | `eth1` → r1 `{{ p2p['r1-r2'].addresses.r2 }}` · `eth2` → r4 `{{ p2p['r2-r4'].addresses.r2 }}` |
 | `r3` | `{{ loopback.r3 }}` | `eth1` → r1 `{{ p2p['r1-r3'].addresses.r3 }}` · `eth2` → r4 `{{ p2p['r3-r4'].addresses.r3 }}` |
-| `r4` | `{{ loopback.r4 }}` | `eth1` → r2 `{{ p2p['r2-r4'].addresses.r4 }}` · `eth2` → r3 `{{ p2p['r3-r4'].addresses.r4 }}` |
-
-M3 의 정적 경로는 전부 사라졌다. 지금 라우터에 적혀 있는 것은
-"이 인터페이스는 area 0 이다" 와 "cost 는 얼마다" 뿐이다.
-어디로 가야 하는지는 아무도 적어 주지 않았다. 그런데도 통신이 된다.
-
-cost 는 사람이 정한 값이다. 두 경로의 물리적 성능은 이 랩에서 똑같다.
-`{{ p2p['r1-r3'].ospf_cost }}` 이라는 숫자에 **"이건 백업이다"** 라는 설계 의도를 담은 것이다.
+| `r4` | `{{ loopback.r4 }}` | `eth1` → r2 `{{ p2p['r2-r4'].addresses.r4 }}` · `eth2` → r3 `{{ p2p['r3-r4'].addresses.r4 }}` · `eth3` → 서버망 `{{ gw.vlan40 }}` |
 
 ---
 
@@ -228,24 +291,253 @@ M3 에서 넣은 정적 경로를 걷어내지 않고 OSPF 를 켜면 OSPF 는 �
 
 ---
 
-## 3. 실습
+## 3. 직접 만든다
 
-터미널 6개: `pc1`, `r1`, `r2`, `r3`, `r4`, `web`.
-되돌리려면 `sudo systemctl restart frr` (설정 파일 기준). `write memory` 는 하지 마세요.
+여기서부터 **손으로 만든다.** 터미널 넷을 연다 — `r1`, `r2`, `r3`, `r4`.
+(`pc1` 하나를 더 열어 두면 4절에서 바로 확인할 수 있다.)
+
+엉키면 **[이 모듈 적용]** 을 다시 누르면 된다. 초기 구성으로 되돌아온다.
+
+### 3.1 라우터 안으로 들어간다
+
+이 랩의 라우터는 **FRRouting** 을 쓴다. `vtysh` 가 그 장비의 CLI 이고,
+**실장비 콘솔에 붙은 것과 같다** — Cisco IOS 명령이 거의 그대로 통한다.
+
+```bash
+# r1 에서
+sudo vtysh
+```
+
+```
+Hello, this is FRRouting (version 8.4).
+Copyright 1996-2005 Kunihiro Ishiguro, et al.
+
+r1#
+```
+
+프롬프트가 `r1#` 으로 바뀌었다. **여기서부터는 리눅스 셸이 아니라 라우터 안이다.**
+
+| 하려는 것 | 명령 | 프롬프트 |
+|---|---|---|
+| 상태 보기 | `show ip route` | `r1#` |
+| 설정 모드로 | `configure terminal` (줄여서 `conf t`) | `r1(config)#` |
+| 인터페이스 설정 | `interface eth2` | `r1(config-if)#` |
+| 한 칸 나가기 | `exit` | |
+| 맨 위로 한 번에 | `end` | `r1#` |
+| 설정 파일에 저장 | `write memory` (줄여서 `wr`) | `r1#` |
+| 셸로 나가기 | `exit` 또는 `Ctrl-D` | |
+
+**뒤에 무엇을 쓸 수 있는지 모를 때는 `?` 를 친다.** Tab 으로 완성도 된다.
+
+```
+r1(config-if)# ip ospf ?
+  area           Enable OSPF on this interface with area
+  authentication Enable authentication on this interface
+  cost           Interface cost
+  dead-interval  Interval after which a neighbor is declared dead
+  hello-interval Time between HELLO packets
+  ...
+```
+
+> 실무 — 셸에서 `sudo vtysh -c 'show ip route'` 처럼 `-c` 를 붙이면 **한 줄로** 같은 일을
+> 한다. 스크립트나 빠른 확인에는 그쪽이 편하다. 이 교재는 실장비와 같은 감각을 위해
+> 3절부터 대화형을 쓴다. 둘이 같은 것이라는 점만 알고 있으면 된다.
+
+**설정은 친 즉시 반영되고, 저장은 따로다.** `write memory` 를 하지 않으면
+`sudo systemctl restart frr` 로 설정 파일 기준으로 되돌아간다 — 실습 중에는 그게 안전하다.
+**이 모듈에서는 `write memory` 를 하지 마세요.**
+
+### 3.2 정적 경로를 걷어낸다 (할 일 ①)
+
+정적 경로는 AD 1, OSPF 는 AD 110 이다. 남겨 두면 OSPF 가 아무리 잘 배워도 쓰이지 않는다.
+**r1 · r2 · r4** 세 대에 있다 (`r3` 에는 없다).
+
+**할 일** — 세 라우터의 정적 경로를 지운다.
+**확인** — `show ip route static` 이 비어야 한다.
+
+<details>
+<summary>명령이 기억나지 않으면</summary>
+
+지우는 명령은 넣을 때 쓴 줄 앞에 `no` 를 붙이는 것이다.
+
+```
+r1# configure terminal
+r1(config)# no ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}
+r1(config)# end
+r1# show ip route static
+```
+
+```
+r2# configure terminal
+r2(config)# no ip route {{ zone['site-a'] }} {{ p2p['r1-r2'].addresses.r1 }}
+r2(config)# no ip route {{ zone['site-b'] }} {{ p2p['r2-r4'].addresses.r4 }}
+r2(config)# end
+```
+
+```
+r4# configure terminal
+r4(config)# no ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}
+r4(config)# end
+```
+
+</details>
+
+이제 `pc1` 에서 `ping {{ ip.web }}` 을 해 보세요. **안 된다.** 당연하다 — 길을 아는 장비가 없다.
+여기서부터 OSPF 가 그 길을 스스로 찾게 만든다.
+
+### 3.3 r1 에 OSPF 를 켠다 (할 일 ②③④⑤)
+
+한 대를 끝까지 해 보고, 나머지는 같은 방식으로 반복한다.
+
+**할 일**
+
+1. OSPF 프로세스를 켜고 **router-id 를 `{{ loopback.r1 }}`** 로 못 박는다
+2. `eth2`(주 경로) · `eth3`(백업) · `eth1.10` · `eth1.20` · `lo0` 을 **area {{ routing.ospf.area }}** 에 넣는다
+3. `eth2` 는 cost {{ p2p['r1-r2'].ospf_cost }}, `eth3` 은 cost {{ p2p['r1-r3'].ospf_cost }}
+4. 사용자망(`eth1.10` · `eth1.20`)과 `lo0` 은 **passive** 로 둔다
+
+**확인** — `show ip ospf interface eth2` 에 `Area 0.0.0.0` 과 `Cost: {{ p2p['r1-r2'].ospf_cost }}` 가 보인다.
+
+<details>
+<summary>명령이 기억나지 않으면</summary>
+
+인터페이스마다 "이 인터페이스는 area 0 이다" 를 적고, 프로세스에는 router-id 와
+passive 목록만 적는다. FRR 은 두 가지 방식을 다 지원하는데, 이 랩은 인터페이스 쪽에 적는다.
+
+```
+r1# configure terminal
+r1(config)# router ospf
+r1(config-router)# ospf router-id {{ loopback.r1 }}
+r1(config-router)# passive-interface eth1.10
+r1(config-router)# passive-interface eth1.20
+r1(config-router)# passive-interface lo0
+r1(config-router)# exit
+r1(config)# interface eth2
+r1(config-if)# ip ospf area {{ routing.ospf.area }}
+r1(config-if)# ip ospf cost {{ p2p['r1-r2'].ospf_cost }}
+r1(config-if)# exit
+r1(config)# interface eth3
+r1(config-if)# ip ospf area {{ routing.ospf.area }}
+r1(config-if)# ip ospf cost {{ p2p['r1-r3'].ospf_cost }}
+r1(config-if)# exit
+r1(config)# interface eth1.10
+r1(config-if)# ip ospf area {{ routing.ospf.area }}
+r1(config-if)# exit
+r1(config)# interface eth1.20
+r1(config-if)# ip ospf area {{ routing.ospf.area }}
+r1(config-if)# exit
+r1(config)# interface lo0
+r1(config-if)# ip ospf area {{ routing.ospf.area }}
+r1(config-if)# end
+```
+
+</details>
+
+> 주의 — router-id 를 안 정하면 장비가 자기 주소 중 하나를 골라 쓴다. 그 주소가 붙은
+> 인터페이스가 내려가면 router-id 가 바뀌고, 인접이 통째로 다시 선다.
+> **루프백은 절대 안 내려가므로** router-id 로 쓴다.
+
+### 3.4 나머지 세 대
+
+`r2` · `r3` · `r4` 도 같은 방식이다. 값만 다르다.
+
+| 라우터 | router-id | area 0 에 넣을 것 | cost | passive |
+|---|---|---|---|---|
+| `r2` | `{{ loopback.r2 }}` | `eth1` `eth2` `lo0` | 둘 다 {{ p2p['r1-r2'].ospf_cost }} | `lo0` |
+| `r3` | `{{ loopback.r3 }}` | `eth1` `eth2` `lo0` | 둘 다 {{ p2p['r1-r3'].ospf_cost }} | `lo0` |
+| `r4` | `{{ loopback.r4 }}` | `eth1` `eth2` `eth3` `lo0` | `eth1` {{ p2p['r2-r4'].ospf_cost }} · `eth2` {{ p2p['r3-r4'].ospf_cost }} | `eth3` `lo0` |
+
+**한 대를 끝낼 때마다 `show ip ospf neighbor` 를 쳐 보세요.** 상대도 켜져 있어야 이웃이 선다 —
+r1 만 켠 상태에서는 아무것도 안 보이는 것이 정상이다.
+
+<details>
+<summary>r2 의 명령 (r3 · r4 도 같은 모양)</summary>
+
+```
+r2# configure terminal
+r2(config)# router ospf
+r2(config-router)# ospf router-id {{ loopback.r2 }}
+r2(config-router)# passive-interface lo0
+r2(config-router)# exit
+r2(config)# interface eth1
+r2(config-if)# ip ospf area {{ routing.ospf.area }}
+r2(config-if)# ip ospf cost {{ p2p['r1-r2'].ospf_cost }}
+r2(config-if)# exit
+r2(config)# interface eth2
+r2(config-if)# ip ospf area {{ routing.ospf.area }}
+r2(config-if)# ip ospf cost {{ p2p['r2-r4'].ospf_cost }}
+r2(config-if)# exit
+r2(config)# interface lo0
+r2(config-if)# ip ospf area {{ routing.ospf.area }}
+r2(config-if)# end
+```
+
+`r4` 는 서버망 쪽 `eth3` 이 하나 더 있다. 그 너머에는 라우터가 없으므로 **passive** 다 —
+대역은 광고하되 Hello 는 보내지 않는다.
+
+</details>
+
+### 3.5 내가 적은 것을 눈으로 확인한다
+
+```
+r1# show running-config
+```
+
+지금까지 친 것이 그대로 보인다. `interface` 절과 `router ospf` 절을 훑어 보세요.
+빠뜨린 인터페이스가 있으면 여기서 보인다.
+
+**저장하지 마세요.** 실습 중 `write memory` 를 하면 되돌리기가 번거로워진다.
+
+---
+
+## 4. 확인 — 내가 만든 것이 도는가
+
+네 대를 다 켰으면 **먼저 통신부터** 해 본다. 만든 것이 실제로 도는지가 첫 번째 질문이다.
+
+```bash
+# pc1 에서
+ping -c 3 {{ ip.web }}
+traceroute -n -w1 -q1 {{ ip.web }}
+```
+
+```
+ 1  {{ gw.vlan10 }}
+ 2  {{ p2p['r1-r2'].addresses.r2 }}
+ 3  {{ p2p['r2-r4'].addresses.r4 }}
+ 4  {{ ip.web }}
+```
+
+**주 경로(r2)를 지나야 한다.** r3 를 지난다면 cost 를 반대로 넣은 것이다 —
+3.4 의 표를 다시 보세요.
+
+안 되면 아래 순서로 좁힌다.
+
+| 증상 | 먼저 볼 것 |
+|---|---|
+| `show ip ospf neighbor` 에 이웃이 없다 | 상대 라우터도 켰는가 · 양쪽 area 가 같은가 (2.5 의 ①) |
+| 이웃은 `Full` 인데 경로가 없다 | 그 대역의 인터페이스를 area 에 넣었는가 |
+| 경로는 있는데 통신이 안 된다 | 정적 경로가 남아 있지 않은가 (`show ip route static`) |
+| 상태가 `ExStart` 에서 멈춘다 | MTU (2.5 의 ③) |
+
+되돌리려면 `sudo systemctl restart frr` (설정 파일 기준으로 돌아간다).
+아예 처음부터 다시 하려면 **[이 모듈 적용]** 이다.
+
+터미널은 여섯 개를 쓴다: `pc1`, `r1`, `r2`, `r3`, `r4`, `web`.
 
 ### 실습 1 — 무엇이 사라지고 무엇이 생겼나
 
-```bash
-# r1
-vtysh -c 'show ip route static'
+내가 지운 것과 내가 만든 것을 나란히 본다.
+
+```
+r1# show ip route static
 ```
 
 ```
-(아무것도 없다)
+(아무것도 없다 — 3.2 에서 지웠다)
 ```
 
-```bash
-vtysh -c 'show ip route ospf'
+```
+r1# show ip route ospf
 ```
 
 ```
@@ -264,20 +556,22 @@ O>* {{ p2p['r3-r4'].cidr }} [110/110] via {{ p2p['r1-r3'].addresses.r3 }}, eth3,
 
 cost 숫자의 절대값에 매달리지 마세요. 인터페이스 대역폭 인식에 따라 조금씩 다를 수 있다.
 중요한 것은 주 경로 쪽 합이 백업 쪽 합보다 뚜렷하게 작다는 사실이다.
-확인: `vtysh -c 'show ip ospf route'` 로 OSPF 가 계산한 cost 를 직접 볼 수 있다.
+확인: `show ip ospf route` 로 OSPF 가 계산한 cost 를 직접 볼 수 있다.
+
+r1 이 아는 대역이 몇 개인지는 셸에서 세는 편이 빠르다. `-c` 는 대화형에 들어가지 않고
+한 줄만 실행하는 방식이다.
 
 ```bash
-# r1 — 라우터가 아는 대역이 몇 개인가
-vtysh -c 'show ip route' | grep -c '^O'
+# r1 의 셸에서
+sudo vtysh -c 'show ip route' | grep -c '^O'
 ```
 
 정적일 때는 r1 에 1줄이었다. 지금은 라우터가 자기 몫으로 여러 대역을 알고 있다.
 그리고 Site-B 에 대역을 추가해도 r1 은 손대지 않는다. 설정이 아니라 학습이기 때문이다.
 
 ### 실습 2 — 이웃과 지도를 본다
-```bash
-# r1
-vtysh -c 'show ip ospf neighbor'
+```
+r1# show ip ospf neighbor
 ```
 
 ```
@@ -292,9 +586,10 @@ Neighbor ID     Pri State     Up Time    Dead Time  Address           Interface
 | State | `Full` 이어야 정상 |
 | Dead Time | 이 값이 0 이 되면 이웃이 죽은 것으로 판정한다. 계속 줄었다 리셋된다 |
 
-```bash
-# 인터페이스 하나의 OSPF 설정 — ①④ 를 한 번에 본다
-vtysh -c 'show ip ospf interface eth2'
+인터페이스 하나의 OSPF 설정을 본다 — 2.5 의 ①과 ④ 를 한 화면에서 확인할 수 있다.
+
+```
+r1# show ip ospf interface eth2
 ```
 
 ```
@@ -308,14 +603,17 @@ eth2 is up
 점검할 때 가장 먼저 치는 명령이 이것이다. Area · Cost · 타이머 · MTU 감지 여부가 한 화면에 있다.
 양쪽 라우터에서 떠서 **나란히 놓고 비교**하는 것이 요령이다.
 
-```bash
-# 지도(LSDB) 자체를 본다
-vtysh -c 'show ip ospf database'
+지도(LSDB) 자체를 본다.
+
+```
+r1# show ip ospf database
 ```
 
-```bash
-# r2 에서도 같은 명령 — 두 출력이 같아야 한다
 ```
+r2# show ip ospf database
+```
+
+두 출력이 같아야 한다.
 
 같은 area 안의 라우터는 모두 같은 LSDB 를 갖는다. 다르면 그 자체가 문제다.
 "경로가 이상하다"는 신고에서 양쪽 LSDB 를 비교하는 것이 유효한 이유다.
@@ -353,11 +651,12 @@ traceroute -n {{ ip.web }}
  4  {{ ip.web }}
 ```
 
-```bash
-# r1 — 무엇이 달라졌나
-vtysh -c 'show ip ospf neighbor'      # r2 가 목록에서 사라졌다
-vtysh -c 'show ip route ospf'         # 전부 eth3(r3) 경유로 바뀌었다
 ```
+r1# show ip ospf neighbor
+r1# show ip route ospf
+```
+
+`show ip ospf neighbor` 에서는 r2 가 사라졌고, `show ip route ospf` 는 전부 eth3(r3) 경유로 바뀌었다.
 
 #### 복구
 
@@ -378,10 +677,12 @@ sudo ip link set eth2 up
 ### 실습 4 — cost 로 경로를 유도한다
 장애 없이, **설정만으로** 트래픽을 백업 경로로 옮긴다.
 
-```bash
-# r1
-sudo vtysh -c "conf t" -c "interface eth2" -c "ip ospf cost 200"
-vtysh -c 'show ip route ospf' | head -3
+```
+r1# configure terminal
+r1(config)# interface eth2
+r1(config-if)# ip ospf cost 200
+r1(config-if)# end
+r1# show ip route ospf
 ```
 
 ```bash
@@ -418,10 +719,12 @@ cost 는 **나가는 방향에만** 적용된다. 양쪽을 함께 바꿔야 대
 
 #### 정리 (반드시 할 것)
 
-```bash
-# r1
-sudo vtysh -c "conf t" -c "interface eth2" -c "ip ospf cost {{ p2p['r1-r2'].ospf_cost }}"
-vtysh -c 'show ip ospf interface eth2' | grep -i cost
+```
+r1# configure terminal
+r1(config)# interface eth2
+r1(config-if)# ip ospf cost {{ p2p['r1-r2'].ospf_cost }}
+r1(config-if)# end
+r1# show ip ospf interface eth2
 ```
 
 ### 실습 5 — ★ "링크는 UP 인데 상대가 죽었다"
@@ -456,9 +759,8 @@ M1 에서 배운 1차 판정은 여전히 유효하지만, 그것만으로는 �
 
 #### ② 그런데 경로는 이미 바뀌어 있다
 
-```bash
-# r1
-vtysh -c 'show ip ospf neighbor'
+```
+r1# show ip ospf neighbor
 ```
 
 ```
@@ -468,8 +770,8 @@ vtysh -c 'show ip ospf neighbor'
 
 r2 가 **아직 `Full`** 이다. Dead Time 만 줄어들고 있다.
 
-```bash
-vtysh -c 'show ip route ospf' | head -3
+```
+r1# show ip route ospf
 ```
 
 **그런데 경로는 이미 `eth3`(r3) 로 바뀌어 있다.**
@@ -481,9 +783,8 @@ r2 는 자기 포트가 죽자마자 "나는 r1 과 연결돼 있지 않다" 는
 
 **③ {{ routing.ospf.timers.dead }}초 뒤**
 
-```bash
-# r1 — 다시 확인
-vtysh -c 'show ip ospf neighbor'
+```
+r1# show ip ospf neighbor
 ```
 
 r2 가 목록에서 사라진다.
@@ -504,17 +805,28 @@ Hello 를 훨씬 자주 주고받아 장애를 빨리 알아채는 별도 프로
 ### 실습 6 — MTU 불일치로 `ExStart` 에 갇히기
 M2 에서 배운 MTU 가 **OSPF 를 멈추게** 하는 것을 본다.
 
+MTU 는 리눅스 쪽 값이라 셸에서 바꾼다. 그다음 라우터 안에서 인터페이스를 껐다 켜
+인접을 다시 세운다.
+
 ```bash
-# r1 — 백업 링크만 좁힌다
+# r1 의 셸에서 — 백업 링크만 좁힌다
 sudo ip link set eth3 mtu 1400
-sudo vtysh -c "conf t" -c "interface eth3" -c "shutdown" -c "no shutdown"
+```
+
+```
+r1# configure terminal
+r1(config)# interface eth3
+r1(config-if)# shutdown
+r1(config-if)# no shutdown
+r1(config-if)# end
 ```
 
 *(인접을 다시 맺게 하려는 것이다. 그냥 두어도 재시도하지만 시간이 걸린다)*
 
-```bash
-# r1 — 잠시 뒤
-vtysh -c 'show ip ospf neighbor'
+잠시 뒤 확인한다.
+
+```
+r1# show ip ospf neighbor
 ```
 
 ```
@@ -542,19 +854,28 @@ OSPF Packet[DD]: Neighbor {{ loopback.r3 }} MTU 1500 is larger than [eth3]'s MTU
 #### 정리 (반드시 할 것)
 
 ```bash
-# r1
+# r1 의 셸에서
 sudo ip link set eth3 mtu 1500
-sudo vtysh -c "conf t" -c "interface eth3" -c "shutdown" -c "no shutdown"
-vtysh -c 'show ip ospf neighbor'      # 둘 다 Full 인지 확인
 ```
+
+```
+r1# configure terminal
+r1(config)# interface eth3
+r1(config-if)# shutdown
+r1(config-if)# no shutdown
+r1(config-if)# end
+r1# show ip ospf neighbor
+```
+
+둘 다 `Full` 인지 확인할 것.
 
 ---
 
-## 4. 관찰 포인트 정리
+## 5. 관찰 포인트 정리
 
 | 확인할 것 | 명령 | 정상이라면 |
 |---|---|---|
-| 인접이 섰는가 | `show ip ospf neighbor` (vtysh) | 이웃 수만큼 `Full` |
+| 인접이 섰는가 | `show ip ospf neighbor` (라우터 안) | 이웃 수만큼 `Full` |
 | 어디서 멈췄는가 | 같은 명령의 State 열 | `ExStart` → MTU, `Init` 이하 → Area·인증·타이머 |
 | Area · cost · 타이머 | `show ip ospf interface <if>` | 양쪽이 같다 |
 | 지도가 같은가 | `show ip ospf database` (양쪽) | 두 출력이 일치 |
@@ -568,7 +889,7 @@ vtysh -c 'show ip ospf neighbor'      # 둘 다 Full 인지 확인
 
 ---
 
-## 5. 장애 연습 — 증상만 보고 원인 찾기
+## 6. 장애 연습 — 증상만 보고 원인 찾기
 
 **언제 하나** — [과제] 탭의 마지막 과제다. 실습을 다 끝낸 뒤에 오세요.
 설정이 손에 익기 전에는 증상을 봐도 무엇이 이상한지 보이지 않는다.
@@ -596,7 +917,7 @@ m04-01 과 m04-04 는 증상이 거의 같다. 원인은 완전히 다르다.
 
 ---
 
-## 6. 흔한 오해 · 실무 팁
+## 7. 흔한 오해 · 실무 팁
 
 | 오해 | 사실 |
 |---|---|
