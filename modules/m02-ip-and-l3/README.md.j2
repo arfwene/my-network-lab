@@ -179,8 +179,13 @@ M1 의 결론은 "스위치를 늘려도 브로드캐스트 도메인은 하나"
 kind: mini
 cols: [[pc1, pc2], sw1, r1]
 links:
-  - { label: untagged, sub: "eth1 · eth2" }
-  - { label: "트렁크  eth3 ↔ eth1", sub: "VLAN {{ vlans[10].id }},{{ vlans[20].id }} 태그", tone: warn }
+  - { a: pc1, b: sw1, label: "VLAN {{ vlans[10].id }}", sub: untagged,
+      ends: ["{{ end('pc1', 'sw1') }}", "{{ end('sw1', 'pc1') }}"] }
+  - { a: pc2, b: sw1, label: "VLAN {{ vlans[20].id }}", sub: untagged,
+      ends: ["{{ end('pc2', 'sw1') }}", "{{ end('sw1', 'pc2') }}"] }
+  - { a: sw1, b: r1, label: 트렁크, tone: warn,
+      sub: "VLAN {{ vlans[10].id }},{{ vlans[20].id }} 태그",
+      ends: ["{{ end('sw1', 'r1') }}", "{{ end('r1', 'sw1') }}"] }
 marks:
   pc1: ["{{ ipc.pc1 }}"]
   pc2: ["{{ ipc.pc2 }}"]

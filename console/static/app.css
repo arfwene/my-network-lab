@@ -334,6 +334,8 @@ svg.dia .t.note.ok{fill:var(--ok)} svg.dia .t.note.warn{fill:var(--warn)}
 svg.dia .t.m.warn{fill:var(--warn)}
 /* 대역·포트처럼 숫자로 읽는 글자는 고정폭으로.
    선 위에 앉는 자리가 있으므로 토폴로지와 같이 배경색 테두리로 선을 지운다. */
+/* 포트 이름 — 랩 지도의 .if 와 같은 크기·색 */
+svg.dia .t.if{fill:var(--faint);font-family:ui-monospace,SFMono-Regular,monospace}
 svg.dia .t.seg{fill:var(--body);font-family:ui-monospace,SFMono-Regular,monospace;
   paint-order:stroke;stroke:var(--code-bg);stroke-width:3.5px;stroke-linejoin:round}
 

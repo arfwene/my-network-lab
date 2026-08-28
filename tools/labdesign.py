@@ -666,6 +666,23 @@ def doc_context(lab_id=1, stage="m10"):
                 break
         ifs[name] = {i["name"]: i for i in c["lab_interfaces"] if i.get("active")}
 
+    # 어느 포트로 어느 장비에 붙어 있는가. 구성도가 "eth2" 를 손으로 적지 않게 한다.
+    port = {n: {i["peer"]: i["name"] for i in v.values() if i.get("peer")}
+            for n, v in ifs.items()}
+
+    def end(node, peer):
+        """링크 한쪽 끝의 표기 — `포트 .끝자리`. 랩 지도(topolayout)와 같은 규칙이다.
+
+        교재의 작은 구성도가 포트와 주소를 손으로 적으면 설계가 바뀔 때 어긋난다.
+        같은 함수에서 나오면 지도와 구성도가 같은 말을 한다.
+        """
+        for i in (ifs.get(node) or {}).values():
+            if i.get("peer") != peer:
+                continue
+            v = (i.get("ipv4") or "").split("/")[0]
+            return f'{i["name"]} .{v.split(".")[-1]}' if v else i["name"]
+        raise KeyError(f"{node} 에는 {peer} 로 가는 포트가 없다 (stage={stage})")
+
     segs = IPAM["ipv4"]["segments"]
 
     # MAC 에서 파생되는 IPv6 값들 (M5 의 EUI-64 / SLAAC 설명용)
@@ -681,7 +698,7 @@ def doc_context(lab_id=1, stage="m10"):
 
     return {
         "lab_id": lab_id, "stage": stage,
-        "nodes": nodes, "ifs": ifs,
+        "nodes": nodes, "ifs": ifs, "port": port, "end": end,
         "ip": ip, "ipc": ipc, "mac": mac,
         "cidr": {k: v["cidr"] for k, v in segs.items()},
         "gw": {k: v["gateway"] for k, v in segs.items()},

@@ -29,6 +29,7 @@ PAD = 18                              # 캔버스 바깥 여백
 FS = 13                               # 기본 글자 크기
 FS_SM = 11.5                          # 곁들이는 글자
 FS_NAME = 12.5                        # 장비 이름. 랩 지도(.n-name)와 같은 크기
+FS_IF = 10                            # 포트 이름. 랩 지도(.if)와 같은 크기
 LH = 18                               # 줄 간격
 
 
@@ -271,6 +272,13 @@ def _mini(spec, S):
     marks = spec.get("marks") or {}
     shapes = spec.get("shapes") or {}
     CELL, GAP, ROW = 84, 132, 70
+    #  포트 이름과 대역이 한 통로에 같이 들어가면 132 로는 부딪힌다. 글자를 줄이는
+    #  대신 통로를 넓힌다 — 줄이면 10px 글자가 못 읽는 크기가 되기 때문.
+    wend = max([_tw(e, FS_IF) for lk in links for e in _lines(lk.get("ends"))] or [0])
+    wlab = max([_tw(lk.get("label") or "", FS_SM) for lk in links]
+               + [_tw(lk.get("sub") or "", FS_SM) for lk in links] or [0])
+    if wend:
+        GAP = max(GAP, round(2 * wend + wlab + 24))
     BAND, NAME = 40, 18                # 그림이 차지하는 높이 / 그 밑 이름 줄
     rows = max(len(c) for c in cols)
     top = PAD + 8
@@ -294,25 +302,69 @@ def _mini(spec, S):
                 half = w / 2
             pos[n] = (cx, yy + BAND / 2, half)
     mid = top + (rows - 1) * ROW / 2 + BAND / 2
-    subs = []
-    for i in range(len(cols) - 1):
-        lk = links[i] if i < len(links) else {}
-        gap_l = PAD + i * (CELL + GAP) + CELL
-        gap_r = PAD + (i + 1) * (CELL + GAP)
-        cxm = (gap_l + gap_r) / 2
+    colof = {n: i for i, c in enumerate(cols) for n in c}
+
+    def gap_mid(i):
+        return PAD + i * (CELL + GAP) + CELL + GAP / 2
+
+    def draw(a, b, lk, ay, by, xk):
+        """장비 둘을 잇는다. ends 는 각 끝의 `포트 .끝자리` 표기."""
+        ax, _, ah = pos[a]
+        bx, _, bh = pos[b]
         # pair: 같은 두 장비를 잇는 선을 둘 그린다 (L2 루프처럼 경로가 둘일 때)
-        offs = (-9, 9) if lk.get("pair") else (0,)
-        for a in cols[i]:
-            for b in cols[i + 1]:
-                ax, ay, ah = pos[a]
-                bx, by, bh = pos[b]
-                for d in offs:
-                    S.line([(ax + ah, ay), (cxm, ay + d), (cxm, by + d), (bx - bh, by)],
-                           cls="l " + (lk.get("tone") or ""),
-                           arrow="end" if lk.get("arrow") else "")
-        subs.append((cxm, lk.get("sub", "")))
-        S.text(cxm, mid - 12, lk.get("label", ""), cls="t seg",
-               anchor="middle", size=FS_SM)
+        for d in (-9, 9) if lk.get("pair") else (0,):
+            S.line([(ax + ah, ay), (xk, ay + d), (xk, by + d), (bx - bh, by)],
+                   cls="l " + (lk.get("tone") or ""),
+                   arrow="end" if lk.get("arrow") else "")
+        ends = _lines(lk.get("ends"))
+        if ends:
+            S.text(ax + ah + 6, ay - 6, ends[0], cls="t if", size=FS_IF)
+            if len(ends) > 1:
+                S.text(bx - bh - 6, by - 6, ends[1], cls="t if",
+                       anchor="end", size=FS_IF)
+
+    subs = []
+    #  링크에 a·b 를 적으면 그 짝만 잇는다. 한 열에 장비가 둘이면(r2·r3) 열끼리
+    #  모두 잇는 방식으로는 링크마다 다른 대역·포트를 적을 수 없기 때문이다.
+    explicit = [lk for lk in links if lk.get("a") and lk.get("b")]
+    if explicit:
+        STG = 16                       # 한 장비에서 여러 링크가 나갈 때의 층 간격
+        gaps = {}
+        for lk in explicit:
+            gaps.setdefault(min(colof[lk["a"]], colof[lk["b"]]), []).append(lk)
+        for g, lks in gaps.items():
+            gap_l = PAD + g * (CELL + GAP) + CELL
+            #  한 장비에서 둘이 나가면 같은 높이로 겹친다. 상대의 높이 순으로
+            #  층을 나눠 내보내면 선도 이름표도 갈라진다 (랩 지도와 같은 방식).
+            slot, cnt = {}, {}
+            for n in {x for lk in lks for x in (lk["a"], lk["b"])}:
+                mine = sorted((lk for lk in lks if n in (lk["a"], lk["b"])),
+                              key=lambda lk: pos[lk["b"] if lk["a"] == n else lk["a"]][1])
+                cnt[n] = len(mine)
+                for j, lk in enumerate(mine):
+                    slot[(n, id(lk))] = j
+            for m, lk in enumerate(lks):
+                a, b = lk["a"], lk["b"]
+                ey = lambda n: pos[n][1] + (slot[(n, id(lk))] - (cnt[n] - 1) / 2) * STG
+                xk = gap_l + GAP * (m + 1) / (len(lks) + 1)
+                ay, by = ey(a), ey(b)
+                draw(a, b, lk, ay, by, xk)
+                ly = (ay + by) / 2 + 4
+                S.text(xk, ly, lk.get("label", ""), cls="t seg",
+                       anchor="middle", size=FS_SM)
+                if lk.get("sub"):
+                    S.text(xk, ly + LH, lk["sub"], cls="t m",
+                           anchor="middle", size=FS_SM)
+    else:
+        for i in range(len(cols) - 1):
+            lk = links[i] if i < len(links) else {}
+            cxm = gap_mid(i)
+            for a in cols[i]:
+                for b in cols[i + 1]:
+                    draw(a, b, lk, pos[a][1], pos[b][1], cxm)
+            S.text(cxm, mid - 12, lk.get("label", ""), cls="t seg",
+                   anchor="middle", size=FS_SM)
+            subs.append((cxm, lk.get("sub", "")))
     # 아래로 가는 글줄은 층을 나눠 쌓는다 — 같은 높이에 두면 반드시 부딪힌다.
     bottom = top + (rows - 1) * ROW + BAND + NAME
     if any(s for _, s in subs):

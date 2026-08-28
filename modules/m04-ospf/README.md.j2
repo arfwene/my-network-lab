@@ -41,14 +41,22 @@ M3 의 마지막 질문은 이것이었다 — "`r1 ↔ r2` 케이블을 뽑으�
 kind: mini
 cols: [r1, [r2, r3], r4]
 links:
-  - { label: 링크 넷 다 UP, sub: 주소도 다 붙어 있다 }
-  - {}
+  - { a: r1, b: r2, label: "{{ p2p['r1-r2'].cidr }}",
+      ends: ["{{ end('r1', 'r2') }}", "{{ end('r2', 'r1') }}"] }
+  - { a: r1, b: r3, label: "{{ p2p['r1-r3'].cidr }}",
+      ends: ["{{ end('r1', 'r3') }}", "{{ end('r3', 'r1') }}"] }
+  - { a: r2, b: r4, label: "{{ p2p['r2-r4'].cidr }}",
+      ends: ["{{ end('r2', 'r4') }}", "{{ end('r4', 'r2') }}"] }
+  - { a: r3, b: r4, label: "{{ p2p['r3-r4'].cidr }}",
+      ends: ["{{ end('r3', 'r4') }}", "{{ end('r4', 'r3') }}"] }
 marks:
   r1: ["정적 경로 1줄"]
   r2: ["정적 경로 2줄"]
   r3: ["라우팅 설정 없음"]
   r4: ["정적 경로 1줄"]
 notes:
+  - 포트 옆 숫자는 그 포트가 든 주소의 끝자리다
+  - 링크 넷이 다 UP 이고 주소도 다 붙어 있다. 없는 것은 경로뿐이다
   - r3 를 지나는 길은 아무도 모른다
 ```
 
@@ -70,8 +78,14 @@ M3 에서 손으로 넣은 정적 경로가 그대로 있다. 라우터에 적�
 kind: mini
 cols: [r1, [r2, r3], r4]
 links:
-  - { label: OSPF area 0, sub: 서로를 배운다 }
-  - { label: OSPF area 0, sub: 서로를 배운다 }
+  - { a: r1, b: r2, label: "{{ p2p['r1-r2'].cidr }}", sub: "cost {{ p2p['r1-r2'].ospf_cost }}",
+      ends: ["{{ end('r1', 'r2') }}", "{{ end('r2', 'r1') }}"] }
+  - { a: r1, b: r3, label: "{{ p2p['r1-r3'].cidr }}", sub: "cost {{ p2p['r1-r3'].ospf_cost }}",
+      ends: ["{{ end('r1', 'r3') }}", "{{ end('r3', 'r1') }}"] }
+  - { a: r2, b: r4, label: "{{ p2p['r2-r4'].cidr }}", sub: "cost {{ p2p['r2-r4'].ospf_cost }}",
+      ends: ["{{ end('r2', 'r4') }}", "{{ end('r4', 'r2') }}"] }
+  - { a: r3, b: r4, label: "{{ p2p['r3-r4'].cidr }}", sub: "cost {{ p2p['r3-r4'].ospf_cost }}",
+      ends: ["{{ end('r3', 'r4') }}", "{{ end('r4', 'r3') }}"] }
 marks:
   r1: ["{{ loopback.r1 }}"]
   r2: ["{{ loopback.r2 }}"]
@@ -79,6 +93,7 @@ marks:
   r4: ["{{ loopback.r4 }}"]
 notes:
   - 장비 밑은 router-id (루프백 주소)
+  - 포트도 주소도 그대로다. 넷 다 area {{ routing.ospf.area }} 로 묶인다
   - 어디로 가라고 적어 주는 줄은 한 줄도 없다
   - r1↔r2 를 끊으면 스스로 r3 로 옮겨 간다
 ```
