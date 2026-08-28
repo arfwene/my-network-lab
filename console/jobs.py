@@ -124,6 +124,8 @@ BUILD_STAGES = set(L.SITE.get("console", {}).get("build_stages") or [])
 
 
 def _prev_stage(stage):
+    if stage not in L.STAGES:          # 재시작 전이라 목록이 낡았다 (state.module_status 참조)
+        return stage
     i = L.STAGES.index(stage)
     return L.STAGES[i - 1] if i > 0 else stage
 

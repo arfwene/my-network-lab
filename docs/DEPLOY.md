@@ -641,6 +641,16 @@ sudo systemctl restart my-network-lab
 읽히지만 **라우트는 프로세스 시작 때 등록된다.** 그래서 새 버튼은 보이는데 누르면
 `{"detail":"Not Found"}` 가 나온다 — 화면은 새것, 코드는 옛것인 상태다.
 
+**설계(design/*.yml)도 프로세스가 뜰 때 한 번 읽는다.** 모듈이나 단계가 늘어난
+갱신이면 재시작 전까지 콘솔은 옛 목록을 들고 있다. 저장된 진행에는 있는 단계가
+목록에는 없는 상태가 되어 화면이 어긋난다. `/healthz` 의 `modules` 개수가
+`modules/` 디렉터리 수와 다르면 재시작을 안 한 것이다.
+
+```bash
+curl -s http://127.0.0.1:8080/healthz     # {"ok":true,"modules":12}
+ls -d modules/m*/ | wc -l                 # 12
+```
+
 `make console` 로 띄웠다면 그 창에서 `Ctrl+C` 후 다시 실행한다.
 
 ---

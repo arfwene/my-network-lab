@@ -142,7 +142,13 @@ def module_status(lab_id, module):
         return "verified"
     if stage in st.get("applied", []) or st.get("stage") == stage:
         return "applied"
-    if st.get("stage") and L.STAGES.index(st["stage"]) > L.STAGES.index(stage):
+    # 모르는 단계가 오면 "아직" 으로 본다.
+    #   단계 목록은 **프로세스가 뜰 때** 한 번 읽는다. 단계를 늘리는 배포를 하고
+    #   콘솔을 재시작하지 않으면, 저장된 진행에는 있는 단계가 목록에는 없다.
+    #   그때 예외를 던지면 대시보드 전체가 500 이 되어 모든 교육생이 막힌다 —
+    #   실제로 M5 를 끼워 넣은 배포에서 그렇게 됐다. 카드 하나가 덜 정확한 편이 낫다.
+    now = st.get("stage")
+    if now in L.STAGES and stage in L.STAGES and L.STAGES.index(now) > L.STAGES.index(stage):
         return "passed"
     return "pending"
 
