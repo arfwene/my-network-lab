@@ -246,6 +246,7 @@ def base_ctx(request, user, lab_id):
                      "progress": assess.module_state(user["username"], m, is_admin)}
                     for m in mods],
         "unlocked": unlocked,
+        "is_admin": is_admin,          # 실행 로그의 [원본 로그] 버튼이 이걸 본다
         "lab_state": st,
         "busy": runner.busy(lab_id),
         # 코드만 나열하면 무엇을 고를지 알 수 없다 — 증상과 단계를 함께 싣는다.
@@ -1156,7 +1157,15 @@ async def job_stream(request: Request, job_id: str):
     if not user or not allowed:
         return JSONResponse({"error": "권한 없음"}, status_code=403)
 
-    reveal = auth.can(user, "lab.all")
+    # 원본 로그는 **아무에게도 저절로 열리지 않는다.** 관리자도 마찬가지다.
+    #   전에는 관리자에게 그대로 흘렸다 — 안내 메시지는 원래 진행자에게 쓴 글이니
+    #   봐도 된다고 본 것이다. 그런데 이 랩을 실제로 돌려 보는 사람이 그 관리자다.
+    #   장애 하나 넣고 증상부터 보려는데 로그가 "r2 의 eth2 에만 인증을 걸었다" 라고
+    #   먼저 말해 버리면, 연습이 시작도 전에 끝난다.
+    #   필요할 때는 [원본 로그] 를 눌러 다시 받는다 — 한 번 더 누르게 하는 것이
+    #   여기서 지키려는 전부다.
+    reveal = (auth.can(user, "lab.all")
+              and request.query_params.get("reveal") == "1")
 
     def sse(lines):
         """한 프레임에 여러 줄을 싣는다.

@@ -416,6 +416,9 @@ class Job:
         return {"id": self.id, "lab_id": self.lab_id, "action": self.action,
                 "stage": self.stage,
                 "scenario": self.scenario if (reveal or not self.secret) else None,
+                # 가려서 보냈다는 사실 자체는 숨기지 않는다. 화면이 이걸 보고
+                # 관리자에게 [원본 로그] 를 띄운다 — 내용은 그때 다시 받아 간다.
+                "secret": self.secret,
                 "module": self.module,
                 "status": self.status,
                 "rc": self.rc, "user": self.user,

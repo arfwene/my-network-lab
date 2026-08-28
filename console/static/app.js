@@ -3,6 +3,8 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const log = $('#log'), jobinfo = $('#jobinfo'), consoleBox = $('#console');
+  // 관리자에게만 있는 버튼. 가려서 받은 로그를 일부러 다시 받을 때 쓴다.
+  const rawlog = $('#rawlog');
   let es = null;
 
   const labId = () => $('.actions')?.dataset.lab || '1';
@@ -348,11 +350,12 @@
 
   function stopClock() { clearInterval(clock); clock = null; }
 
-  function stream(jobId) {
+  function stream(jobId, reveal) {
     return new Promise(resolve => {
       if (es) es.close();
       startClock();
-      es = new EventSource(`/jobs/${jobId}/stream`);
+      if (rawlog && !reveal) rawlog.hidden = true;
+      es = new EventSource(`/jobs/${jobId}/stream` + (reveal ? '?reveal=1' : ''));
       es.onmessage = ev => { lastOut = Date.now(); paint(JSON.parse(ev.data)); };
       // 서버가 알려 주는 진짜 경과로 시계를 맞춘다. 새로고침해서 도중에 붙었거나
       // 브라우저가 절전으로 멈췄던 경우를 여기서 바로잡는다.
@@ -366,6 +369,8 @@
         const d = JSON.parse(ev.data);
         stopClock();
         jobinfo.textContent = `${d.action} · ${d.status} · ${fmt(d.elapsed)}`;
+        // 가려서 받은 로그였다면 관리자에게만 다시 받을 길을 열어 둔다.
+        if (rawlog && d.secret && !reveal) { rawlog.dataset.job = d.id; rawlog.hidden = false; }
         es.close(); es = null;
         refreshStatus();
         resolve(d);
@@ -527,6 +532,11 @@
   });
 
   $('#clearlog').onclick = () => log.textContent = '';
+  if (rawlog) rawlog.onclick = async () => {
+    rawlog.hidden = true;
+    paint('$ ── 원본 로그 (관리자) ── 여기부터는 무엇을 주입했는지 그대로 보입니다');
+    await stream(rawlog.dataset.job, true);
+  };
   $('#togglelog').onclick = () => {
     consoleBox.classList.toggle('collapsed');
     $('#togglelog').textContent = consoleBox.classList.contains('collapsed') ? '펼치기' : '접기';

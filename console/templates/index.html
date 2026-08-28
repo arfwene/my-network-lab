@@ -185,6 +185,10 @@
     <span class="title">실행 로그</span>
     <span class="job" id="jobinfo"></span>
     <div class="spacer"></div>
+{% if is_admin %}
+    <!-- 가려서 보낸 로그를 관리자가 **일부러** 다시 받는 자리. 저절로 열리지 않는다. -->
+    <button class="btn sm" id="rawlog" hidden>원본 로그</button>
+{% endif %}
     <button class="btn sm" id="clearlog">지우기</button>
     <button class="btn sm" id="togglelog">접기</button>
   </header>
