@@ -291,6 +291,11 @@ def _mini(spec, S):
     if wend:
         GAP = max(GAP, round(2 * wend + wlab + 24))
     BAND, NAME = 40, 18                # 그림이 차지하는 높이 / 그 밑 이름 줄
+    #  주석은 **그 장비 바로 밑**에 붙는다. 그림 맨 아래에 모아 두면 한 열에
+    #  장비가 둘일 때(r2·r3) 누구의 주석인지 알 수 없다 — 위 장비 것이 아래
+    #  장비 밑에 붙어 보인다. 그래서 열 간격을 주석 줄 수만큼 벌린다.
+    mrows = max([len(_lines(v)) for v in marks.values()] or [0])
+    ROW = max(ROW, BAND + NAME + mrows * LH + 12)
     rows = max(len(c) for c in cols)
     top = PAD + 8
     pos = {}                           # 이름 -> (중심x, 중심y, 반너비)
@@ -378,23 +383,20 @@ def _mini(spec, S):
             subs.append((cxm, lk.get("sub", "")))
     # 아래로 가는 글줄은 층을 나눠 쌓는다 — 같은 높이에 두면 반드시 부딪힌다.
     bottom = top + (rows - 1) * ROW + BAND + NAME
+    # 주석은 그 장비의 이름 줄 바로 아래에 쌓는다.
+    for n, rowsm in marks.items():
+        if n not in pos:
+            continue
+        cx, cy, _ = pos[n]
+        y0 = cy - BAND / 2 + BAND + NAME + 10
+        for j, r in enumerate(_lines(rowsm)):
+            S.text(cx, y0 + j * LH, r, cls="t m", anchor="middle", size=FS_SM)
+    if mrows:
+        bottom += mrows * LH + 4
     if any(s for _, s in subs):
         for cx, s in subs:
             S.text(cx, bottom + 18, s, cls="t m", anchor="middle", size=FS_SM)
         bottom += 18 + 6
-    # 한 열에 장비가 둘이면(pc1·pc2) 주석의 x 가 같다. 줄까지 같으면 글자가
-    # 그대로 포개지므로, 같은 열의 것은 이어서 쌓는다.
-    used = {}
-    for n, rowsm in marks.items():
-        cx = pos[n][0]
-        start = used.get(cx, 0)
-        rows_n = _lines(rowsm)
-        for j, r in enumerate(rows_n):
-            S.text(cx, bottom + 18 + (start + j) * LH, r, cls="t m",
-                   anchor="middle", size=FS_SM)
-        used[cx] = start + len(rows_n)
-    if marks:
-        bottom += 18 + max(used.values()) * LH - LH + 6
     for j, note in enumerate(_lines(spec.get("notes"))):
         S.text(PAD, bottom + 24 + j * LH, "← " + note, cls="t m", size=FS_SM)
     return S
