@@ -55,6 +55,17 @@ UP  <NO-CARRIER,...>   ≈  Gi0/1 is up, line protocol is down
 DOWN <BROADCAST,...>   ≈  Gi0/1 is administratively down
 ```
 
+**시리얼(WAN) 포트는 이 랩에 없습니다.** 실장비에서 지점과 지점을 잇는 회선이 꽂히는 자리이고,
+`Serial0/0/0` 처럼 나옵니다. 이더넷과 다른 점만 적어 둡니다 (M3 2.2).
+
+| 무엇 | 이더넷 | 시리얼 |
+|---|---|---|
+| MAC · ARP | 있습니다 | **없습니다** |
+| 정적 경로의 next-hop | 주소를 적습니다 | 인터페이스만 적어도 됩니다 |
+| 캡슐화 | 이더넷 | `encapsulation hdlc` / `ppp` — 양 끝이 같아야 합니다 |
+| 클럭 | 없습니다 | DCE 쪽에 `clock rate 64000` |
+| 안 붙을 때 | `show interface` 의 line protocol | 위 셋을 순서대로 |
+
 ## 3. L2 · VLAN
 
 | 하는 일 | Linux Bridge | Cisco IOS |
@@ -78,7 +89,7 @@ DOWN <BROADCAST,...>   ≈  Gi0/1 is administratively down
 | 특정 목적지 | `show ip route 10.10.40.0/24` | `show ip route 10.10.40.0` |
 | 출처별 | `show ip route ospf` · `static` | `show ip route ospf` · `static` |
 | 커널 실제 경로 | `ip route get {{ ip.web }}` | `show ip cef <주소>` |
-| 정적 경로 | `ip route 10.10.32.0/19 10.10.64.2` | `ip route 10.10.32.0 255.255.224.0 10.10.64.2` |
+| 정적 경로 | `ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}` | `ip route {{ zone['site-b'].split('/')[0] }} {{ netmask(zone['site-b']) }} {{ p2p['r1-r2'].addresses.r2 }}` |
 | 기본 경로 | `ip route 0.0.0.0/0 <다음홉>` | `ip route 0.0.0.0 0.0.0.0 <다음홉>` |
 | 포워딩 켜기 | `sysctl net.ipv4.ip_forward=1` | (기본 켜짐) |
 
@@ -90,7 +101,7 @@ FRR / IOS 공통 표기
      [AD/metric]
 ```
 
-> **마스크 표기가 다릅니다.** FRR 은 `/19`, IOS 는 `255.255.224.0`.
+> **마스크 표기가 다릅니다.** FRR 은 `{{ '/' ~ zone['site-b'].split('/')[1] }}`, IOS 는 `{{ netmask(zone['site-b']) }}`.
 > IOS 의 정적 경로에서 이것을 틀리는 것이 가장 흔한 사고입니다.
 
 ## 5. OSPF
@@ -172,7 +183,7 @@ FRR / IOS 공통 표기
 
 | # | 무엇 | 이 랩 | 실장비 |
 |---|---|---|---|
-| 1 | **마스크 표기** | `/19` | `255.255.224.0`, OSPF 는 와일드카드 `0.0.0.31` |
+| 1 | **마스크 표기** | `{{ '/' ~ zone['site-b'].split('/')[1] }}` | `{{ netmask(zone['site-b']) }}`, OSPF 는 와일드카드 `0.0.0.31` |
 | 2 | **인터페이스 이름** | `eth1` · `eth1.10` | `GigabitEthernet0/1` · `Gi0/1.10` |
 | 3 | **설정 저장** | 파일에 곧바로 | `write memory` 를 안 하면 재부팅에 날아갑니다 |
 

@@ -697,6 +697,10 @@ def doc_context(lab_id=1, stage="m10"):
             return f'{i["name"]} .{v.split(".")[-1]}' if v else i["name"]
         raise KeyError(f"{node} 에는 {peer} 로 가는 포트가 없다 (stage={stage})")
 
+    def netmask(cidr):
+        """`10.10.32.0/19` → `255.255.224.0`. Cisco 표기를 교재가 손으로 적지 않게 한다."""
+        return str(ipaddress.ip_network(cidr, strict=False).netmask)
+
     _byname = {n["name"]: n for n in TOPO["nodes"]}
 
     def ip_at(node, config_stage, cidr=False):
@@ -728,6 +732,7 @@ def doc_context(lab_id=1, stage="m10"):
     return {
         "lab_id": lab_id, "stage": stage,
         "nodes": nodes, "ifs": ifs, "port": port, "end": end, "ip_at": ip_at,
+        "netmask": netmask,
         "ip": ip, "ipc": ipc, "mac": mac,
         "cidr": {k: v["cidr"] for k, v in segs.items()},
         "gw": {k: v["gateway"] for k, v in segs.items()},
