@@ -253,7 +253,7 @@ checks:
       kind: state
       title: "6.4 에서 내린 r1 의 위쪽 링크를 되돌렸는가"
       host: r1
-      run: "ip -br link show eth2 eth3 | grep -c UP"
+      run: "ip -br link show | grep -E '^eth2 |^eth3 ' | grep -c UP"
       expect: "2"
       hint: "sudo ip link set eth2 up · sudo ip link set eth3 up"
 
