@@ -185,6 +185,22 @@ quiz:
 #     · M3 정적 경로    m11 은 OSPF 로 라우팅한다. `show ip route static` 은 비어 있는 것이 정상이다
 #     · 각 모듈의 실습 흔적 정리 검사 중 그 모듈 고유의 것 (M2 pc2-no-leftover, M6 임시주소 등)
 #   가져온 검사에 붙는 `M0x ·` 접두사는 **어느 계층이 깨졌는지** 한눈에 보이라고 붙인 것이다.
+    - id: q11
+      type: single
+      text: |
+        이중화된 구간에서 장애를 볼 때, 설정을 열기 전에 **먼저 확정해야 할 것**은?
+      choices:
+        - "두 대의 설정이 서로 같은지 — 다르면 그 차이가 곧 원인입니다"
+        - "지금 어느 쪽이 자리를 들고 있는지 — 그것이 정해져야 볼 장비가 정해집니다"
+        - "장애가 난 시각 — 그 시각의 로그부터 읽어야 하기 때문입니다"
+        - "예비 쪽을 먼저 재시작해도 되는지 — 영향 범위를 알아야 하기 때문입니다"
+      answer: [1]
+      explain: |
+        이중화는 **지금 누가 일하는지**에 따라 봐야 할 장비가 달라집니다.
+        예비 쪽 설정을 아무리 봐도 증상이 설명되지 않습니다 — 지금 트래픽이 그리로 안 가니까요.
+        반대로 "다 되는데 한 대를 내리면 무너진다" 는, 이중화가 **이미 죽어 있었다**는 뜻입니다.
+        통신이 된다는 사실은 이중화를 보증하지 않습니다 (2.1 · 6장).
+
 checks:
   include:
     - from: m00
@@ -204,6 +220,12 @@ checks:
     - from: m04
       only: [ospf-neighbors-r1, ospf-neighbors-r4, ospf-learned, no-static-left,
              primary-cost, backup-cost, backup-mtu]
+    - from: m05
+      # 이중화는 **확인해야 존재한다.** 평상시 통신이 다 되는 상태에서도 백업이
+      # 죽어 있을 수 있어서, 다른 검사로는 손이 안 닿는다.
+      #   end-to-end · gw-reachable 은 m03·m07 의 통신 검사와 겹쳐 뺀다.
+      only: [vip-not-on-parent, backup-has-address, vmac-device, master-r1,
+             backup-r3, vip-up-on-master, trainee-sees-vmac, uplinks-restored]
     - from: m06
       only: [pc1-v6-addr, pc1-v6-default, r1-ospf6-neighbors, r1-ospf6-routes,
              v6-cross-site, v6-http, dual-stack]
