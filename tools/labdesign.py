@@ -425,7 +425,7 @@ def _apply_stage_override(node_name, r, stage):
     return r
 
 
-def _apply_vrrp(node_name, r, stage):
+def _apply_vrrp(node_name, if_name, r, stage):
     """이중화 단계부터 게이트웨이 주소가 가상 IP 가 된다.
 
     두 라우터가 각자 실주소를 갖고, 그 위에 가상 IP 하나를 함께 든다.
@@ -446,7 +446,9 @@ def _apply_vrrp(node_name, r, stage):
         r["vrrp"] = {"vrid": v["vrid"], "priority": me["priority"],
                      "virtual_ip": v["virtual_ip"], "virtual_mac": v["virtual_mac"],
                      "master": v["master"] == node_name,
-                     "device": f'vrrp4-{v["vrid"]}'}
+                     # FRR 의 vrrpd 는 가상 MAC 을 단 macvlan 을 보고 붙는다.
+                     # 이름은 FRR 문서의 관례를 따른다 — `<부모>-<VRID>`.
+                     "device": f'{if_name}-{v["vrid"]}'}
     elif IPAM["ipv4"]["segments"][seg_name].get("gateway_node") != node_name:
         # 아직 이중화 전 — 백업 라우터는 이 대역에 주소가 없다
         r["ipv4"] = r["ipv6"] = r["role"] = None
@@ -470,7 +472,7 @@ def node_config(lab_id, node, stage="m11", config_stage=None):
     for itf in node.get("interfaces", []):
         ist = itf.get("stage", node["stage"])
         r = _apply_stage_override(node["name"], resolve_interface(node, itf), cs)
-        r = _apply_vrrp(node["name"], r, cs)
+        r = _apply_vrrp(node["name"], itf["name"], r, cs)
         if r.get("ipv4"):
             r["ipv4_network"] = str(ipaddress.ip_interface(r["ipv4"]).network)
         if r.get("ipv6"):

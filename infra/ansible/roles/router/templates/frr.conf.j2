@@ -12,6 +12,7 @@
 {% set v6 = si >= stages.index('m6') %}
 {% set m3 = stages.index('m3') %}
 {% set m4 = stages.index('m4') %}
+{% set m5 = stages.index('m5') %}
 {% set m10 = stages.index('m10') %}
 frr defaults traditional
 hostname {{ node }}
@@ -30,6 +31,18 @@ service integrated-vtysh-config
 ip route {{ r.prefix }} {{ r.via }}
 {% endfor %}
 !
+{% endif %}
+{% if si >= m5 and lab_interfaces | selectattr('active') | selectattr('vrrp', 'defined') | list %}
+! ---- M5 : 게이트웨이 이중화 (VRRP) ----------------------------------------
+!  가상 IP 는 인터페이스에 붙이지 않는다. vrrpd 가 가상 MAC 을 단 macvlan
+!  (roles/router 가 만든다)에 올리고, MASTER 인 쪽에서만 든다.
+{% for i in lab_interfaces if i.active and i.vrrp is defined %}
+interface {{ i.name }}
+! {{ i.vrrp.device }} — 가상 MAC {{ i.vrrp.virtual_mac }}
+ vrrp {{ i.vrrp.vrid }} priority {{ i.vrrp.priority }}
+ vrrp {{ i.vrrp.vrid }} ip {{ i.vrrp.virtual_ip }}
+!
+{% endfor %}
 {% endif %}
 {% if si >= m4 and ospf_enabled %}
 ! ---- M4 : OSPF -----------------------------------------------------------

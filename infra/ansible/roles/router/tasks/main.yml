@@ -6,7 +6,7 @@
     path: /etc/frr/daemons
     regexp: "^{{ item }}="
     line: "{{ item }}=yes"
-  loop: [zebra, staticd, ospfd, ospf6d]
+  loop: [zebra, staticd, ospfd, ospf6d, vrrpd]
   notify: restart frr
 
 - name: vtysh 통합 설정 사용
@@ -17,6 +17,41 @@
     mode: "0640"
     owner: frr
     group: frrvty
+
+# VRRP (M5) — vrrpd 는 **가상 MAC 을 단 macvlan** 을 보고 붙는다.
+#   가상 IP 를 인터페이스에 직접 붙이지 않는 이유가 이것이다. 장애가 나서
+#   BACKUP 이 MASTER 가 되면 IP 뿐 아니라 **MAC 까지 그대로 넘어가므로**,
+#   단말의 ARP 캐시를 건드리지 않아도 통신이 이어진다.
+- name: VRRP 가상 MAC 인터페이스 생성
+  ansible.builtin.shell: |
+    set -e
+    dev={{ item.vrrp.device }}
+    if ! ip link show "$dev" >/dev/null 2>&1; then
+      ip link add "$dev" link {{ item.name }} address {{ item.vrrp.virtual_mac }} \
+         type macvlan mode bridge
+      echo created
+    fi
+    ip link set "$dev" up
+  register: vrrp_dev
+  changed_when: "'created' in vrrp_dev.stdout"
+  loop: "{{ lab_interfaces | selectattr('active') | selectattr('vrrp', 'defined') | list }}"
+  loop_control: {label: "{{ item.name }} -> {{ item.vrrp.device }}"}
+  notify: restart frr
+
+- name: 설정에 없는 VRRP 인터페이스 제거
+  ansible.builtin.shell: |
+    keep="{{ lab_interfaces | selectattr('active') | selectattr('vrrp', 'defined')
+             | map(attribute='vrrp.device') | join(' ') }}"
+    for d in /sys/class/net/*; do
+      i=$(basename "$d")
+      grep -q '^DEVTYPE=macvlan$' "$d/uevent" 2>/dev/null || continue
+      case " $keep " in *" $i "*) continue ;; esac
+      ip link del "$i" 2>/dev/null || true
+      echo "removed $i"
+    done
+  register: vrrp_prune
+  changed_when: "'removed' in vrrp_prune.stdout"
+  notify: restart frr
 
 - name: frr.conf 배포
   ansible.builtin.template:
