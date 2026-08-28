@@ -1108,6 +1108,9 @@ async def action(request: Request, lab: int = Form(...), action: str = Form(...)
         module = (exam.checkpoint_module(cp) if cp else None) or module
         if not module:
             return JSONResponse({"error": "판정할 모듈을 찾지 못했습니다"}, status_code=400)
+        # 판정 범위도 **서버가 정한다.** 화면이 보내는 단계를 그대로 믿으면
+        # 낮은 단계를 보내 앞 모듈 검사를 통째로 빼놓고 통과할 수 있다.
+        stage = (cp or {}).get("stage") or stage
         # 검사 출력에는 실패한 항목 이름이 그대로 나온다 — 그게 곧 답이다. 가린다.
         secret = True
     try:

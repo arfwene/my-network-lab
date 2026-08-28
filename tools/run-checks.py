@@ -84,10 +84,47 @@ def _included(module_id, block):
     return out
 
 
-def load_checks(module_id, lab_id):
+def _cumulative(module_id, upto):
+    """`upto` 단계까지의 **앞 모듈 검사**. 중간 점검이 이걸 쓴다.
+
+    중간 점검은 여러 모듈에 걸친 장애 하나를 가려 놓고 푸는 자리인데, 판정은
+    그 단계 모듈의 검사 하나로만 했다. 그래서 M1 의 링크를 내려 놓고 M3 의
+    검사를 돌리면 **아무것도 실패하지 않는다** — 누르자마자 통과가 뜬다.
+
+    어느 검사를 가져올지는 새로 정하지 않는다. 캡스톤(m11)이 이미 **끝까지
+    살아남는 검사**만 골라 두었으므로 그 목록을 그대로 쓰고, 이번 단계보다
+    나중 모듈만 걸러낸다. 목록이 한 곳이라 한쪽만 낡을 일이 없다.
+    (그 단계 모듈 자신의 검사는 호출한 쪽이 통째로 쓴다 — 캡스톤 기준으로
+     솎아낸 것이 아니라 그 단계에서 참인 것 전부여야 하기 때문이다.)
+    """
+    cap = ((L.SITE.get("console") or {}).get("capstone") or {}).get("module")
+    if not cap or cap == module_id:
+        return []
+    block = _read_spec(cap)[1].get("checks") or {}
+    incs = []
+    for inc in block.get("include") or []:
+        src = inc["from"]
+        if src == module_id:
+            continue
+        if not L.stage_le(_read_spec(src)[0]["stage"], upto):
+            continue
+        incs.append(inc)
+    return _included(module_id, {"include": incs})
+
+
+def load_checks(module_id, lab_id, upto=None):
     meta, spec = _read_spec(module_id)
     block = spec.get("checks") or {}
-    items = _included(module_id, block) + (block.get("items") or [])
+    items = (_cumulative(module_id, upto) if upto else []) \
+        + _included(module_id, block) + (block.get("items") or [])
+    # id 가 겹치면 결과 파일 이름이 겹쳐 한쪽이 조용히 사라진다. 앞의 것을 남긴다.
+    seen, uniq = set(), []
+    for c in items:
+        if c["id"] in seen:
+            continue
+        seen.add(c["id"])
+        uniq.append(c)
+    items = uniq
     if not items:
         return meta, []
     # 가져온 검사도 **이 모듈의 단계**로 치환한다.
@@ -171,9 +208,10 @@ def main():
     ap.add_argument("--module", required=True)
     ap.add_argument("--out")
     ap.add_argument("--inventory", help="기본: infra/ansible/inventory/lab<N>")
+    ap.add_argument("--upto", help="이 단계까지의 앞 모듈 검사도 함께 돌린다 (중간 점검)")
     args = ap.parse_args()
 
-    meta, checks = load_checks(args.module, args.lab)
+    meta, checks = load_checks(args.module, args.lab, args.upto)
     out_path = Path(args.out) if args.out else \
         L.ROOT / f"var/state/checks-lab{args.lab}-{args.module}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)

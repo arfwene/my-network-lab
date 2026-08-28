@@ -293,7 +293,13 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
     if action in ("check", "drill-check"):
         if not module:
             raise ValueError("검사에는 모듈이 필요합니다")
-        return [(L.ROOT, [PY, "tools/run-checks.py", "--lab", str(lab_id), "--module", module])]
+        argv = [PY, "tools/run-checks.py", "--lab", str(lab_id), "--module", module]
+        if action == "drill-check":
+            # 중간 점검은 **누적 범위**를 가려 놓고 푸는 자리다. 그 단계 모듈의
+            # 검사만으로 판정하면 앞 모듈에 넣은 장애가 하나도 안 걸린다 —
+            # 누르자마자 통과가 뜬다. 여기까지의 앞 모듈 검사를 함께 돌린다.
+            argv += ["--upto", stage]
+        return [(L.ROOT, argv)]
     if action == "drill-end":
         # 진단 연습 끝내기 — 주입돼 있던 것을 그 시나리오 자신의 fix 로 되돌린다.
         # 이 작업의 로그는 가리지 않는다. **무엇이었는지 보여 주는 것이 정답 공개**다.
