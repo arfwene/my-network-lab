@@ -260,9 +260,9 @@ checks:
       host: pc2
       run: "ip -br addr show eth1"
       expect: "{{ ip.pc2 }}"
-      expect_none: ["{{ unused_ip.vlan10 }}"]
+      expect_none: ["{{ ip_at('pc2', 'm1') }}"]
       hint: |
-        sudo ip addr del {{ unused_ip.vlan10 }}/24 dev eth1
+        sudo ip addr del {{ ip_at('pc2', 'm1', true) }} dev eth1
         실습 뒤에 원래 상태로 되돌리는 것까지가 작업입니다.
 
     - id: mtu-restored

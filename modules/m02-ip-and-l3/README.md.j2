@@ -52,7 +52,7 @@ links:
       ends: ["{{ end('sw1', 'r1') }}", "{{ end('r1', 'sw1') }}"] }
 marks:
   pc1: ["{{ ip.pc1 }}/24"]
-  pc2: ["{{ unused_ip.vlan10 }}/24"]
+  pc2: ["{{ ip_at('pc2', 'm1', true) }}"]
   sw1: ["브리지 하나", "VLAN 필터링 꺼짐"]
   r1: ["주소 없음", "서브인터페이스 없음"]
 notes:
@@ -60,7 +60,7 @@ notes:
   - 기본 경로가 없습니다. 갈 곳이 이 대역뿐이기 때문입니다
 ```
 
-`pc2` 의 주소가 `{{ unused_ip.vlan10 }}` 인 것에 주목하세요. M1 에서는 두 PC 가
+`pc2` 의 주소가 `{{ ip_at('pc2', 'm1') }}` 인 것에 주목하세요. 영업부 대역입니다. M1 에서는 두 PC 가
 같은 대역에 있어야 라우터 없이 통했습니다. 그 주소를 이번 모듈에서 옮깁니다.
 
 ### 1.3 목표 구성 — 이 모듈이 끝나면
@@ -89,7 +89,7 @@ notes:
 | 무엇이 | 초기 구성 | 목표 구성 |
 |---|---|---|
 | `sw1` 의 VLAN 필터링 | 꺼짐 (포트 전부 한 덩어리) | 켬 (포트마다 VLAN 지정) |
-| `pc2` 의 주소 | `{{ unused_ip.vlan10 }}/24` | `{{ ipc.pc2 }}` |
+| `pc2` 의 주소 | `{{ ip_at('pc2', 'm1', true) }}` (영업부 대역) | `{{ ipc.pc2 }}` |
 | `sw1 eth3` | 그냥 꽂혀만 있음 | 트렁크 ({{ vlans[10].id }}·{{ vlans[20].id }} 태그) |
 | `r1` | 서브인터페이스 없음 | `eth1.10` · `eth1.20` 게이트웨이 |
 | 두 PC 의 기본 경로 | 없음 | 각자의 게이트웨이 |
@@ -115,7 +115,7 @@ notes:
 | 개발부 VLAN | {{ vlans[20].id }} (`{{ vlans[20].name }}`) · 대역 `{{ cidr.vlan20 }}` · 게이트웨이 `{{ gw.vlan20 }}` |
 | native VLAN | {{ vlans[999].id }} (`{{ vlans[999].name }}`) — 아무도 쓰지 않는 번호 |
 | `pc1` | `{{ ipc.pc1 }}` (그대로 둡니다) |
-| `pc2` | `{{ unused_ip.vlan10 }}/24` → `{{ ipc.pc2 }}` |
+| `pc2` | `{{ ip_at('pc2', 'm1', true) }}` → `{{ ipc.pc2 }}` |
 | `sw1` 포트 | `{{ port.sw1.pc1 }}` → pc1 · `{{ port.sw1.pc2 }}` → pc2 · `{{ port.sw1.r1 }}` → r1 |
 | `r1` 포트 | `{{ port.r1.sw1 }}` (여기에 서브인터페이스를 얹습니다) |
 
@@ -445,7 +445,7 @@ eth3              1 PVID Untagged
 # pc1
 ip -br addr show eth1
 ip route show
-ping -c 2 {{ unused_ip.vlan10 }}
+ping -c 2 {{ ip_at('pc2', 'm1') }}
 ```
 
 `pc2` 가 응답합니다. 주소가 같은 대역이고 브로드캐스트 도메인이 하나이기 때문입니다.
@@ -497,7 +497,7 @@ eth3              1 PVID Untagged
 
 ```bash
 # pc1
-ping -c 2 -W 2 {{ unused_ip.vlan10 }}
+ping -c 2 -W 2 {{ ip_at('pc2', 'm1') }}
 ```
 
 ```
@@ -512,7 +512,7 @@ ip neigh show dev eth1
 ```
 
 ```
-{{ unused_ip.vlan10 }} dev eth1  FAILED
+{{ ip_at('pc2', 'm1') }} dev eth1  FAILED
 ```
 
 `FAILED` 는 ARP 응답이 오지 않았다는 뜻입니다. `pc1` 의 ARP Request 는 브로드캐스트이고,
@@ -530,7 +530,7 @@ links:
   - { a: sw1, b: r1, tone: dash, label: 아직 없다 }
 marks:
   pc1: ["{{ ip.pc1 }}/24"]
-  pc2: ["{{ unused_ip.vlan10 }}/24"]
+  pc2: ["{{ ip_at('pc2', 'm1', true) }}"]
   sw1: ["VLAN 필터링 켬"]
   r1: ["주소 없음"]
 notes:
@@ -547,7 +547,7 @@ VLAN 만 갈라 놓고 주소를 그대로 두면 어중간한 상태입니다.
 
 ```bash
 # pc2
-sudo ip addr del {{ unused_ip.vlan10 }}/24 dev eth1
+sudo ip addr del {{ ip_at('pc2', 'm1', true) }} dev eth1
 sudo ip addr add {{ ipc.pc2 }} dev eth1
 ip -br addr show eth1
 ```

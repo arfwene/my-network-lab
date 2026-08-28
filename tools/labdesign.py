@@ -697,6 +697,21 @@ def doc_context(lab_id=1, stage="m10"):
             return f'{i["name"]} .{v.split(".")[-1]}' if v else i["name"]
         raise KeyError(f"{node} 에는 {peer} 로 가는 포트가 없다 (stage={stage})")
 
+    _byname = {n["name"]: n for n in TOPO["nodes"]}
+
+    def ip_at(node, config_stage, cidr=False):
+        """그 노드가 config_stage 까지 설정된 상태에서 갖는 주소.
+
+        M2 처럼 초기 구성이 stage_override 로 달라지는 모듈이 "시작할 때의 주소"를
+        손으로 적지 않게 한다. cidr=True 면 프리픽스까지 붙는다.
+        """
+        c = node_config(lab_id, _byname[node], stage, config_stage)
+        for i in c["lab_interfaces"]:
+            if (i.get("active") and i.get("ipv4")
+                    and i.get("role") in ("access", "public", "external-site")):
+                return i["ipv4"] if cidr else i["ipv4"].split("/")[0]
+        raise KeyError(f"{node} 에는 {config_stage} 시점의 주소가 없다")
+
     segs = IPAM["ipv4"]["segments"]
 
     # MAC 에서 파생되는 IPv6 값들 (M5 의 EUI-64 / SLAAC 설명용)
@@ -712,7 +727,7 @@ def doc_context(lab_id=1, stage="m10"):
 
     return {
         "lab_id": lab_id, "stage": stage,
-        "nodes": nodes, "ifs": ifs, "port": port, "end": end,
+        "nodes": nodes, "ifs": ifs, "port": port, "end": end, "ip_at": ip_at,
         "ip": ip, "ipc": ipc, "mac": mac,
         "cidr": {k: v["cidr"] for k, v in segs.items()},
         "gw": {k: v["gateway"] for k, v in segs.items()},
