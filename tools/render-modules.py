@@ -52,7 +52,7 @@ def _diagrams(text, dst):
         seq[0] += 1
         d = dst / "diagrams"
         d.mkdir(parents=True, exist_ok=True)
-        (d / f"{i}.svg").write_text(diagramsvg.render(m.group(1)), encoding="utf-8")
+        (d / f"{i}.svg").write_text(diagramsvg.render(m.group(1), standalone=True), encoding="utf-8")
         return f"![구성도](diagrams/{i}.svg)"
 
     return DIAGRAM.sub(swap, text)

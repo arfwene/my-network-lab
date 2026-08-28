@@ -23,18 +23,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import yaml
 from topolayout import _tw            # 글자 폭 추정. 규칙을 두 벌 두지 않는다.
+import devices                        # 장비 모양 · 색. 랩 지도와 같은 것을 본다.
 
 PAD = 18                              # 캔버스 바깥 여백
 FS = 13                               # 기본 글자 크기
 FS_SM = 11.5                          # 곁들이는 글자
+FS_NAME = 12.5                        # 장비 이름. 랩 지도(.n-name)와 같은 크기
 LH = 18                               # 줄 간격
 
 
 class Scene:
-    """상자 · 글자 · 선만 담는다. 좌표는 전부 절대값이다."""
+    """상자 · 글자 · 선 · 장비만 담는다. 좌표는 전부 절대값이다."""
 
     def __init__(self):
-        self.boxes, self.texts, self.lines = [], [], []
+        self.boxes, self.texts, self.lines, self.glyphs = [], [], [], []
         self.w = self.h = 0
 
     def box(self, x, y, w, h, tone="", rx=8, **kw):
@@ -48,6 +50,12 @@ class Scene:
                            "anchor": anchor, "size": size})
         return self.texts[-1]
 
+    def glyph(self, x, y, w, h, shape, role):
+        """장비 그림 한 개. 모양과 색은 tools/devices.py 가 정한다."""
+        self.glyphs.append({"x": x, "y": y, "w": w, "h": h,
+                            "shape": shape, "role": role})
+        return self.glyphs[-1]
+
     def line(self, pts, cls="l", arrow=""):
         self.lines.append({"pts": pts, "cls": cls, "arrow": arrow})
         return self.lines[-1]
@@ -55,7 +63,7 @@ class Scene:
     def fit(self, extra=PAD):
         """그려 넣은 것을 다 감싸는 캔버스 크기를 정한다."""
         xs, ys = [0], [0]
-        for b in self.boxes:
+        for b in self.boxes + self.glyphs:
             xs += [b["x"], b["x"] + b["w"]]
             ys += [b["y"], b["y"] + b["h"]]
         for t in self.texts:
@@ -144,14 +152,21 @@ def _fields(spec, S):
 
 
 def _seq(spec, S):
-    """주고받는 차례. 배우를 세로 기둥으로 세우고 화살을 가로로 긋는다."""
+    """주고받는 차례. 배우를 세로 기둥으로 세우고 화살을 가로로 긋는다.
+
+    배우가 장비면 머리에 장비 그림을 얹는다 — 같은 pc1 이 앞 그림에서는 PC,
+    여기서는 회색 네모면 다른 것으로 읽힌다. 장비가 아닌 이름(A · B)은 네모다.
+    """
     actors = spec["actors"]
     steps = spec["steps"]
+    shapes = spec.get("shapes") or {}
+    roles = {a: devices.role_of(a, shapes.get(a)) for a in actors}
+    BAND = 40                          # 머리 그림이 차지하는 높이
+    head = (BAND + 18) if any(roles.values()) else 26
     labw = max([_tw(s.get("label", ""), FS_SM) for s in steps] + [90]) + 40
     colw = max(labw, 120)
     xs = {a: PAD + 40 + i * colw for i, a in enumerate(actors)}
-    top = PAD + 26
-    ny = max([_tw(s.get("n", ""), FS_SM) for s in steps] + [0])
+    top = PAD + head
     y = top + 30
     for s in steps:
         a, b = xs[s["from"]], xs[s["to"]]
@@ -166,9 +181,16 @@ def _seq(spec, S):
         y += 34
     for a in actors:
         S.line([(xs[a], top + 8), (xs[a], y - 20)], cls="l dash")
-        S.box(xs[a] - 40, PAD, 80, 26, tone="node", rx=6)
-        S.text(xs[a], PAD + 18, a, cls="t b", anchor="middle", size=FS_SM)
-    del ny
+        role = roles[a]
+        if role:
+            shape = devices.ROLE[role]["shape"]
+            gw, gh = devices.GLYPH_SM[shape]
+            S.glyph(xs[a] - gw / 2, PAD + (BAND - gh) / 2, gw, gh, shape, role)
+            S.text(xs[a], PAD + BAND + 13, a, cls="t b", anchor="middle", size=FS_NAME)
+        else:
+            w = max(80, _tw(a, FS_NAME) + 24)
+            S.box(xs[a] - w / 2, PAD, w, 26, tone="node", rx=6)
+            S.text(xs[a], PAD + 18, a, cls="t b", anchor="middle", size=FS_NAME)
     return S
 
 
@@ -237,44 +259,62 @@ def _branch(spec, S):
 
 
 def _mini(spec, S):
-    """작은 토폴로지 스케치. 열마다 장비를 세우고 이웃 열끼리 잇는다."""
+    """작은 토폴로지 스케치. 열마다 장비를 세우고 이웃 열끼리 잇는다.
+
+    장비 그림은 랩 지도와 같은 프리셋(tools/devices.py)에서 온다 — 교재의 r1 과
+    지도의 r1 이 다른 그림이면 교육생은 다른 장비로 읽는다. 이름이 이 랩의 작명
+    규칙에 걸리지 않으면(예: "서버망 DHCP") 장비가 아니라 개념 상자로 본다.
+    `shapes: {이름: 역할}` 로 직접 지정할 수도 있다.
+    """
     cols = [c if isinstance(c, list) else [c] for c in spec["cols"]]
     links = _lines(spec.get("links"))
     marks = spec.get("marks") or {}
-    NW, NH, GAP, ROW = 84, 32, 132, 58
+    shapes = spec.get("shapes") or {}
+    CELL, GAP, ROW = 84, 132, 70
+    BAND, NAME = 40, 18                # 그림이 차지하는 높이 / 그 밑 이름 줄
     rows = max(len(c) for c in cols)
     top = PAD + 8
-    pos = {}
+    pos = {}                           # 이름 -> (중심x, 중심y, 반너비)
     for i, col in enumerate(cols):
-        x = PAD + i * (NW + GAP)
+        cx = PAD + i * (CELL + GAP) + CELL / 2
         off = (rows - len(col)) * ROW / 2
         for j, n in enumerate(col):
             yy = top + off + j * ROW
-            S.box(x, yy, NW, NH, tone="node", rx=7)
-            S.text(x + NW / 2, yy + 21, n, cls="t b", anchor="middle", size=FS_SM)
-            pos[n] = (x, yy)
-    mid = top + (rows - 1) * ROW / 2 + NH / 2
+            role = devices.role_of(n, shapes.get(n))
+            if role:
+                shape = devices.ROLE[role]["shape"]
+                gw, gh = devices.GLYPH_SM[shape]
+                S.glyph(cx - gw / 2, yy + (BAND - gh) / 2, gw, gh, shape, role)
+                S.text(cx, yy + BAND + 13, n, cls="t b", anchor="middle", size=FS_NAME)
+                half = gw / 2          # 선은 그림에 붙는다. 이름 길이와는 무관하다
+            else:
+                w = max(CELL, _tw(n, FS_NAME) + 24)
+                S.box(cx - w / 2, yy, w, BAND, tone="node", rx=7)
+                S.text(cx, yy + BAND / 2 + 4, n, cls="t b", anchor="middle", size=FS_NAME)
+                half = w / 2
+            pos[n] = (cx, yy + BAND / 2, half)
+    mid = top + (rows - 1) * ROW / 2 + BAND / 2
     subs = []
     for i in range(len(cols) - 1):
         lk = links[i] if i < len(links) else {}
-        x1 = PAD + i * (NW + GAP) + NW
-        x2 = PAD + (i + 1) * (NW + GAP)
+        gap_l = PAD + i * (CELL + GAP) + CELL
+        gap_r = PAD + (i + 1) * (CELL + GAP)
+        cxm = (gap_l + gap_r) / 2
         # pair: 같은 두 장비를 잇는 선을 둘 그린다 (L2 루프처럼 경로가 둘일 때)
         offs = (-9, 9) if lk.get("pair") else (0,)
         for a in cols[i]:
             for b in cols[i + 1]:
+                ax, ay, ah = pos[a]
+                bx, by, bh = pos[b]
                 for d in offs:
-                    S.line([(pos[a][0] + NW, pos[a][1] + NH / 2),
-                            ((x1 + x2) / 2, pos[a][1] + NH / 2 + d),
-                            ((x1 + x2) / 2, pos[b][1] + NH / 2 + d),
-                            (pos[b][0], pos[b][1] + NH / 2)],
+                    S.line([(ax + ah, ay), (cxm, ay + d), (cxm, by + d), (bx - bh, by)],
                            cls="l " + (lk.get("tone") or ""),
                            arrow="end" if lk.get("arrow") else "")
-        subs.append(((x1 + x2) / 2, lk.get("sub", "")))
-        S.text((x1 + x2) / 2, mid - 12, lk.get("label", ""),
-               cls="t seg", anchor="middle", size=FS_SM)
+        subs.append((cxm, lk.get("sub", "")))
+        S.text(cxm, mid - 12, lk.get("label", ""), cls="t seg",
+               anchor="middle", size=FS_SM)
     # 아래로 가는 글줄은 층을 나눠 쌓는다 — 같은 높이에 두면 반드시 부딪힌다.
-    bottom = top + (rows - 1) * ROW + NH
+    bottom = top + (rows - 1) * ROW + BAND + NAME
     if any(s for _, s in subs):
         for cx, s in subs:
             S.text(cx, bottom + 18, s, cls="t m", anchor="middle", size=FS_SM)
@@ -283,13 +323,13 @@ def _mini(spec, S):
     # 그대로 포개지므로, 같은 열의 것은 이어서 쌓는다.
     used = {}
     for n, rowsm in marks.items():
-        x, yy = pos[n]
-        start = used.get(x, 0)
+        cx = pos[n][0]
+        start = used.get(cx, 0)
         rows_n = _lines(rowsm)
         for j, r in enumerate(rows_n):
-            S.text(x + NW / 2, bottom + 18 + (start + j) * LH, r, cls="t m",
+            S.text(cx, bottom + 18 + (start + j) * LH, r, cls="t m",
                    anchor="middle", size=FS_SM)
-        used[x] = start + len(rows_n)
+        used[cx] = start + len(rows_n)
     if marks:
         bottom += 18 + max(used.values()) * LH - LH + 6
     for j, note in enumerate(_lines(spec.get("notes"))):

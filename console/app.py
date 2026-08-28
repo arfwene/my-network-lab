@@ -927,7 +927,8 @@ async def topology(request: Request, stage: str = "m10"):
         return redir
     if stage not in L.STAGES:
         stage = "m10"
-    return HTMLResponse(topology_svg.render(stage), media_type="image/svg+xml")
+    return HTMLResponse(topology_svg.render(stage, standalone=True),
+                        media_type="image/svg+xml")
 
 
 @app.get("/diagram.drawio")

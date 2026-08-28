@@ -12,6 +12,7 @@ from xml.sax.saxutils import quoteattr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import diagram as D
+import devices
 
 S = 1.6                      # 화면용 좌표 -> draw.io 좌표 (글자가 작지 않게)
 TONE = {"":     ("#ffffff", "#b3b3b3"),
@@ -37,6 +38,17 @@ def drawio(spec, title="구성도"):
             f'fillColor={fill};strokeColor={stroke};" vertex="1" parent="1">'
             f'<mxGeometry x="{b["x"]*S:.0f}" y="{b["y"]*S:.0f}" '
             f'width="{b["w"]*S:.0f}" height="{b["h"]*S:.0f}" as="geometry"/></mxCell>')
+
+    # 장비는 draw.io 의 네트워크 기호로 나간다 — 토폴로지 .drawio 와 같은 모양이다.
+    for g in sc.glyphs:
+        stencil, _, _ = devices.DRAWIO_SHAPE[g["shape"]]
+        fill, stroke = devices.HEX[g["role"]]
+        cells.append(
+            f'<mxCell id="{nid()}" value="" style="shape={stencil};html=1;'
+            f'outlineConnect=0;gradientColor=none;strokeWidth=2;'
+            f'fillColor={fill};strokeColor={stroke};" vertex="1" parent="1">'
+            f'<mxGeometry x="{g["x"]*S:.0f}" y="{g["y"]*S:.0f}" '
+            f'width="{g["w"]*S:.0f}" height="{g["h"]*S:.0f}" as="geometry"/></mxCell>')
 
     for l in sc.lines:
         pts = l["pts"]

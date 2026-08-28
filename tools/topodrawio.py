@@ -18,6 +18,7 @@ from xml.sax.saxutils import escape, quoteattr
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import topolayout as T
+import devices
 
 S = 2.2                       # 화면용 좌표 -> draw.io 좌표
 
@@ -25,16 +26,9 @@ S = 2.2                       # 화면용 좌표 -> draw.io 좌표
 # 다른 사람이 만든 구성도와 같은 모습이어야 손보기 쉽다.
 BASE = ("verticalAlign=top;verticalLabelPosition=bottom;labelPosition=center;align=center;"
         "html=1;outlineConnect=0;gradientColor=none;strokeWidth=2;")
-SHAPE = {"pc":       ("mxgraph.networks.pc", 100, 70),
-         "switch":   ("mxgraph.networks.switch", 100, 30),
-         "router":   ("mxgraph.networks.router", 100, 30),
-         "server":   ("mxgraph.networks.server", 90, 100),
-         "firewall": ("mxgraph.networks.firewall", 100, 100),
-         "cloud":    ("mxgraph.networks.cloud", 90, 50)}
+SHAPE = devices.DRAWIO_SHAPE
 # 역할색은 화면과 같은 뜻을 지킨다 (draw.io 기본 팔레트에서 고른 값).
-COLOR = {"host":   ("#dae8fc", "#6c8ebf"), "switch": ("#d5e8d4", "#82b366"),
-         "router": ("#fff2cc", "#d6b656"), "server": ("#e1d5e7", "#9673a6"),
-         "edge":   ("#f8cecc", "#b85450")}
+COLOR = devices.HEX
 ZONE_STYLE = ("rounded=1;dashed=1;fillColor=#f9f9f9;strokeColor=#999999;"
               "verticalAlign=top;align=left;spacingLeft=12;fontStyle=1;fontSize=15;"
               "fontColor=#555555;container=1;collapsible=0;pointerEvents=0;")

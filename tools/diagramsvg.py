@@ -13,13 +13,15 @@ from xml.sax.saxutils import escape
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import diagram as D
+import devices
 
 
 def _path(pts):
     return "M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in pts)
 
 
-def render(spec, title=""):
+def render(spec, title="", standalone=False):
+    """standalone: 파일로 나가는 그림. 콘솔 CSS 가 없으므로 색 규칙을 심는다."""
     s = D.build(spec)
     out = [f'<svg viewBox="0 0 {s.w} {s.h}" width="{s.w}" height="{s.h}" class="dia" '
            f'xmlns="http://www.w3.org/2000/svg" role="img" '
@@ -28,11 +30,18 @@ def render(spec, title=""):
            '<defs><marker id="dh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" '
            'markerHeight="7" orient="auto-start-reverse">'
            '<path d="M0,0 L8,4 L0,8 z" class="head"/></marker></defs>']
+    if standalone:
+        out.append(devices.style_tag())
 
     for b in s.boxes:
         cls = ("dbox " + b["tone"]).strip()
         out.append(f'<rect class="{cls}" x="{b["x"]:.1f}" y="{b["y"]:.1f}" '
                    f'width="{b["w"]:.1f}" height="{b["h"]:.1f}" rx="{b["rx"]}"/>')
+    # 장비는 토폴로지와 같은 그림 · 같은 색으로 그린다.
+    for g in s.glyphs:
+        out.append(f'<g class="node" style="--f:{devices.FILL[g["role"]]}">'
+                   f'<g transform="translate({g["x"]:.1f},{g["y"]:.1f})">'
+                   f'{devices.body(g["shape"], g["w"], g["h"])}</g></g>')
     for l in s.lines:
         arrow = ' marker-end="url(#dh)"' if l["arrow"] == "end" else ""
         out.append(f'<path class="{l["cls"]}" d="{_path(l["pts"])}"{arrow}/>')

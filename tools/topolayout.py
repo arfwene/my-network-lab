@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import labdesign as L
+import devices
 
 # --------------------------------------------------------------------- 구역
 ZONE_LABEL = {"site-a": "Site-A · 지사", "core": "Core · 백본",
@@ -51,12 +52,11 @@ Z_GAP_X, Z_GAP_Y = 20, 34      # 구역 사이 간격
 #  제목은 본줄 구역은 아래, 윗줄 구역은 위에 단다. 밴드를 넘는 링크가 노드
 #  위로 빠져나가기 때문 — 제목을 위에 두면 그 선이 글자를 뚫고 지나간다.
 
-# 역할 -> 그림 종류. 색이 아니라 실루엣으로 구분한다 (흑백 인쇄 · 색약 대응).
-ROLE_SHAPE = {"host": "pc", "switch": "switch", "router": "router",
-              "server": "server", "edge": "firewall"}
+# 역할 -> 그림 종류 · 크기. 장비 프리셋(tools/devices.py) 한 곳에서 정한다 —
+# 색이 아니라 실루엣으로 구분한다 (흑백 인쇄 · 색약 대응).
+ROLE_SHAPE = devices.ROLE_SHAPE
 #  글리프는 모두 GLYPH_H 안에 세로 가운데로 놓인다 -> 링크가 붙는 높이가 같다.
-GLYPH = {"pc": (48, 38), "switch": (64, 44), "router": (42, 42),
-         "server": (34, 42), "firewall": (48, 40), "cloud": (60, 36)}
+GLYPH = devices.GLYPH
 
 
 def _depth(nodes, links):

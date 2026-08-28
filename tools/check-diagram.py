@@ -133,7 +133,8 @@ def check_docs(err):
                 for name, b in tb:
                     if b[0] < -1 or b[2] > s.w + 1 or b[1] < -1 or b[3] > s.h + 1:
                         err(where, f"글자가 그림 밖으로 나갔다: «{name}»")
-                bx = [box(b["x"], b["y"], b["w"], b["h"]) for b in s.boxes]
+                bx = [box(b["x"], b["y"], b["w"], b["h"])
+                      for b in s.boxes + s.glyphs]
                 for i in range(len(bx)):
                     for j in range(i + 1, len(bx)):
                         if hit(bx[i], bx[j], pad=2):
@@ -141,9 +142,20 @@ def check_docs(err):
     return n
 
 
+def check_preset(err):
+    """설계 파일에 나오는 역할이 장비 프리셋에 다 있는가.
+    빠지면 그 장비만 그림 없이 뚫린다 — 렌더링 때 KeyError 로 죽는 편이 낫지만,
+    검사에서 먼저 잡으면 어느 역할인지 바로 보인다."""
+    import devices
+    for n in L.TOPO["nodes"]:
+        if n["role"] not in devices.ROLE:
+            err("preset", f'역할 «{n["role"]}» ({n["name"]}) 이 tools/devices.py 에 없다')
+
+
 def main():
     found = []
     check_all = lambda s, m: found.append(f"[{s}] {m}")     # noqa: E731
+    check_preset(check_all)
     for stage in L.STAGES:
         check(stage, check_all)
     n = check_docs(lambda w, m: found.append(f"[{w}] {m}"))

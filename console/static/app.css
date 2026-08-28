@@ -14,6 +14,7 @@
   --ok:#0070f3;
   --code-bg:#f2f2f2; --log-bg:#171717; --log-ink:#ededed;
   --n-host:#dbeafe; --n-switch:#dcfce7; --n-router:#fef3c7; --n-server:#ede9fe; --n-edge:#fee2e2;
+  --n-cloud:#eef2f6;
   --zone:#00000006; --zone-line:#00000024; --n-line:#0000004d; --topo-link:#00000059;
   /* 설치 화면의 상태 딱지 — 값을 박아 두면 어두운 화면에서만 튄다 */
   --tag-ok-bg:#e7f6ec;   --tag-ok-ink:#186a3b;
@@ -46,7 +47,7 @@
   --code-bg:#171717; --log-bg:#0a0a0a;
   --log-ink:#ededed; --n-host:#1e3a5f;
   --n-switch:#14532d; --n-router:#5c4813;
-  --n-server:#3b2f63; --n-edge:#5b2222;
+  --n-server:#3b2f63; --n-edge:#5b2222; --n-cloud:#222b36;
   --zone:#ffffff08; --zone-line:#ffffff26;
   --n-line:#ffffff59; --topo-link:#ffffff66;
   --shadow-1:0 1px 1px rgba(0,0,0,.3); --shadow-2:0 2px 2px rgba(0,0,0,.3),0 8px 16px -4px rgba(0,0,0,.5);
@@ -291,12 +292,15 @@ svg.topo .n-name{text-anchor:middle;fill:var(--ink);font-size:12.5px;font-weight
 svg.topo .n-cap{text-anchor:middle;fill:var(--muted);font-size:10.5px;
   font-family:ui-monospace,SFMono-Regular,monospace}
 
-/* 장비 그림 — 본체는 역할색, 안쪽 장식은 테두리색 */
-svg.topo .node>g>*{fill:var(--f);stroke:var(--n-line);stroke-width:1.2;stroke-linejoin:round}
-svg.topo .node>g>.sub{fill:var(--n-line);stroke:none}
-svg.topo .node>g>.ico{fill:none;stroke:var(--n-line);stroke-width:1.7;
+/* 장비 그림 — 본체는 역할색, 안쪽 장식은 테두리색.
+   랩 지도(svg.topo)와 교재 구성도(svg.dia)가 같은 프리셋에서 나오므로 규칙도 하나다. */
+svg.topo .node>g>*,svg.dia .node>g>*{fill:var(--f);stroke:var(--n-line);
+  stroke-width:1.2;stroke-linejoin:round}
+svg.topo .node>g>.sub,svg.dia .node>g>.sub{fill:var(--n-line);stroke:none}
+svg.topo .node>g>.ico,svg.dia .node>g>.ico{fill:none;stroke:var(--n-line);stroke-width:1.7;
   stroke-linecap:round;stroke-linejoin:round}
-svg.topo .node>g>.brick{fill:none;stroke:var(--n-line);stroke-width:.9;opacity:.6}
+svg.topo .node>g>.brick,svg.dia .node>g>.brick{fill:none;stroke:var(--n-line);
+  stroke-width:.9;opacity:.6}
 svg.topo .node.hl>g>*{stroke:var(--accent);stroke-width:2.4}
 svg.topo .node.hl .n-name{fill:var(--accent)}
 
@@ -328,8 +332,10 @@ svg.dia .t.m{fill:var(--muted)}
 svg.dia .t.note{fill:var(--muted)}
 svg.dia .t.note.ok{fill:var(--ok)} svg.dia .t.note.warn{fill:var(--warn)}
 svg.dia .t.m.warn{fill:var(--warn)}
-/* 대역·포트처럼 숫자로 읽는 글자는 고정폭으로 */
-svg.dia .t.seg{fill:var(--body);font-family:ui-monospace,SFMono-Regular,monospace}
+/* 대역·포트처럼 숫자로 읽는 글자는 고정폭으로.
+   선 위에 앉는 자리가 있으므로 토폴로지와 같이 배경색 테두리로 선을 지운다. */
+svg.dia .t.seg{fill:var(--body);font-family:ui-monospace,SFMono-Regular,monospace;
+  paint-order:stroke;stroke:var(--code-bg);stroke-width:3.5px;stroke-linejoin:round}
 
 /* ---------- 상태 · 실행 ---------- */
 .status-grid{display:flex;flex-direction:column;gap:7px;font-size:12px}
