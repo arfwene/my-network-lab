@@ -310,7 +310,7 @@ checks:
       expect: "0"
       hint: |
         r4 는 라우터입니다. 방화벽 정책을 두는 자리가 아닙니다.
-        `nft list ruleset` 에 무언가 보이면 그것이 원인입니다 (`nft delete table inet <이름>`).
+        `sudo nft list ruleset` 에 무언가 보이면 그것이 원인입니다 (`nft delete table inet <이름>`).
 
 # ---------------------------------------------------------------------------
 # 서술 — 최종 산출물 세 가지 (PLAN 5장 M10)

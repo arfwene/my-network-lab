@@ -115,7 +115,7 @@ notes:
 | 패킷이 도착하는가 | 목적지 |
 | 어디서 사라지는가 | 출발지·목적지 사이를 이등분 |
 | 변형되는가 (NAT · VLAN · MTU) | 그 장비의 양쪽 인터페이스 |
-| 응답이 돌아오는가 | 목적지 (요청과 응답을 함께 본다) |
+| 응답이 돌아오는가 | 목적지 (요청과 응답을 함께 봅니다) |
 
 #### 기본 순서
 
@@ -167,25 +167,25 @@ notes:
 #### 조합
 
 ```bash
-tcpdump -i eth1 -nn 'host {{ ip.web }} and tcp port 80 and not port 22'
-tcpdump -i eth1 -nn 'icmp or arp'
-tcpdump -i eth1 -nn 'net {{ cidr.vlan40 }} and not net {{ cidr.vlan10 }}'
+sudo tcpdump -i eth1 -nn 'host {{ ip.web }} and tcp port 80 and not port 22'
+sudo tcpdump -i eth1 -nn 'icmp or arp'
+sudo tcpdump -i eth1 -nn 'net {{ cidr.vlan40 }} and not net {{ cidr.vlan10 }}'
 ```
 
 #### 비트 필터 — 플래그를 직접 본다
 
 ```bash
 # SYN 또는 SYN-ACK (SYN 비트가 켜진 것 전부)
-tcpdump -i eth1 -nn 'tcp[tcpflags] & tcp-syn != 0'
+sudo tcpdump -i eth1 -nn 'tcp[tcpflags] & tcp-syn != 0'
 
 # SYN 만 (연결 시도만. SYN-ACK 제외)
-tcpdump -i eth1 -nn 'tcp[tcpflags] & (tcp-syn|tcp-ack) == tcp-syn'
+sudo tcpdump -i eth1 -nn 'tcp[tcpflags] & (tcp-syn|tcp-ack) == tcp-syn'
 
 # RST — 거부당한 연결만
-tcpdump -i eth1 -nn 'tcp[tcpflags] & tcp-rst != 0'
+sudo tcpdump -i eth1 -nn 'tcp[tcpflags] & tcp-rst != 0'
 
 # ICMP echo request 만
-tcpdump -i eth1 -nn 'icmp[icmptype] == 8'
+sudo tcpdump -i eth1 -nn 'icmp[icmptype] == 8'
 ```
 
 `!= 0` 과 `== tcp-syn` 의 차이가 핵심입니다.
@@ -205,8 +205,8 @@ SSH 로 나가면서 되먹임까지 생깁니다.
 트렁크에서는 `vlan` 을 앞에 붙입니다 (M2 에서 겪은 함정)
 
 ```bash
-tcpdump -i eth1 -e -nn 'vlan and icmp'      # 트렁크
-tcpdump -i eth1 -e -nn 'icmp'               # access 포트
+sudo tcpdump -i eth1 -e -nn 'vlan and icmp'      # 트렁크
+sudo tcpdump -i eth1 -e -nn 'icmp'               # access 포트
 ```
 
 ### 2.3 옵션 — 무엇을 얼마나 볼 것인가
@@ -258,14 +258,14 @@ marks:
 | IP ID | IPv4 헤더의 식별자. `-v` 로 보입니다. 홉을 넘어도 그대로 |
 | TCP seq | 재전송 추적에 유용 |
 | ICMP id/seq | ping 추적에 최적 |
-| 시각 | 장비 시계가 맞아야 합니다 (NTP 가 안 맞으면 대조가 지옥이 된다) |
+| 시각 | 장비 시계가 맞아야 합니다 (NTP 가 안 맞으면 대조가 지옥이 됩니다) |
 
 홉을 넘으면 MAC 은 바뀝니다. MAC 으로 같은 패킷을 찾으려 하면 안 됩니다.
 IP·포트·seq 처럼 엔드투엔드로 유지되는 값을 기준으로 잡습니다 (M2 의 그 원칙).
 
 ### 2.5 캡슐화를 바이트로 짚는다
 ```bash
-tcpdump -i eth1 -nn -X -c 1 'tcp port 80'
+sudo tcpdump -i eth1 -nn -X -c 1 'tcp port 80'
 ```
 
 ```
@@ -301,7 +301,7 @@ tcpdump -r /tmp/x.pcap -nn | wc -l
 #### Wireshark 로 넘길 때
 
 ```bash
-# 점프 호스트로 회수
+# 내 PC 로 회수 — SSH 설정이 점프 호스트를 알아서 거친다
 scp pc1:/tmp/x.pcap .
 ```
 
@@ -316,7 +316,7 @@ scp pc1:/tmp/x.pcap .
 BPF 필터(캡처용)와 Wireshark 표시 필터는 문법이 다릅니다.
 `port 80` (BPF) ↔ `tcp.port == 80` (Wireshark). 섞어 쓰면 안 먹습니다.
 
-pcap 은 민감 정보 덩어리입니다. 평문 프로토콜이면 아이디·비밀번호가 그대로 들어 있습니다 (M8 에서 확인한다).
+pcap 은 민감 정보 덩어리입니다. 평문 프로토콜이면 아이디·비밀번호가 그대로 들어 있습니다 (M8 에서 확인합니다).
 밖으로 내보낼 때는 snaplen 으로 헤더만 뜨거나, 반출 승인을 받습니다.
 이 감각이 없으면 "장애 분석하려고 캡처를 메신저로 보냈다" 는 사고가 납니다.
 
@@ -592,7 +592,7 @@ curl -s -o /dev/null -w 'time=%{time_total}\n' http://{{ ip.web }}/
 Wireshark 로 열면 더 분명합니다.
 
 ```bash
-scp pc1:/tmp/x.pcap .      # 점프 호스트에서
+scp pc1:/tmp/x.pcap .      # 내 PC 에서
 ```
 
 표시 필터: `tcp.analysis.retransmission`

@@ -281,7 +281,7 @@ sudo nft list ruleset > /tmp/nft-before.txt
 | 문서 | 없으면 생기는 일 |
 |---|---|
 | 토폴로지도 | 장애 때마다 구조를 다시 파악합니다 |
-| IP 관리대장 | 주소가 중복 배정됩니다 (M5 의 DAD 실패가 그것이다) |
+| IP 관리대장 | 주소가 중복 배정됩니다 (M5 의 DAD 실패가 그것입니다) |
 | 변경 이력 | "언제부터" 를 물어도 답할 사람이 없습니다 |
 
 변경 이력이 없으면 2.1 의 다섯 번째 질문(**최근 변경**)에 아무도 답할 수 없습니다.
@@ -529,8 +529,8 @@ sudo vtysh -c 'show ip ospf interface {{ port.r1.r3 }}'
 | `ip route show` | `show ip route` |
 | `sudo vtysh` 로 들어간 뒤 `show ip ospf neighbor` | `show ip ospf neighbor` |
 | `ss -ltnp` | (장비에는 없음 — 서버에서 확인) |
-| `nft list ruleset` | `show access-lists` |
-| `tcpdump -i eth1` | `monitor capture` / SPAN |
+| `sudo nft list ruleset` | `show access-lists` |
+| `sudo tcpdump -i eth1` | `monitor capture` / SPAN |
 
 개념은 같습니다. 바뀌는 것은 명령어뿐입니다.
 

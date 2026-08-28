@@ -137,6 +137,30 @@ def md_in_code(mod_dir):
     return out
 
 
+# root 가 있어야 도는 명령. 교재의 ```bash 블록에 sudo 없이 적히면 교육생은
+# "Operation not permitted" 를 만난다 — 실제로 M2 6.4 의 정리 명령이 그랬다.
+# vtysh 의 조회(`-c 'show ...'`)만은 예외다 — 랩 계정이 frrvty 그룹에 있다.
+NEEDS_ROOT = re.compile(
+    r"^(nft |tcpdump -i |conntrack |ip link set |ip link add |ip link del "
+    r"|ip addr add |ip addr del |ip route add |ip route del |ip route flush "
+    r"|bridge vlan add |bridge vlan del |sysctl -w |systemctl (start|stop|restart) "
+    r"|vtysh(?! -c ['\"]show)|iptables )")
+
+
+def sudo_missing(mod_dir):
+    """```bash 블록에서 sudo 가 빠진 root 명령. [(파일, 줄)] 을 돌려준다."""
+    out = []
+    for f in sorted(mod_dir.glob("*.md.j2")):
+        for m in CODE_FENCE.finditer(f.read_text(encoding="utf-8")):
+            b = m.group(0)
+            if not b.startswith("```bash"):
+                continue
+            for line in b.splitlines()[1:-1]:
+                if NEEDS_ROOT.match(line):
+                    out.append((f.name, line.strip()[:60]))
+    return out
+
+
 def back_refs(mod_dir):
     """과제가 **앞 모듈**을 가리키는 자리. [(줄번호, 줄)] 을 돌려준다.
 
@@ -186,7 +210,10 @@ def plain_form(raw):
         if line.startswith("#") or line.lstrip().startswith("- ["):
             continue
         for seg in re.split(r"(?<=다[.])\s+|\|", line):
-            seg = seg.strip().rstrip(".").strip()
+            # 문장 끝의 괄호와 굵게 표시를 걷어내야 "(M3 에서 쓴다)" 나
+            # "**...생겼다.**" 처럼 표시에 감싸인 평서형이 잡힌다. 따옴표는
+            # 걷어내지 않는다 — 증상이나 남의 말을 그대로 옮긴 인용은 평서형이 맞다.
+            seg = seg.strip().rstrip(".)* ").strip()
             if seg and PLAIN.search(seg) and PLAIN.search(seg).end() == len(seg):
                 n += 1
     return n
@@ -222,20 +249,25 @@ def main(only=None):
     if only:
         files = [f for f in files if f.parent.name.startswith(only)]
     bad = 0
-    over, leaks, backs, mds = [], [], [], []
-    print(f"{'모듈':<6}{'퀴즈':>6}{'모양누출':>9}{'앞모듈참조':>11}{'코드속MD':>10}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
+    over, leaks, backs, mds, sudos = [], [], [], [], []
+    print(f"{'모듈':<6}{'퀴즈':>6}{'모양누출':>9}{'앞모듈참조':>11}{'코드속MD':>10}{'sudo빠짐':>10}"
+          f"{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
           f"{'작은표':>7}{'머리말없는인용':>15}{'평서형':>8}")
-    print("-" * 104)
+    print("-" * 114)
     for f in files:
         m = measure(f)
         nq = quiz_count(f.parent)
         sl = shape_leaks(f.parent)
         br = back_refs(f.parent)
         mc = md_in_code(f.parent)
+        sd = sudo_missing(f.parent)
         marks = []
         if mc:
             marks.append("코드속MD")
             mds += [(f.parent.name[:3], fn, s) for fn, s in mc]
+        if sd:
+            marks.append("sudo빠짐")
+            sudos += [(f.parent.name[:3], fn, s) for fn, s in sd]
         if br:
             marks.append("앞모듈")
             backs += [(f.parent.name[:3], ln, s) for ln, s in br]
@@ -252,7 +284,8 @@ def main(only=None):
         if m["tiny"]: marks.append("작은표")
         if m["bad_prefix"]: marks.append("머리말")
         col = R if marks else G
-        print(f"{col}{f.parent.name[:4]:<6}{nq:>6}{len(sl):>9}{len(br):>11}{len(mc):>10}{m['bold_per_sent']:>10.2f}"
+        print(f"{col}{f.parent.name[:4]:<6}{nq:>6}{len(sl):>9}{len(br):>11}{len(mc):>10}{len(sd):>10}"
+              f"{m['bold_per_sent']:>10.2f}"
               f"{m['quote_per_100']:>11.1f}{m['table_pct']:>7.1f}{len(m['tiny']):>7}"
               f"{len(m['bad_prefix']):>15}{m['plain']:>8}{N}")
         if marks:
@@ -261,9 +294,9 @@ def main(only=None):
                 print(f"        {Y}머리말 없는 인용구{N}: {b[:60]}")
             for b in m["tiny"][:2]:
                 print(f"        {Y}2열 3행 이하 표{N}: {b}")
-    print("-" * 104)
-    print(f"기준: 퀴즈 ≤ {QUIZ_MAX}문항 · 모양누출 0 · 앞모듈참조 0 · 코드속MD 0 · 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · "
-          f"작은표 0 · 머리말 없는 인용구 0")
+    print("-" * 114)
+    print(f"기준: 퀴즈 ≤ {QUIZ_MAX}문항 · 모양누출 0 · 앞모듈참조 0 · 코드속MD 0 · sudo빠짐 0 · "
+          f"굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · 작은표 0 · 머리말 없는 인용구 0")
     print("표% 와 평서형은 참고값이다 — 표는 찾아보는 문서면 높아도 맞고,")
     print("평서형은 아직 존댓말로 안 바꾼 모듈이 몇 문장 남았는지를 센다 (0 이 목표).")
     if bad:
@@ -274,6 +307,8 @@ def main(only=None):
     # 세면 답이 나오는 값이므로 여기서 막는다.
     for mod, fn, s in mds:
         print(f"{R}✘{N} {mod}/{fn} 코드 블록 안에 마크다운이 있다 — {s}")
+    for mod, fn, s in sudos:
+        print(f"{R}✘{N} {mod}/{fn} root 명령에 sudo 가 없다 — {s}")
     for mod, ln, s in backs:
         print(f"{R}✘{N} {mod} tasks.md.j2:{ln} 이 앞 모듈을 가리킨다 — {s}")
     for mod, qid, why in leaks:
@@ -281,7 +316,7 @@ def main(only=None):
     for name, n in over:
         print(f"{R}✘{N} {name} 의 퀴즈가 {n}문항이다 — {QUIZ_MAX}문항까지만 둔다 "
               f"(modules/{name}/assessment.yml)")
-    return 1 if (over or leaks or backs or mds) else 0
+    return 1 if (over or leaks or backs or mds or sudos) else 0
 
 
 if __name__ == "__main__":

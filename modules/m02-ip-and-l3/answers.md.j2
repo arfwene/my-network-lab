@@ -244,7 +244,7 @@ pc2 에 임시 주소를 붙인 채로 두면 검사 `pc2-no-leftover` 에서 �
 
 | 확인 | 명령 | 정상 |
 |---|---|---|
-| nft 표가 남았나 | `nft list ruleset \| grep -cE "mangle\|blackhole"` (r1) | `0` |
+| nft 표가 남았나 | `sudo nft list ruleset \| grep -cE "mangle\|blackhole"` (r1) | `0` |
 | MTU 가 돌아왔나 | `ip -d link show eth1.20 \| grep mtu` (r1) | `1500` |
 | PMTU 캐시 | `ip route get {{ ip.pc2 }}` (pc1) | `mtu` 표시가 없다 |
 

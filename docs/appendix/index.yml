@@ -18,6 +18,11 @@ appendix:
     summary: "이 과정에 나온 용어를 한 줄로. 흔한 오해를 함께 적었습니다."
     print: false
 
+  - id: addressing
+    title: "주소 계획 — 이 랩은 왜 이렇게 잘랐는가"
+    summary: "구역 · 마스크 · 사설과 공인 · 관리망 분리의 근거. M2 설계 과제의 본보기입니다."
+    print: true
+
   - id: vendor-cli
     title: "벤더 CLI 매핑 — FRR · Linux ↔ Cisco IOS"
     summary: "개념은 같고 명령어만 바뀝니다. 실장비로 넘어갈 때 이 표만 있으면 됩니다."
