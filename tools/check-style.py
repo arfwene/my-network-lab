@@ -172,6 +172,26 @@ def quiz_count(mod_dir):
     return len((d.get("quiz") or {}).get("questions") or [])
 
 
+#  교재 · 과제는 존댓말로 쓴다 (docs/STYLE.md 1). 예전 모듈은 평서형(`~한다`)이라
+#  한 번에 다 못 바꾼다 — 막지 않고 **몇 문장 남았는지만** 센다. 0 이면 다 바뀐 것이다.
+#  제목과 도입부(첫 `---` 위)는 이름표에 가까우므로 세지 않는다.
+PLAIN = re.compile(r"[가-힣]+(?<!니)다(?=[.\s]|$)")
+
+
+def plain_form(raw):
+    body = strip_blocks(raw)
+    body = body.split("\n---\n", 1)[-1]
+    n = 0
+    for line in body.splitlines():
+        if line.startswith("#") or line.lstrip().startswith("- ["):
+            continue
+        for seg in re.split(r"(?<=다[.])\s+|\|", line):
+            seg = seg.strip().rstrip(".").strip()
+            if seg and PLAIN.search(seg) and PLAIN.search(seg).end() == len(seg):
+                n += 1
+    return n
+
+
 def measure(p):
     raw = p.read_text(encoding="utf-8")
     body = strip_blocks(raw)
@@ -189,6 +209,7 @@ def measure(p):
     sent = len(re.findall(r"(?:다|요)[.]|[.!?]\s*$", body, re.M)) or 1
     ntab, tab_lines, tiny, all_lines = tables(raw)
     return {
+        "plain": plain_form(raw),
         "lines": len(lines), "quote_lines": len(quotes), "quote_blocks": len(blocks),
         "bad_prefix": bad_prefix, "bold": bold, "sent": sent, "tiny": tiny,
         "bold_per_sent": bold / sent, "quote_per_100": len(quotes) / max(len(lines), 1) * 100,
@@ -203,8 +224,8 @@ def main(only=None):
     bad = 0
     over, leaks, backs, mds = [], [], [], []
     print(f"{'모듈':<6}{'퀴즈':>6}{'모양누출':>9}{'앞모듈참조':>11}{'코드속MD':>10}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
-          f"{'작은표':>7}{'머리말없는인용':>15}")
-    print("-" * 96)
+          f"{'작은표':>7}{'머리말없는인용':>15}{'평서형':>8}")
+    print("-" * 104)
     for f in files:
         m = measure(f)
         nq = quiz_count(f.parent)
@@ -233,17 +254,18 @@ def main(only=None):
         col = R if marks else G
         print(f"{col}{f.parent.name[:4]:<6}{nq:>6}{len(sl):>9}{len(br):>11}{len(mc):>10}{m['bold_per_sent']:>10.2f}"
               f"{m['quote_per_100']:>11.1f}{m['table_pct']:>7.1f}{len(m['tiny']):>7}"
-              f"{len(m['bad_prefix']):>15}{N}")
+              f"{len(m['bad_prefix']):>15}{m['plain']:>8}{N}")
         if marks:
             bad += 1
             for b in m["bad_prefix"][:2]:
                 print(f"        {Y}머리말 없는 인용구{N}: {b[:60]}")
             for b in m["tiny"][:2]:
                 print(f"        {Y}2열 3행 이하 표{N}: {b}")
-    print("-" * 96)
+    print("-" * 104)
     print(f"기준: 퀴즈 ≤ {QUIZ_MAX}문항 · 모양누출 0 · 앞모듈참조 0 · 코드속MD 0 · 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · "
           f"작은표 0 · 머리말 없는 인용구 0")
-    print("표% 는 참고값이다 — 찾아보는 표가 본문인 문서는 높아도 맞다.")
+    print("표% 와 평서형은 참고값이다 — 표는 찾아보는 문서면 높아도 맞고,")
+    print("평서형은 아직 존댓말로 안 바꾼 모듈이 몇 문장 남았는지를 센다 (0 이 목표).")
     if bad:
         print(f"{Y}{bad}개 모듈이 기준을 넘는다 (docs/STYLE.md){N}")
     else:
