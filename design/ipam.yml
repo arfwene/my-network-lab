@@ -82,6 +82,15 @@ segments:
     ipv6_subnet_id: "0010"
     ipv6_gateway_suffix: "254"
     ipv6_host_suffix: {pc1: "11"}
+    # M5 — 게이트웨이 이중화. .254 는 두 라우터가 함께 드는 **가상 IP** 가 되고,
+    #   각자는 자기 실주소를 갖는다. PC 의 게이트웨이 설정은 .254 그대로다.
+    #   IPv4 만 이중화한다 — IPv6 는 M6 에서 r1 하나가 계속 게이트웨이다.
+    vrrp:
+      stage: m5
+      vrid: 10                   # 가상 MAC 00:00:5e:00:01:0a 의 마지막 바이트
+      routers:
+        r1: {offset: 252, priority: 150}
+        r3: {offset: 253, priority: 100}
 
   vlan20:
     zone: site-a
@@ -96,6 +105,12 @@ segments:
     ipv6_subnet_id: "0020"
     ipv6_gateway_suffix: "254"
     ipv6_host_suffix: {pc2: "11"}
+    vrrp:
+      stage: m5
+      vrid: 20                   # 가상 MAC 00:00:5e:00:01:14
+      routers:
+        r1: {offset: 252, priority: 150}
+        r3: {offset: 253, priority: 100}
 
   vlan40:
     zone: site-b

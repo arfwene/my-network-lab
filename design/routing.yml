@@ -38,6 +38,7 @@ ospf:
   # 네트워크 광고 대상: 각 라우터가 자기 인터페이스 대역을 area 0 에 광고
   passive_interfaces:             # 사용자/서버망 쪽은 Hello 를 보낼 이유가 없다
     r1: [eth1.10, eth1.20]
+    r3: [eth3.10, eth3.20]        # M5 에서 붙는 백업 게이트웨이 쪽. 여기도 사용자망이다
     r4: [eth3]
   # 링크별 cost 는 ipam.yml 의 p2p.*.ospf_cost 가 소유한다 (주 경로 10 / 백업 100)
   timers:

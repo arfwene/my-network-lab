@@ -60,10 +60,19 @@ GLYPH = devices.GLYPH
 
 
 def _depth(nodes, links):
-    """site-a 사용자 PC 로부터의 홉 수. 구역 안에서 열 순서를 정하는 데만 쓴다."""
+    """site-a 사용자 PC 로부터의 홉 수. 구역 안에서 열 순서를 정하는 데만 쓴다.
+
+    **나중에 덧붙인 배선은 세지 않는다.** 장비가 이미 다 있는데 링크만 늘어난
+    경우(M5 에서 r3 가 sw1 에도 붙는 것)까지 세면 그 장비의 열이 앞으로 당겨져
+    자리가 바뀐다. 자리는 그 장비가 처음 등장할 때의 배선으로 정한다.
+    """
     names = {n["name"] for n in nodes}
+    born = {n["name"]: n["stage"] for n in nodes}
     adj = {n: set() for n in names}
-    for _, (a, _), (b, _) in links:
+    for br, (a, _), (b, _) in links:
+        later = max(born[a], born[b], key=lambda s: L.STAGES.index(s))
+        if not L.stage_le(br["stage"], later):
+            continue
         adj[a].add(b)
         adj[b].add(a)
     starts = [n["name"] for n in nodes if n["zone"] == "site-a" and n["role"] == "host"] \
@@ -375,6 +384,15 @@ def layout(stage="m11"):
         pb = _anchor(B, p["sb"], fb, len(idx[kb]))
 
         lines = _link_label(br, p["a"], p["ai"], p["b"], p["bi"], segs, ctx, has_l3)
+        # 같은 VLAN 을 실어 나르는 트렁크가 둘이면(M5 의 sw1↔r1 · sw1↔r3)
+        # 첫 링크에만 적는다. 두 번째 트렁크의 라벨이 놓일 통로에는 이미
+        # 사이에 낀 장비의 포트 이름이 들어 있어 반드시 부딪힌다.
+        if lines and lines[0].startswith("트렁크"):
+            key = tuple(lines)
+            if key in seen_seg:
+                lines = []
+            else:
+                seen_seg.add(key)
         # 같은 대역에 링크가 여럿이면(VLAN40 은 4개) 첫 링크에만 적는다.
         if lines and lines[0].startswith("VLAN"):
             key = tuple(lines)
@@ -423,7 +441,15 @@ def layout(stage="m11"):
             lx, ly = (pts[1][0] + pts[2][0]) / 2, corridor
         else:
             lo, hi = (A, B) if A["gx"] < B["gx"] else (B, A)
-            lx = (lo["gx"] + lo["gw"] + hi["gx"]) / 2
+            # 두 장비가 이웃 열이 아니면(M5 의 sw1 ↔ r3) 가운데에 다른 장비가
+            # 있다. 그 위에 대역 이름을 얹으면 글자가 장비를 덮는다 —
+            # 오른쪽 장비 바로 앞의 빈 통로에 넣는다.
+            left = lo["gx"] + lo["gw"]
+            for n in placed:
+                right = n["gx"] + n["gw"]
+                if lo["gx"] < n["gx"] and right <= hi["gx"] and right > left:
+                    left = right
+            lx = (left + hi["gx"]) / 2
             ly = _y_at(pts, lx)
 
         fan = {p["a"]: fa, p["b"]: fb}

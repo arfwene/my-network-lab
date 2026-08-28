@@ -59,6 +59,7 @@ bridges:
   - {id: "101", alias: pc1-sw1,   zone: site-a, stage: m1, desc: "pc1 ↔ sw1  (access VLAN10)"}
   - {id: "102", alias: pc2-sw1,   zone: site-a, stage: m1, desc: "pc2 ↔ sw1  (access VLAN20)"}
   - {id: "103", alias: sw1-r1,    zone: site-a, stage: m2, desc: "sw1 ↔ r1   (802.1Q trunk)"}
+  - {id: "104", alias: sw1-r3,    zone: site-a, stage: m5, desc: "sw1 ↔ r3   (802.1Q trunk) — VRRP 백업 게이트웨이"}
 
   - {id: "201", alias: r1-r2,     zone: core,   stage: m3, desc: "r1 ↔ r2    (주 경로)"}
   - {id: "202", alias: r1-r3,     zone: core,   stage: m4, desc: "r1 ↔ r3    (백업 경로)"}
@@ -120,6 +121,7 @@ nodes:
       - {name: eth1, bridge: "101", peer: pc1, mac: "52:54:00:21:00:01", vlan: 10,       mode: access}
       - {name: eth2, bridge: "102", peer: pc2, mac: "52:54:00:21:00:02", vlan: 20,       mode: access}
       - {name: eth3, bridge: "103", peer: r1,  mac: "52:54:00:21:00:03", vlan: [10, 20], mode: trunk, native: 999, stage: m2}
+      - {name: eth4, bridge: "104", peer: r3,  mac: "52:54:00:21:00:04", vlan: [10, 20], mode: trunk, native: 999, stage: m5}
 
   - name: r1
     id: 0x31
@@ -155,10 +157,13 @@ nodes:
     zone: core
     stage: m4
     memory: 768
-    desc: "코어 라우터 (백업 경로) — OSPF cost 높음. M4 경로 우회 실습의 핵심"
+    desc: "코어 라우터 (백업 경로) — OSPF cost 높음. M5 에서 Site-A 의 백업 게이트웨이도 겸한다"
     interfaces:
       - {name: eth1, bridge: "202", peer: r1, mac: "52:54:00:33:00:01"}
       - {name: eth2, bridge: "204", peer: r4, mac: "52:54:00:33:00:02"}
+      - {name: eth3,    bridge: "104", peer: sw1, mac: "52:54:00:33:00:03", mode: trunk, native: 999, stage: m5, desc: "Site-A 백업 게이트웨이 (VRRP)"}
+      - {name: eth3.10, parent: eth3, vlan: 10, stage: m5, desc: "VLAN10 백업 게이트웨이"}
+      - {name: eth3.20, parent: eth3, vlan: 20, stage: m5, desc: "VLAN20 백업 게이트웨이"}
       - {name: lo0,  type: loopback}
 
   # ---------------- Site-B : 데이터센터 ----------------

@@ -116,6 +116,19 @@ def _resolve():
                "gateway": _a4(n, s["gateway_offset"]), "gateway_node": s["gateway_node"],
                "desc": s["desc"],
                "hosts": {h: _a4(n, o) for h, o in s.get("hosts", {}).items()}}
+        if "vrrp" in s:
+            # 이중화 단계부터 gateway 는 두 라우터가 함께 드는 **가상 IP** 다.
+            # 각 라우터의 실주소를 여기서 미리 풀어 둔다 (교재도 이 값을 쓴다).
+            v = s["vrrp"]
+            seg["vrrp"] = {
+                "stage": v["stage"], "vrid": v["vrid"],
+                "virtual_ip": _a4(n, s["gateway_offset"]),
+                "virtual_mac": f'00:00:5e:00:01:{v["vrid"]:02x}',
+                "routers": {r: {"ipv4": _a4(n, o["offset"]),
+                                "priority": o["priority"]}
+                            for r, o in v["routers"].items()},
+                "master": max(v["routers"], key=lambda r: v["routers"][r]["priority"]),
+            }
         if "dhcp_pool" in s:
             seg["dhcp_pool"] = f'{_a4(n, s["dhcp_pool"]["start"])} - {_a4(n, s["dhcp_pool"]["end"])}'
         segments[name] = seg
@@ -343,10 +356,13 @@ def resolve_interface(node, itf):
     if itf.get("parent"):
         seg_name, seg = _seg_by_vlan(itf["vlan"])
         v6 = _v6_seg(seg_name)
-        if seg.get("gateway_node") == name:
+        vrrp = seg.get("vrrp") or {}
+        if seg.get("gateway_node") == name or name in vrrp.get("routers", {}):
             out["ipv4"] = f'{seg["gateway"]}/{_plen(seg["cidr"])}'
-            out["ipv6"] = f'{v6["gateway"]}/64' if v6 else None
+            # IPv6 는 이중화하지 않는다 — 정규 게이트웨이 한 대만 든다 (M6).
+            out["ipv6"] = f'{v6["gateway"]}/64' if v6 and seg.get("gateway_node") == name else None
             out["role"] = "gateway"
+            out["segment"] = seg_name
         return out
 
     br = itf.get("bridge")
@@ -388,6 +404,7 @@ def resolve_interface(node, itf):
                 out["ipv4"] = f'{seg["gateway"]}/{_plen(seg["cidr"])}'
                 out["ipv6"] = f'{v6["gateway"]}/64' if v6 else None
                 out["role"] = "gateway"
+                out["segment"] = seg_name
     return out
 
 
@@ -408,6 +425,34 @@ def _apply_stage_override(node_name, r, stage):
     return r
 
 
+def _apply_vrrp(node_name, r, stage):
+    """이중화 단계부터 게이트웨이 주소가 가상 IP 가 된다.
+
+    두 라우터가 각자 실주소를 갖고, 그 위에 가상 IP 하나를 함께 든다.
+    가상 IP 는 인터페이스에 직접 붙이지 않는다 — MASTER 인 쪽의 vrrpd 가
+    가상 MAC 을 단 macvlan 에 올린다. PC 의 게이트웨이 설정(.254)은 바뀌지
+    않는다. 그것이 이 구성의 요점이다.
+    """
+    seg_name = r.get("segment")
+    if r.get("role") != "gateway" or not seg_name:
+        return r
+    v = (IPAM["ipv4"]["segments"][seg_name].get("vrrp") or {})
+    me = v.get("routers", {}).get(node_name)
+    if not me:
+        return r
+    r = dict(r)
+    if stage_le(v["stage"], stage):
+        r["ipv4"] = f'{me["ipv4"]}/{_plen(IPAM["ipv4"]["segments"][seg_name]["cidr"])}'
+        r["vrrp"] = {"vrid": v["vrid"], "priority": me["priority"],
+                     "virtual_ip": v["virtual_ip"], "virtual_mac": v["virtual_mac"],
+                     "master": v["master"] == node_name,
+                     "device": f'vrrp4-{v["vrid"]}'}
+    elif IPAM["ipv4"]["segments"][seg_name].get("gateway_node") != node_name:
+        # 아직 이중화 전 — 백업 라우터는 이 대역에 주소가 없다
+        r["ipv4"] = r["ipv6"] = r["role"] = None
+    return r
+
+
 def node_config(lab_id, node, stage="m11", config_stage=None):
     """노드 하나의 완성된 설정 (Ansible host_vars 로 그대로 사용).
 
@@ -425,6 +470,7 @@ def node_config(lab_id, node, stage="m11", config_stage=None):
     for itf in node.get("interfaces", []):
         ist = itf.get("stage", node["stage"])
         r = _apply_stage_override(node["name"], resolve_interface(node, itf), cs)
+        r = _apply_vrrp(node["name"], r, cs)
         if r.get("ipv4"):
             r["ipv4_network"] = str(ipaddress.ip_interface(r["ipv4"]).network)
         if r.get("ipv6"):
@@ -760,6 +806,8 @@ def doc_context(lab_id=1, stage="m11"):
         "topology": mermaid(lab_id, stage),
         "vlans": {v["id"]: v for v in TOPO["vlans"]},
         # 실습용 보조 값 — 교재가 주소를 지어내지 않도록 여기서 계산한다
+        # 게이트웨이 이중화(M5) — 교재가 가상 IP·가상 MAC·우선순위를 지어내지 않게 한다
+        "vrrp": {k: v["vrrp"] for k, v in segs.items() if v.get("vrrp")},
         "unused_ip": {k: str(ipaddress.ip_network(v["cidr"]).network_address + 99)
                       for k, v in segs.items()},
         "bcast": {k: str(ipaddress.ip_network(v["cidr"]).broadcast_address)
