@@ -26,11 +26,16 @@
   ansible.builtin.shell: |
     set -e
     dev={{ item.vrrp.device }}
+    vip={{ item.vrrp.virtual_ip }}/{{ item.ipv4.split('/')[1] }}
     if ! ip link show "$dev" >/dev/null 2>&1; then
       ip link add "$dev" link {{ item.name }} address {{ item.vrrp.virtual_mac }} \
          type macvlan mode bridge
       echo created
     fi
+    # 가상 IP 는 **양쪽 다** 이 장치에 붙인다. vrrpd 는 주소를 옮기지 않고
+    # 이 장치를 올렸다 내렸다 한다 — BACKUP 인 쪽은 내려가 있어 주소가 겹치지
+    # 않는다. FRR 문서가 정한 방식이다.
+    ip addr replace "$vip" dev "$dev"
     ip link set "$dev" up
   register: vrrp_dev
   changed_when: "'created' in vrrp_dev.stdout"
