@@ -61,15 +61,21 @@ UP    <...,LOWER_UP,UP>     → 정상
 | 실제 경로 | `traceroute -n -w1 -q1 {{ ip.web }}` | {{ gw.vlan10 }} → {{ p2p['r1-r2'].addresses.r2 }} → {{ p2p['r2-r4'].addresses.r4 }} → {{ ip.web }} |
 | 포워딩 켜짐 | `cat /proc/sys/net/ipv4/ip_forward` | `1` (라우터) |
 
-**라우터 (FRR · vtysh)**
+**라우터 (FRR · vtysh)** — `sudo vtysh` 로 들어간 뒤 칩니다.
+
+```
+r1# show ip route                     전체
+r1# show ip route ospf                OSPF 로 배운 것만
+r1# show ip route static              정적만  <- m10 에서는 비어 있어야 정상
+r1# show ip ospf neighbor             인접 (r1·r4 는 2개가 정상)
+r1# show ip ospf interface eth2
+r1# show running-config
+```
+
+셸에서 한 줄로 끝내고 싶거나 파이프·리다이렉트가 필요하면 `-c` 를 씁니다.
 
 ```bash
-sudo vtysh -c 'show ip route'              # 전체
-sudo vtysh -c 'show ip route ospf'         # OSPF 로 배운 것만
-sudo vtysh -c 'show ip route static'       # 정적만  ← m10 에서는 비어 있어야 정상
-sudo vtysh -c 'show ip ospf neighbor'      # 인접 (r1·r4 는 2개가 정상)
-sudo vtysh -c 'show ip ospf interface eth2'
-sudo vtysh -c 'show running-config'
+sudo vtysh -c 'show ip route' | grep -c '^O'
 ```
 
 ```
@@ -93,7 +99,7 @@ O   10.10.40.0/24 ...        O=OSPF 로 배움
 | **DAD 실패 확인** | `ip -6 addr show eth1` | `dadfailed` 가 **없어야** 합니다 |
 | 기본 경로 | `ip -6 route show default` | `via {{ gw6.vlan10 }}` |
 | 이웃 (ARP 대응) | `ip -6 neigh show` | `REACHABLE` |
-| 라우터 | `sudo vtysh -c 'show ipv6 ospf6 neighbor'` | 2개 |
+| 라우터 | `sudo vtysh` 로 들어가 `show ipv6 ospf6 neighbor` | 2개 |
 
 > `-br` 를 붙이면 `dadfailed` 가 **안 보입니다.** IPv6 주소가 있는데 통신이 안 되면
 > `-br` 를 빼고 다시 봐 주세요.
