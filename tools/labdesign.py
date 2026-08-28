@@ -779,6 +779,11 @@ def doc_context(lab_id=1, stage="m11"):
 
     return {
         "lab_id": lab_id, "stage": stage,
+        # 이 모듈이 **직접 만드는 모듈**인가. [이 모듈 적용] 이 한 단계 앞의 설정을
+        # 올리는 단계들이다 (console.build_stages). 과제 끝의 "어떻게 제출하나" 가
+        # 이 값에 따라 달라진다 — 만드는 모듈에서는 [이 모듈 적용] 직후에 검사가
+        # 통과하지 않는다. 그걸 통과한다고 적어 두면 교육생이 검사를 못 믿게 된다.
+        "build": stage in set(SITE.get("console", {}).get("build_stages") or []),
         "nodes": nodes, "ifs": ifs, "port": port, "end": end, "ip_at": ip_at,
         "netmask": netmask,
         "ip": ip, "ipc": ipc, "mac": mac,
