@@ -1,0 +1,325 @@
+# M5 평가 — 퀴즈(이중화 판단) + 검사(둘이 하나로 도는가 · 뒷정리) + 서술
+quiz:
+  pass_score: 100
+  questions:
+    - id: q1
+      type: single
+      text: |
+        M4 에서 Site-A ↔ Site-B 경로를 둘로 만들었습니다. 그런데도 `r1` 을 끄면
+        `pc1` 은 한 발도 못 나갑니다. 왜인가?
+      choices:
+        - "OSPF 가 수렴하는 데 시간이 걸려 그동안만 끊기는 것입니다"
+        - "pc1 의 게이트웨이 주소가 r1 에만 있어 첫 홉이 사라집니다"
+        - "r3 의 cost 가 높아 백업 경로가 선택되지 않기 때문입니다"
+        - "pc1 이 r1 의 MAC 을 캐시에 갖고 있어 잠시 못 나가는 것입니다"
+      answer: [1]
+      explain: |
+        경로가 몇 개든 **첫 홉이 하나면 그 하나가 SPOF** 입니다.
+        `pc1` 은 자기 대역 밖으로 나갈 때 게이트웨이에게 넘기는데, 그 주소를 가진 장비가
+        `r1` 뿐입니다. r1 이 없으면 패킷은 Site-A 를 벗어나지도 못합니다.
+        OSPF 도 cost 도 그 뒤의 이야기입니다 (2.1).
+
+    - id: q2
+      type: single
+      text: |
+        VRRP 를 켜면 게이트웨이 주소에 대응하는 MAC 이 각 라우터의 진짜 MAC 이 아니라
+        `00:00:5e:00:01:xx` 라는 가상 MAC 이 됩니다. 이렇게 하는 이유로 맞는 것은?
+      choices:
+        - "라우터의 진짜 MAC 을 숨겨 보안을 높이기 위해서입니다"
+        - "두 라우터가 같은 MAC 을 써야 스위치가 부하를 나눠 주기 때문입니다"
+        - "넘어갈 때 MAC 이 함께 넘어가야 단말의 ARP 캐시가 그대로 맞기 때문입니다"
+        - "가상 IP 는 실주소가 아니라 별도의 MAC 이 없으면 통신할 수 없기 때문입니다"
+      answer: [2]
+      explain: |
+        단말은 게이트웨이의 MAC 을 캐시에 담아 두고 몇 분씩 씁니다.
+        IP 만 넘어가고 MAC 이 각자의 것이라면, 넘어간 뒤에도 단말은 **죽은 라우터의 MAC 으로**
+        계속 보냅니다. 캐시가 만료될 때까지 통신이 안 됩니다.
+        MAC 까지 넘어가면 단말은 아무것도 안 바꿔도 되고, 스위치만 포트를 다시 배우면 끝입니다 (2.3).
+
+    - id: q3
+      type: short
+      text: |
+        VRID 가 `{{ vrrp.vlan20.vrid }}` 인 VRRP 그룹의 **가상 MAC** 은? (주소만)
+      answer: ["{{ vrrp.vlan20.virtual_mac }}"]
+      explain: |
+        `00:00:5e:00:01:` 뒤에 VRID 를 16진수로 붙입니다. {{ vrrp.vlan20.vrid }} → `{{ '%02x' % vrrp.vlan20.vrid }}`.
+        지어내는 값이 아니라 규칙으로 정해지므로, **같은 L2 에서 VRID 가 겹치면 MAC 이 겹칩니다** (2.3 · 5.6).
+
+    - id: q4
+      type: single
+      text: |
+        광고 간격이 1초, `r3` 의 우선순위가 {{ vrrp.vlan10.routers.r3.priority }} 입니다.
+        `r3` 가 "MASTER 가 죽었다" 고 판단하기까지 기다리는 시간에 가장 가까운 것은?
+      choices:
+        - "1초 — 광고가 한 번만 빠져도 죽은 것으로 보고 곧바로 넘겨받습니다"
+        - "10초 — OSPF 의 Hello 와 같은 값을 그대로 가져다 씁니다"
+        - "40초 — OSPF 의 Dead 와 같은 값을 그대로 가져다 씁니다"
+        - "약 3.6초 — 광고 간격의 세 배에 우선순위로 정해지는 여유를 더합니다"
+      answer: [3]
+      explain: |
+        `Master Down Interval = 광고 간격 × 3 + Skew`, `Skew = (256 − 우선순위) / 256` 초입니다.
+        우선순위 {{ vrrp.vlan10.routers.r3.priority }} 면 Skew 는 약 0.6초, 합계는 약 3.6초입니다.
+        Skew 에 우선순위를 넣은 이유는 BACKUP 이 여럿일 때 **높은 쪽이 먼저 나서게** 하려는 것입니다 (2.5).
+
+    - id: q5
+      type: single
+      text: |
+        6.1 에서 MASTER 를 내렸을 때는 패킷을 열일곱 개 잃었는데, 되돌릴 때는 하나도 안 잃었습니다.
+        이 비대칭의 이유로 맞는 것은?
+      choices:
+        - "되돌릴 때는 preempt 가 꺼져 있어 자리가 안 바뀌기 때문입니다"
+        - "되돌릴 때는 이미 ARP 캐시가 채워져 있어 조회가 필요 없기 때문입니다"
+        - "내릴 때는 죽었는지를 기다려 판단하고, 되돌릴 때는 살아난 쪽이 먼저 말하기 때문입니다"
+        - "내릴 때는 경로를 다시 계산하지만 되돌릴 때는 계산이 필요 없기 때문입니다"
+      answer: [2]
+      explain: |
+        "죽었다" 는 **증거가 없어서** 내리는 판단이라 기다릴 수밖에 없습니다 (Master Down Interval).
+        반대로 살아난 쪽은 자기 우선순위를 실은 광고를 곧바로 보내고, 낮은 쪽은 그것을 보고 물러납니다.
+        기다릴 것이 없으니 순단도 없습니다 (2.5 · 6.1).
+
+    - id: q6
+      type: single
+      text: |
+        `pc1` 에서 `ping {{ gw.vlan10 }}` 은 되는데 `ping {{ ip.web }}` 은 안 됩니다.
+        `r1` 은 여전히 MASTER 입니다. 무엇을 의심해야 하는가?
+      choices:
+        - "VRRP 가 아직 수렴하지 않았습니다. 몇 초 더 기다리면 저절로 됩니다"
+        - "MASTER 쪽의 위쪽 경로가 죽었습니다. VRRP 는 그쪽을 보지 않습니다"
+        - "가상 MAC 이 스위치에 학습되지 않아 그 너머로 나가지 못합니다"
+        - "BACKUP 쪽이 같은 주소를 들고 있어 응답이 둘로 갈라지고 있습니다"
+      answer: [1]
+      explain: |
+        VRRP 는 **첫 홉만** 담당합니다. 사용자망 쪽 포트가 멀쩡하면 위쪽이 다 끊겨도 MASTER 를 유지합니다.
+        패킷은 MASTER 까지 잘 가고 거기서 갈 곳이 없어 버려집니다.
+        실장비는 추적(tracking)으로 위쪽이 죽을 때 우선순위를 스스로 낮춰 자리를 넘깁니다 (2.7 · 5.3).
+
+    - id: q7
+      type: single
+      text: |
+        두 라우터가 **둘 다** 자기가 MASTER 라고 합니다. 가장 먼저 볼 곳은?
+      choices:
+        - "두 라우터의 우선순위 설정. 같은 값이면 둘 다 MASTER 가 됩니다"
+        - "두 라우터 사이의 L2 경로. 서로의 광고가 안 닿고 있습니다"
+        - "가상 IP 설정. 서로 다른 주소를 적었을 것입니다"
+        - "단말의 ARP 캐시. 둘 중 하나만 학습돼 있을 것입니다"
+      answer: [1]
+      explain: |
+        광고를 못 받으면 각자 "상대가 죽었다" 고 판단합니다 — 스플릿 브레인입니다.
+        `show vrrp` 의 `Advertisements Rx` 가 0 이면 확정입니다.
+        우선순위가 같아도 둘 다 MASTER 가 되지는 않습니다 — 그때는 실주소가 큰 쪽이 이깁니다 (5.1).
+
+    - id: q8
+      type: single
+      text: |
+        `r3` 의 우선순위를 200 으로 올렸더니 곧바로 MASTER 가 됐습니다.
+        같은 일을 했는데 자리가 안 바뀌는 현장도 있습니다. 그 차이는?
+      choices:
+        - "그 현장은 VRRP 가 아니라 HSRP 를 쓰고 있습니다"
+        - "그 현장은 광고 간격이 길어 반영에 몇 분이 걸립니다"
+        - "그 현장은 preempt 가 꺼져 있습니다"
+        - "그 현장은 우선순위 255 를 쓰는 라우터가 있습니다"
+      answer: [2]
+      explain: |
+        preempt 가 꺼져 있으면 우선순위가 높아도 **현직 MASTER 가 계속 듭니다.**
+        순단을 한 번으로 줄이려고 일부러 끄는 곳이 있습니다.
+        의도한 것이면 그대로 두고 문서에 적습니다 — 모르고 있으면 "설정이 안 먹는다" 로 시간을 씁니다 (2.6 · 5.5).
+
+    - id: q9
+      type: single
+      text: |
+        VRRP 를 켜기 전에 `r1` 의 서브인터페이스에서 `{{ gw.vlan10 }}` 를 내리고
+        `{{ vrrp.vlan10.routers.r1.ipv4 }}` 로 바꿉니다. 이 단계가 필요한 이유는?
+      choices:
+        - "가상 IP 는 실주소로 가진 장비가 없어야 두 대가 나눠 들 수 있기 때문입니다"
+        - "실주소와 가상 IP 가 같으면 우선순위 계산이 어긋나기 때문입니다"
+        - "FRR 은 서브인터페이스에 주소가 둘 이상 붙는 것을 허용하지 않기 때문입니다"
+        - "가상 IP 는 대역의 마지막 주소여야 한다는 규칙이 있기 때문입니다"
+      answer: [0]
+      explain: |
+        가상 IP 는 **그때 MASTER 인 쪽**이 드는 주소입니다. 한 대가 실주소로 붙들고 있으면
+        그 대는 죽어도 주소를 놓지 않습니다 — 이중화가 성립하지 않습니다.
+        (실주소로 가진 라우터를 두는 방식도 규격에는 있습니다. 그때는 우선순위가 255 로 고정됩니다.)
+
+    - id: q10
+      type: single
+      text: |
+        "VRRP 를 켰으니 라우터 두 대가 트래픽을 나눠 지고 있다" — 이 말에 대한 판단으로 맞는 것은?
+      choices:
+        - "맞습니다. 두 대가 같은 가상 IP 를 들고 있으므로 자연히 반씩 나눠 받습니다"
+        - "맞습니다. 다만 스위치가 두 포트로 나눠 보내 주어야 비로소 성립합니다"
+        - "틀립니다. 한 대만 일합니다. 나누려면 VLAN 마다 MASTER 를 엇갈리게 둡니다"
+        - "틀립니다. VRRP 로는 부하를 나눌 수 없으므로 GLBP 로 바꾸는 수밖에 없습니다"
+      answer: [2]
+      explain: |
+        VRRP 는 **대기(active-standby)** 구성입니다. BACKUP 은 가상 IP 를 든 인터페이스를 내려 둡니다.
+        VLAN {{ vlans[10].id }} 의 MASTER 를 `r1`, VLAN {{ vlans[20].id }} 의 MASTER 를 `r3` 로 엇갈리게 두면 두 대가 다 일합니다.
+        다만 한 대가 죽으면 남은 대가 두 배를 받으므로 **용량을 그렇게 잡아 두어야** 합니다 (9).
+
+checks:
+  required: true
+  items:
+    - id: vip-not-on-parent
+      kind: config
+      title: "게이트웨이 주소가 r1 의 실주소에서 내려갔는가 ★"
+      host: r1
+      run: "ip -br addr show eth1.{{ vlans[10].id }}"
+      expect_all: ["{{ vrrp.vlan10.routers.r1.ipv4 }}/"]
+      expect_none: ["{{ vrrp.vlan10.virtual_ip }}/"]
+      hint: |
+        가상 IP 를 실주소로 붙들고 있는 라우터가 있으면 이중화가 성립하지 않습니다 (3.2).
+        서브인터페이스에는 자기 주소만 있어야 하고, 가상 IP 는 가상 MAC 인터페이스에 있어야 합니다.
+
+    - id: backup-has-address
+      kind: config
+      title: "r3 에 사용자망 서브인터페이스와 자기 주소가 있는가"
+      host: r3
+      run: "ip -br addr show"
+      expect_all:
+        - "{{ vrrp.vlan10.routers.r3.ipv4 }}/"
+        - "{{ vrrp.vlan20.routers.r3.ipv4 }}/"
+      hint: |
+        3.3 을 건너뛰었을 수 있습니다. r3 도 그 대역에서 말을 할 수 있어야 합니다.
+        sudo ip link add link {{ port.r3.sw1 }} name {{ port.r3.sw1 }}.{{ vlans[10].id }} type vlan id {{ vlans[10].id }}
+
+    - id: vmac-device
+      kind: config
+      title: "가상 MAC 인터페이스가 양쪽에 있는가 ★"
+      host: r1
+      run: "ip -d link show | grep -c macvlan"
+      expect: "2"
+      hint: |
+        VLAN 마다 하나씩, 두 개여야 합니다 (3.4).
+        FRR 은 가상 MAC 을 단 인터페이스를 보고 VRID 를 찾습니다 — 없으면 vrrpd 가 붙지 않습니다.
+
+    - id: master-r1
+      kind: state
+      title: "r1 이 두 VLAN 모두에서 MASTER 인가 ★"
+      host: r1
+      run: "vtysh -c 'show vrrp' | grep -c 'Status (v4) *Master'"
+      expect: "2"
+      hint: |
+        vtysh -c 'show vrrp' 로 상태를 봅니다.
+        6.5 에서 올린 r3 의 우선순위를 되돌리지 않았을 수 있습니다.
+        Advertisements Rx 가 0 이면 두 라우터 사이의 L2 를 먼저 보세요 (5.1).
+
+    - id: backup-r3
+      kind: state
+      title: "r3 가 두 VLAN 모두에서 BACKUP 인가"
+      host: r3
+      run: "vtysh -c 'show vrrp' | grep -c 'Status (v4) *Backup'"
+      expect: "2"
+      hint: "둘 다 MASTER 라고 하면 서로의 광고가 안 닿는 것입니다 (5.1)."
+
+    - id: vip-up-on-master
+      kind: config
+      title: "MASTER 만 가상 IP 를 켜고 있는가 ★"
+      host: r1
+      run: "ip -br addr show {{ port.r1.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}"
+      expect_all: ["UP", "{{ vrrp.vlan10.virtual_ip }}/"]
+      hint: |
+        주소는 양쪽 다 붙어 있고, **인터페이스의 up/down 을 vrrpd 가 정합니다** (3.5).
+        MASTER 인데 DOWN 이면 vrrpd 가 안 붙은 것입니다: vtysh -c 'show vrrp'
+
+    - id: trainee-sees-vmac
+      kind: state
+      title: "단말이 보는 게이트웨이 MAC 이 가상 MAC 인가 ★"
+      host: pc1
+      run: "ping -c 1 -W 2 {{ gw.vlan10 }} >/dev/null 2>&1; ip neigh show {{ gw.vlan10 }}"
+      expect_all: ["{{ vrrp.vlan10.virtual_mac }}"]
+      hint: |
+        라우터의 진짜 MAC 이 잡히면 부모 포트가 ARP 에 답하고 있는 것입니다 (5.2 · 6.3).
+        6.3 에서 되돌린 arp_ignore 를 확인해 주세요: sudo sysctl -w net.ipv4.conf.all.arp_ignore=1
+        캐시가 낡았을 수도 있습니다: sudo ip neigh flush dev eth1
+
+    - id: gw-reachable
+      kind: connectivity
+      title: "두 PC 가 게이트웨이에 닿는가"
+      host: pc2
+      run: "ping -c 2 -W 2 {{ gw.vlan20 }}"
+      expect_all: ["2 received"]
+      hint: "VLAN {{ vlans[20].id }} 쪽도 함께 만들었는지 확인해 주세요. 한쪽만 하고 끝내기 쉬운 자리입니다."
+
+    - id: end-to-end
+      kind: connectivity
+      title: "pc1 → web 통신이 되는가 ★"
+      host: pc1
+      run: "ping -c 2 -W 2 {{ ip.web }}"
+      expect_all: ["2 received"]
+      hint: |
+        게이트웨이는 되는데 여기서 막히면 MASTER 의 **위쪽** 경로를 보세요 (5.3).
+        6.4 에서 내린 r1 의 eth2 · eth3 를 되돌리지 않았을 수 있습니다.
+
+    - id: uplinks-restored
+      kind: state
+      title: "6.4 에서 내린 r1 의 위쪽 링크를 되돌렸는가"
+      host: r1
+      run: "ip -br link show eth2 eth3 | grep -c UP"
+      expect: "2"
+      hint: "sudo ip link set eth2 up · sudo ip link set eth3 up"
+
+written:
+  items:
+    - id: failover-record
+      title: "페일오버 기록 — 몇 초였고, 무엇이 안 바뀌었는가 ★"
+      kind: text
+      review: optional
+      auto_pass: true
+      min_chars: 250
+      prompt: |
+        6.1 과 6.2 를 하고 아래가 드러나게 적을 것.
+
+          1. MASTER 를 내렸을 때 **잃은 패킷 수**와 그것을 초로 환산한 값
+          2. 그 값이 2.5 의 계산(광고 간격 × 3 + Skew)과 맞는가
+          3. 되돌릴 때는 몇 개를 잃었는가. **왜 다른가**
+          4. 전환 전후로 `pc1` 의 `ip neigh` 가 어떻게 달랐는가
+          5. 캡처에서 자리가 넘어간 순간을 어느 줄로 판단했는가
+
+        > 4번이 이 과제의 핵심입니다. "안 바뀌었다" 로 끝내지 말고
+        > **왜 안 바뀌어도 되는지**를 한 문장으로 적어 주세요.
+      rubric:
+        - key: 전환시간
+          desc: "잃은 패킷 수를 초로 환산했는가"
+          any: ["초", "packet loss", "패킷", "3.4", "3.6", "잃"]
+        - key: 계산대조
+          desc: "계산값과 실측을 대조했는가"
+          any: ["Master Down", "Skew", "광고", "3 배", "세 배", "계산"]
+        - key: 비대칭
+          desc: "되돌릴 때 순단이 없는 이유를 댔는가"
+          any: ["기다", "먼저", "preempt", "곧바로", "즉시"]
+        - key: ARP
+          desc: "단말의 캐시가 그대로인 것과 그 이유를 적었는가"
+          any: ["ARP", "캐시", "가상 MAC", "00:00:5e", "lladdr"]
+        - key: 근거
+          desc: "캡처의 어느 줄로 판단했는지 밝혔는가"
+          any: ["224.0.0.18", "Advertisement", "prio", "vrid", "캡처", "tcpdump"]
+
+    - id: spof-review
+      title: "남은 단일 장애점 세기"
+      kind: text
+      review: optional
+      auto_pass: true
+      min_chars: 200
+      prompt: |
+        지금 이 랩에서 **하나 죽으면 Site-A 전체가 멈추는 자리**를 세 곳 이상 찾아
+        각각 아래를 적을 것.
+
+          · 무엇이 죽었을 때인가
+          · 그러면 무엇이 안 되는가
+          · 이중화하려면 무엇이 더 필요한가 (장비 · 설정 · 비용)
+          · 그럼에도 **안 하기로 한다면** 그 근거는
+
+        > 마지막 줄이 실무입니다. 전부 이중화하는 설계는 없습니다.
+        > 어디까지 하고 어디서 멈출지를 정하고 **그 이유를 적어 두는 것**이 설계자의 일입니다.
+      rubric:
+        - key: 자리셋
+          desc: "서로 다른 자리를 셋 이상 짚었는가"
+          any: ["스위치", "sw1", "케이블", "전원", "r4", "sw2", "링크"]
+        - key: 영향
+          desc: "죽으면 무엇이 안 되는지 적었는가"
+          any: ["안 되", "멈추", "끊", "못 "]
+        - key: 대안
+          desc: "이중화 방법을 댔는가"
+          any: ["두 대", "이중", "본딩", "LACP", "MLAG", "STP", "추가"]
+        - key: 포기근거
+          desc: "안 하기로 한 근거를 밝혔는가"
+          any: ["비용", "예산", "확률", "영향", "우선", "안 하"]

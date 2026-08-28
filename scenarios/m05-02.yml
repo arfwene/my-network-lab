@@ -1,0 +1,31 @@
+---
+# M5-02 : MASTER 는 살아 있는데 위쪽 길이 없다
+#   증상  : 게이트웨이 ping 은 되는데 그 너머가 안 된다.
+#   한줄  : 게이트웨이는 되는데 서버가 안 된다
+#   목표  : pc1 에서 web 까지 통신이 된다
+#   정답  : r1 의 위쪽 링크 둘이 내려가 있다. VRRP 는 자기 인터페이스만 보므로
+#           r1 은 계속 MASTER 다. 패킷은 r1 까지 가서 버려진다.
+#   노림수: VRRP 는 첫 홉만 담당한다. 설계대로 도는데 설계가 모자란 상황이다.
+- name: "scenario m05-02 :: MASTER 의 위쪽 경로가 죽었다"
+  hosts: r1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: 위쪽 링크 둘을 내린다
+      ansible.builtin.command: ip link set {{ item }} down
+      loop: [eth2, eth3]
+      changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    - name: 위쪽 링크 복구
+      ansible.builtin.command: ip link set {{ item }} up
+      loop: [eth2, eth3]
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
+
+    - name: 안내
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'r1 의 eth2·eth3 를 내렸다. r1 은 여전히 MASTER 다 — 게이트웨이는 되고 그 너머만 안 된다.'
+             if scenario_action | default('break') == 'break'
+             else 'r1 의 위쪽 링크 복구 완료. pc1 에서 web 까지 확인할 것.' }}
