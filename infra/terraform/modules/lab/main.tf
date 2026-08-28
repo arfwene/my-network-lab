@@ -74,9 +74,13 @@ resource "proxmox_virtual_environment_vm" "node" {
     }
   }
 
-  lifecycle {
-    ignore_changes = [network_device] # 실습 중 임시 재배선을 Terraform 이 되돌리지 않게
-  }
+  # network_device 를 ignore_changes 에 두지 않는다.
+  #   전에는 "실습 중 임시 재배선을 되돌리지 않게" 두었는데, 이 저장소에서
+  #   Proxmox 쪽 배선을 건드리는 것은 아무것도 없다 — 장애 주입도 게스트 안에서
+  #   `ip link set down` 을 할 뿐이다. 반면 이걸 두면 **설계에 포트를 더해도
+  #   이미 있는 랩에는 영영 안 붙는다.** M5 가 sw1·r3 에 트렁크를 하나씩 더
+  #   다는데, 랩을 지웠다 다시 만들지 않고는 방법이 없어진다.
+  #   설계가 진실이고, 손으로 바꾼 배선은 다음 [랩 생성] 에 원복된다.
 
   depends_on = [proxmox_virtual_environment_network_linux_bridge.link]
 }
