@@ -408,12 +408,23 @@ def _apply_stage_override(node_name, r, stage):
     return r
 
 
-def node_config(lab_id, node, stage="m10"):
-    """노드 하나의 완성된 설정 (Ansible host_vars 로 그대로 사용)."""
+def node_config(lab_id, node, stage="m10", config_stage=None):
+    """노드 하나의 완성된 설정 (Ansible host_vars 로 그대로 사용).
+
+    stage 는 **무엇이 존재하는가**(배선 · 포트), config_stage 는 **어디까지 설정돼
+    있는가**다. 둘을 가르는 자리가 여기다.
+
+      배선과 물리 포트의 주소   stage        랩이 깔아 준다
+      VLAN 서브인터페이스       config_stage 교육생이 만든다 (M2 의 router-on-a-stick)
+      단계 예외(stage_override) config_stage M1 은 VLAN 없이 한 대역, 게이트웨이 없음
+
+    M2 의 초기 구성이 M1 의 모습이어야 교육생이 "끊긴 통신"에서 시작할 수 있다.
+    """
+    cs = config_stage or stage
     ifaces = []
     for itf in node.get("interfaces", []):
         ist = itf.get("stage", node["stage"])
-        r = _apply_stage_override(node["name"], resolve_interface(node, itf), stage)
+        r = _apply_stage_override(node["name"], resolve_interface(node, itf), cs)
         if r.get("ipv4"):
             r["ipv4_network"] = str(ipaddress.ip_interface(r["ipv4"]).network)
         if r.get("ipv6"):
@@ -423,7 +434,10 @@ def node_config(lab_id, node, stage="m10"):
             "bridge": bridge_name(lab_id, itf["bridge"]) if itf.get("bridge") else None,
             "peer": itf.get("peer"), "vlan": itf.get("vlan"), "mode": itf.get("mode"),
             "native": itf.get("native"), "parent": itf.get("parent"), "type": itf.get("type"),
-            "stage": ist, "active": stage_le(ist, stage), "desc": itf.get("desc"),
+            "stage": ist,
+            #  서브인터페이스는 설정이다. 물리 포트는 배선이다.
+            "active": stage_le(ist, cs if itf.get("parent") else stage),
+            "desc": itf.get("desc"),
             **{k: v for k, v in r.items() if v is not None},
         })
 
@@ -458,7 +472,7 @@ def node_config(lab_id, node, stage="m10"):
         "lab_interfaces": ifaces,
         "loopback_ipv4": IPAM["ipv4"]["loopback"].get(node["name"]),
         "loopback_ipv6": IPAM["ipv6"]["loopback"].get(node["name"]),
-        "stage_override": IPAM.get("stage_overrides", {}).get(stage, {}),
+        "stage_override": IPAM.get("stage_overrides", {}).get(cs, {}),
     }
 
 

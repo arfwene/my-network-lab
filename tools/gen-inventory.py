@@ -91,7 +91,7 @@ def _proxy_args():
 def main(lab_id, stage, config_stage=None):
     # 노드는 전부 포함한다 — 배선은 이미 끝나 있고, 관리망 접속은 단계와 무관하게 가능해야 한다.
     # 각 노드의 node_active 가 "이 단계에서 설정을 올리는가"를 결정한다.
-    nodes = [L.node_config(lab_id, n, stage) for n in L.TOPO["nodes"]]
+    nodes = [L.node_config(lab_id, n, stage, config_stage) for n in L.TOPO["nodes"]]
     base = L.ROOT / f"infra/ansible/inventory/lab{lab_id}"
     (base / "host_vars").mkdir(parents=True, exist_ok=True)
     (base / "group_vars").mkdir(parents=True, exist_ok=True)

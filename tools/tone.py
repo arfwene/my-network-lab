@@ -15,7 +15,8 @@
   코드 블록 · 절 제목 · 지정한 시작 위치보다 앞(제목 · 도입 · 학습 목표).
   구성도(labdiagram) 안에서는 notes 줄만 바꾼다.
 
-usage:  python3 tools/tone.py <파일> '<이 문자열부터>'
+usage:  python3 tools/tone.py <파일> '<이 문자열부터>' [--report]
+        --report 는 바꾸지 않고 아직 평서형인 낱말만 세어 준다.
 """
 import re, sys
 
@@ -77,12 +78,51 @@ add(*[(a, a[:-1] + "습니다") for a in
       "바뀌었다 넘겼다 넣었다 걸었다 됐다 인식했다 같아졌다 늘었다 적었다 빠졌다 "
       "줬다 겹쳤다 않았다 만들어졌다 뿌렸다 했다 멈췄다 내려왔다 사라졌다 끝났다".split()])
 
+# M0 · M1 에서 더 나온 것들. 모듈을 바꿀 때마다 `--report` 로 남은 것을 뽑아 여기 더한다.
+add(*[(a, (a[:-2] if a.endswith("이다") else a[:-1]) + "입니다") for a in
+      "반대다 무효다 배선까지다 노드다 오류다 보루다 장애다 증거다 위해서다 "
+      "브로드캐스트다 유니캐스트다".split()])
+add(("다룬다", "다룹니다"), ("켠다", "켭니다"), ("만진다", "만집니다"), ("먹는다", "먹습니다"),
+    ("끊긴다", "끊깁니다"), ("벌어진다", "벌어집니다"), ("않다", "않습니다"),
+    ("풀린다", "풀립니다"), ("찾는다", "찾습니다"), ("붙는다", "붙습니다"),
+    ("배운다", "배웁니다"), ("열린다", "열립니다"), ("들어온다", "들어옵니다"),
+    ("모른다", "모릅니다"), ("드러낸다", "드러냅니다"), ("갈린다", "갈립니다"),
+    ("읽는다", "읽습니다"), ("잡힌다", "잡힙니다"), ("일어난다", "일어납니다"),
+    ("살린다", "살립니다"), ("아프다", "아픕니다"), ("묻는다", "묻습니다"),
+    ("잡는다", "잡습니다"), ("줄인다", "줄입니다"), ("붙인다", "붙입니다"),
+    ("난다", "납니다"), ("무너진다", "무너집니다"), ("걸러낸다", "걸러냅니다"),
+    ("갈라놓는다", "갈라놓습니다"))
+add(*[(a, a[:-1] + "습니다") for a in "붙었다 두었다 껐다".split()])
+
+
 WORD = re.compile("(" + "|".join(sorted(M, key=len, reverse=True)) + r")(?=[.\s]|$)")
 FENCE = re.compile(r"^```")
 
 
 def convert(line):
     return WORD.sub(lambda m: M[m.group(1)], line)
+
+
+PLAIN = re.compile(r"[가-힣]+(?<!니)다(?=[.\s]|$)")
+
+
+def report(path, start):
+    """아직 평서형으로 남은 낱말을 센다. 표에 없어서 안 바뀐 것들이다."""
+    import collections
+    raw = open(path, encoding="utf-8").read()
+    body = re.sub(r"```.*?```", "", raw[raw.index(start):], flags=re.S)
+    left = collections.Counter()
+    for line in body.split("\n"):
+        if line.startswith("#") or line.lstrip().startswith("- ["):
+            continue
+        for seg in re.split(r"(?<=다[.])\s+|\|", line):
+            seg = seg.strip().rstrip(".").strip()
+            m = PLAIN.search(seg)
+            if seg and m and m.end() == len(seg):
+                left[m.group(0)] += 1
+    for w, c in left.most_common():
+        print(f"{c:4} {w}")
+    print(f"     — 남은 문장 {sum(left.values())}")
 
 
 def main(path, start):
@@ -106,6 +146,9 @@ def main(path, start):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        sys.exit(__doc__.strip().splitlines()[-1])
-    main(sys.argv[1], sys.argv[2])
+    if len(sys.argv) == 4 and sys.argv[3] == "--report":
+        report(sys.argv[1], sys.argv[2])
+    elif len(sys.argv) == 3:
+        main(sys.argv[1], sys.argv[2])
+    else:
+        sys.exit("usage: python3 tools/tone.py <파일> '<이 문자열부터>' [--report]")
