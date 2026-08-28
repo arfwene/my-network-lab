@@ -4,11 +4,14 @@
 
 > **소요 시간** {{ meta.duration }} · **랩 단계** `{{ stage }}` · **역량** {{ meta.competencies | join(', ') }}
 
-M3 의 마지막 질문은 이것이었다 — "`r1 ↔ r2` 케이블을 뽑으면 어떻게 되는가?"
-답은 "아무 일도 일어나지 않는다" 였다. 경로는 그대로 남고 통신만 죽는다.
+M3 에서는 라우터에 길을 한 줄씩 손으로 적어 주었다. 그 방식의 마지막 질문이 이것이었다.
+"`r1 ↔ r2` 케이블을 뽑으면 어떻게 되는가?"
 
-이번 모듈에서 **두 번째 길**(`r3`)이 생기고, 라우터들이 스스로 그 길로 옮겨 간다.
-그리고 옮겨 가는 데 걸리는 시간을 패킷 개수로 직접 센다.
+답은 "아무 일도 일어나지 않는다" 였다. 사람이 적어 준 줄은 그대로 남아 있고, 통신만 죽는다.
+라우터는 그 줄이 이제 쓸모없다는 것을 모른다.
+
+이번 모듈에서는 **두 번째 길**(`r3`)을 놓고, 라우터들이 서로 대화해서 길을 스스로 찾게 만든다.
+그리고 첫 번째 길을 끊어, 옮겨 가는 데 걸리는 시간을 빠진 패킷 개수로 직접 센다.
 
 ## 학습 목표
 
@@ -16,26 +19,38 @@ M3 의 마지막 질문은 이것이었다 — "`r1 ↔ r2` 케이블을 뽑으�
 {{ loop.index }}. {{ o }}
 {% endfor %}
 
+이 교재를 덮을 때 아래 넷을 혼자 할 수 있으면 목표에 도달한 것이다.
+
+- 빈 라우터 넉 대에 OSPF 를 올려 서로 길을 배우게 만든다
+- `show ip ospf neighbor` 한 줄로 어디가 고장인지 좁힌다
+- 어느 길로 갈지를 cost 로 정한다
+- 링크를 끊었을 때 몇 초 만에, 어느 길로 옮겨 가는지 말한다
+
 ## 사전 지식 체크 (M3 복습)
 
-- `show ip route` 에서 `>*` 가 없는 줄은 무슨 뜻인가?
-- AD 와 메트릭의 차이는? 정적(1)과 OSPF(110)가 같은 목적지를 알려 주면 어느 쪽이 이기는가?
-- 사이트가 5곳이면 정적 경로는 몇 줄이 필요했는가? (M3 과제 3)
+아래 셋에 답할 수 없으면 M3 교재의 해당 절을 먼저 보고 오세요.
+
+- `show ip route` 에서 `>*` 가 붙은 줄과 붙지 않은 줄은 무엇이 다른가?
+- AD 와 메트릭은 무엇이 다른가?
+- 사이트가 5곳이면 정적 경로는 몇 줄이 필요했는가?
 
 ---
 
 ## 1. 이 모듈에서 만들 것
 
-**[이 모듈 적용]** 을 누르면 랩은 아래 **초기 구성**으로 맞춰진다.
-이번 모듈이 끝났을 때의 모습이 **목표 구성**이고, 그 사이를 메우는 것이 이 모듈이다.
+**[이 모듈 적용]** 을 누르면 랩이 아래 **초기 구성**으로 맞춰진다.
+이번 모듈이 끝났을 때의 모습이 **목표 구성**이고, 그 사이를 손으로 메우는 것이 3절이다.
+
+### 1.1 지금 랩에 있는 장비
 
 ```mermaid
 {{ topology }}
 ```
 
-`r3` 가 들어오면서 Site-A ↔ Site-B 사이에 **길이 두 개**가 됐다. 배선은 이미 다 돼 있다.
+M3 까지와 달라진 것은 하나다. `r3` 가 들어오면서 Site-A 와 Site-B 사이에 **길이 두 개**가 됐다.
+배선도 주소도 이미 다 돼 있다. 없는 것은 "그 길로 가라" 고 말해 주는 설정뿐이다.
 
-### 1.1 초기 구성 — 지금 랩에 올라와 있는 것
+### 1.2 초기 구성 — 지금 올라와 있는 것
 
 ```labdiagram
 kind: mini
@@ -60,19 +75,19 @@ notes:
   - r3 를 지나는 길은 아무도 모른다
 ```
 
-M3 에서 손으로 넣은 정적 경로가 그대로 있다. 라우터에 적힌 경로는 **넉 줄뿐**이다.
+라우터에 적힌 경로는 넉 줄뿐이다. M3 에서 손으로 넣은 그대로다.
 
-| 라우터 | 지금 적혀 있는 것 |
-|---|---|
-| `r1` | `ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}` |
-| `r2` | `ip route {{ zone['site-a'] }} {{ p2p['r1-r2'].addresses.r1 }}` · `ip route {{ zone['site-b'] }} {{ p2p['r2-r4'].addresses.r4 }}` |
-| `r3` | — |
-| `r4` | `ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}` |
+| 라우터 | 지금 적혀 있는 것 | 뜻 |
+|---|---|---|
+| `r1` | `ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}` | Site-B 로 가려면 r2 에게 넘겨라 |
+| `r2` | `ip route {{ zone['site-a'] }} {{ p2p['r1-r2'].addresses.r1 }}` | Site-A 로 가려면 r1 에게 넘겨라 |
+| `r2` | `ip route {{ zone['site-b'] }} {{ p2p['r2-r4'].addresses.r4 }}` | Site-B 로 가려면 r4 에게 넘겨라 |
+| `r4` | `ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}` | Site-A 로 가려면 r2 에게 넘겨라 |
 
-`r3` 는 이번에 새로 들어온 장비다. 링크도 주소도 붙어 있지만 **라우팅 설정이 하나도 없다.**
-지금 `r1 ↔ r2` 를 끊으면 통신은 그대로 죽는다 — M3 의 마지막 질문 그대로다.
+`r3` 에는 한 줄도 없다. 링크도 주소도 붙어 있지만 아무도 `r3` 에게 길을 알려 주지 않았고,
+`r3` 도 누구에게 무엇을 알려 주지 않는다. 지금 `r1 ↔ r2` 를 끊으면 통신은 그대로 죽는다.
 
-### 1.2 목표 구성 — 이 모듈이 끝나면
+### 1.3 목표 구성 — 이 모듈이 끝나면
 
 ```labdiagram
 kind: mini
@@ -98,89 +113,98 @@ notes:
   - r1↔r2 를 끊으면 스스로 r3 로 옮겨 간다
 ```
 
-| 경로 | 구간 | cost | 합계 |
+| 경로 | 구간 | cost 합계 |
+|---|---|---|
+| 주 경로 | r1 →(`{{ p2p['r1-r2'].cidr }}`)→ r2 →(`{{ p2p['r2-r4'].cidr }}`)→ r4 | {{ p2p['r1-r2'].ospf_cost }} + {{ p2p['r2-r4'].ospf_cost }} = {{ p2p['r1-r2'].ospf_cost + p2p['r2-r4'].ospf_cost }} |
+| 백업 경로 | r1 →(`{{ p2p['r1-r3'].cidr }}`)→ r3 →(`{{ p2p['r3-r4'].cidr }}`)→ r4 | {{ p2p['r1-r3'].ospf_cost }} + {{ p2p['r3-r4'].ospf_cost }} = {{ p2p['r1-r3'].ospf_cost + p2p['r3-r4'].ospf_cost }} |
+
+두 길의 물리적 성능은 이 랩에서 똑같다. `{{ p2p['r1-r3'].ospf_cost }}` 이라는 숫자에
+"이건 백업이다" 라는 **설계 의도**를 사람이 담는 것이다.
+
+### 1.4 그래서 할 일은 다섯 가지
+
+| # | 할 일 | 왜 필요한가 |
+|---|---|---|
+| ① | 라우터마다 OSPF 를 켜고 router-id 를 루프백으로 못 박는다 | 안 정하면 장비가 아무 주소나 골라 쓰고, 그 주소가 사라지면 인접이 다시 선다 |
+| ② | 네 라우터의 인터페이스를 area {{ routing.ospf.area }} 에 넣는다 | 같은 area 에 있어야 이웃을 찾고 지도를 나눈다 |
+| ③ | cost 로 주 경로와 백업을 가른다 | 두 길의 성능이 같으므로 숫자로 의도를 적는다 |
+| ④ | 사용자망 · 서버망은 passive 로 둔다 | 라우터가 없는 곳에 Hello 를 보낼 이유가 없다 |
+| ⑤ | 정적 경로를 걷어낸다 | 같은 목적지를 두 곳에서 관리하게 되고, 링크가 죽어도 남아 블랙홀이 된다 |
+
+순서는 ①②③④ 를 라우터 한 대씩 끝내고, 네 대가 다 선 뒤에 ⑤ 를 한다.
+**왜 정적을 마지막에 걷어내는지는 3.7 에 있다.** 먼저 걷어내면 만드는 내내 통신이 죽어 있다.
+
+### 1.5 만들 때 쓸 값
+
+랩 지도와 같은 값이다. 노드 안에서는 `lab-whereami` 로도 볼 수 있다.
+
+| 라우터 | router-id (루프백) | 포트와 주소 | cost |
 |---|---|---|---|
-| 주 경로 | r1 →(`{{ p2p['r1-r2'].cidr }}`)→ r2 →(`{{ p2p['r2-r4'].cidr }}`)→ r4 | {{ p2p['r1-r2'].ospf_cost }} + {{ p2p['r2-r4'].ospf_cost }} | {{ p2p['r1-r2'].ospf_cost + p2p['r2-r4'].ospf_cost }} |
-| 백업 경로 | r1 →(`{{ p2p['r1-r3'].cidr }}`)→ r3 →(`{{ p2p['r3-r4'].cidr }}`)→ r4 | {{ p2p['r1-r3'].ospf_cost }} + {{ p2p['r3-r4'].ospf_cost }} | {{ p2p['r1-r3'].ospf_cost + p2p['r3-r4'].ospf_cost }} |
+| `r1` | `{{ loopback.r1 }}` | `eth2` → r2 `{{ p2p['r1-r2'].addresses.r1 }}` · `eth3` → r3 `{{ p2p['r1-r3'].addresses.r1 }}` · `eth1.10` `{{ gw.vlan10 }}` · `eth1.20` `{{ gw.vlan20 }}` | eth2 {{ p2p['r1-r2'].ospf_cost }} · eth3 {{ p2p['r1-r3'].ospf_cost }} |
+| `r2` | `{{ loopback.r2 }}` | `eth1` → r1 `{{ p2p['r1-r2'].addresses.r2 }}` · `eth2` → r4 `{{ p2p['r2-r4'].addresses.r2 }}` | 둘 다 {{ p2p['r1-r2'].ospf_cost }} |
+| `r3` | `{{ loopback.r3 }}` | `eth1` → r1 `{{ p2p['r1-r3'].addresses.r3 }}` · `eth2` → r4 `{{ p2p['r3-r4'].addresses.r3 }}` | 둘 다 {{ p2p['r1-r3'].ospf_cost }} |
+| `r4` | `{{ loopback.r4 }}` | `eth1` → r2 `{{ p2p['r2-r4'].addresses.r4 }}` · `eth2` → r3 `{{ p2p['r3-r4'].addresses.r4 }}` · `eth3` → 서버망 `{{ gw.vlan40 }}` | eth1 {{ p2p['r2-r4'].ospf_cost }} · eth2 {{ p2p['r3-r4'].ospf_cost }} |
 
-cost 는 사람이 정한 값이다. 두 경로의 물리적 성능은 이 랩에서 똑같다.
-`{{ p2p['r1-r3'].ospf_cost }}` 이라는 숫자에 **"이건 백업이다"** 라는 설계 의도를 담는 것이다.
-
-### 1.3 그래서 할 일은 다섯 가지
-
-| # | 할 일 | 왜 |
-|---|---|---|
-| ① | 정적 경로를 걷어낸다 | AD 1 이라 그대로 두면 OSPF(110)를 이겨 버린다 |
-| ② | 라우터마다 router-id 를 루프백으로 못 박는다 | 안 정하면 장비가 아무 주소나 골라 쓴다 |
-| ③ | 네 라우터의 인터페이스를 area 0 에 넣는다 | 이웃을 찾고 지도를 나눈다 |
-| ④ | cost 로 주 경로와 백업을 가른다 | 두 길의 성능이 같으므로 숫자로 의도를 적는다 |
-| ⑤ | 사용자망·서버망은 passive 로 둔다 | 이웃이 없는 곳에 Hello 를 보낼 이유가 없다 |
-
-**만드는 순서는 3절에 있다.** 먼저 2절에서 무엇을 만드는지 알고 가세요.
-
-### 1.4 주소 참조
-
-만들 때 쓸 값이다. 랩 지도와 같은 값이고, 노드에서는 `lab-whereami` 로도 볼 수 있다.
-
-| 라우터 | 루프백 (router-id) | 인터페이스 |
-|---|---|---|
-| `r1` | `{{ loopback.r1 }}` | `eth2` → r2 `{{ p2p['r1-r2'].addresses.r1 }}` · `eth3` → r3 `{{ p2p['r1-r3'].addresses.r1 }}` |
-| `r2` | `{{ loopback.r2 }}` | `eth1` → r1 `{{ p2p['r1-r2'].addresses.r2 }}` · `eth2` → r4 `{{ p2p['r2-r4'].addresses.r2 }}` |
-| `r3` | `{{ loopback.r3 }}` | `eth1` → r1 `{{ p2p['r1-r3'].addresses.r3 }}` · `eth2` → r4 `{{ p2p['r3-r4'].addresses.r3 }}` |
-| `r4` | `{{ loopback.r4 }}` | `eth1` → r2 `{{ p2p['r2-r4'].addresses.r4 }}` · `eth2` → r3 `{{ p2p['r3-r4'].addresses.r4 }}` · `eth3` → 서버망 `{{ gw.vlan40 }}` |
+루프백(`lo0`)은 네 대 모두 `/32` 한 개다. 물리 포트가 아니라 장비 안에만 있는 가상 인터페이스라,
+어느 케이블을 뽑아도 사라지지 않는다. 그래서 장비의 이름표로 쓰기에 알맞다.
 
 ---
 
-## 2. 개념
+## 2. 개념 — 만들기 전에 알아야 할 것
 
-### 2.1 왜 동적 라우팅인가
+### 2.1 라우터는 원래 자기 옆만 안다
 
-M3 에서 두 가지 한계를 숫자로 봤다.
+전원을 넣은 라우터가 아는 대역은 **자기 포트에 꽂혀 있는 대역뿐**이다.
+`r1` 은 `{{ cidr.vlan10 }}` 과 `{{ p2p['r1-r2'].cidr }}` 은 알지만,
+Site-B 의 `{{ cidr.vlan40 }}` 은 들어 본 적도 없다.
+모르는 목적지로 온 패킷은 버린다. 라우터의 기본 동작은 "모르면 버린다" 이다.
 
-한계는 둘이다. 사이트가 N 곳이면 정적 경로가 N² 줄 필요하다 — 5곳이면 25줄이다.
-그리고 링크가 죽어도 경로는 그대로라, 대체 경로가 있어도 못 쓴다.
+그래서 길을 알려 주는 방법이 필요하고, 방법은 둘뿐이다.
 
-동적 라우팅은 이 둘을 해결한다. 대신 새로운 비용이 생긴다 — 라우터들이 서로 대화해야 하고,
-그 대화가 어긋나면(Area·MTU·인증…) 아무 경로도 생기지 않는다. M4 의 절반은 그 대화를 점검하는 법이다.
-
-"이중화가 있으면 규모와 무관하게 동적이 맞다."
-경로가 두 개 있는데 옮겨 갈 수 없다면 그 두 번째 경로는 존재하지 않는 것과 같다.
-
-### 2.2 IGP 와 EGP
-| | IGP (OSPF · IS-IS · EIGRP) | EGP (BGP) |
+| | 정적 라우팅 (M3) | 동적 라우팅 (M4) |
 |---|---|---|
-| 범위 | 하나의 조직(AS) 안 | AS 와 AS 사이 |
-| 기준 | 가장 빠른 길 (cost) | 정책 (계약 · 비용 · 경유 거부) |
-| 규모 | 수백~수천 경로 | 전 세계 90만+ 경로 |
-| 수렴 | 초 단위 | 분 단위 |
+| 누가 적는가 | 사람이 한 줄씩 | 라우터끼리 대화해서 |
+| 링크가 죽으면 | 그대로 남는다 | 몇 초 안에 다른 길로 바꾼다 |
+| 사이트 N 곳 | N² 줄에 가까워진다 | 대역이 늘어도 설정은 그대로 |
+| 틀렸을 때 | 적은 사람만 안다 | 대화가 어긋나면 아무 경로도 안 생긴다 |
 
-AS(Autonomous System) = 하나의 정책으로 운영되는 네트워크 덩어리. ISP 하나, 대기업 하나가 각각 AS 이다.
+동적 라우팅은 공짜가 아니다. 라우터들이 서로 대화해야 하고, 그 대화가 어긋나면
+(area · 서브넷 · MTU · 인증) 경로가 하나도 안 생긴다.
+M4 의 절반은 그 대화를 점검하는 법이다.
 
-사내망에 BGP 를 쓰는 일은 드문다. 사내에는 "정책"이 없기 때문이다 — 그냥 빠른 길로 가면 된다.
-반대로 인터넷에는 "이 회선은 비싸니 웬만하면 쓰지 마라" 같은 정책이 있고, 그것을 표현하는 것이 BGP 다.
-이 랩에서는 M9 에서 경계를 다룰 때 **정적 default** 로 처리한다 — 실무에서도 소규모는 그렇게 한다.
+이중화가 있으면 규모와 무관하게 동적이 맞다.
+길이 두 개 있는데 옮겨 갈 수 없다면 두 번째 길은 없는 것과 같다.
 
-### 2.3 OSPF 는 세 단계로 동작한다
+### 2.2 OSPF 는 경로가 아니라 지도를 나눈다
 
-```
-① Neighbor  이웃을 찾아 인접을 맺는다        ← 여기서 대부분 막힌다
-② LSDB      각자 아는 것(LSA)을 교환해 같은 지도를 만든다
-③ SPF       그 지도로 각자 최단 경로를 계산한다 (Dijkstra)
-```
-
-핵심은 ②다. OSPF 는 "경로"를 주고받지 않는다. "지도" 를 주고받는다.
-그래서 모든 라우터가 같은 LSDB(지도) 를 갖고, 각자 자기 위치에서 최단 경로를 계산한다.
+여기가 OSPF 를 이해하는 핵심이다.
 
 | | 거리 벡터 (RIP) | 링크 상태 (OSPF) |
 |---|---|---|
-| 주고받는 것 | "나는 A 까지 3홉" (결론) | "나는 B 와 연결돼 있고 cost 10" (사실) |
+| 이웃에게 주는 것 | "나는 A 까지 3홉" (결론) | "나는 B 와 붙어 있고 cost 10" (사실) |
 | 아는 범위 | 이웃이 말해 준 것만 | 전체 지도 |
+| 계산하는 사람 | 이웃을 믿는다 | 자기가 직접 계산한다 |
 | 루프 | 생기기 쉽다 | 구조적으로 잘 안 생긴다 |
 
-그래서 OSPF 에서 "경로가 이상하다" 는 대개 **지도가 다르다**는 뜻이다.
-`show ip ospf database` 를 양쪽에서 떠서 비교하는 것이 그래서 유효한 진단이 된다.
+OSPF 라우터는 각자 "나는 누구와 어떤 cost 로 붙어 있다" 는 사실 조각(LSA)을 뿌린다.
+같은 area 안의 모든 라우터가 그 조각을 다 모으면 **똑같은 지도(LSDB)** 가 된다.
+그다음 각자 자기 위치에서 최단 경로를 계산한다.
 
-### 2.4 Neighbor 상태 머신
+그래서 OSPF 에서 "경로가 이상하다" 는 대개 **지도가 다르다** 는 뜻이다.
+양쪽에서 `show ip ospf database` 를 떠서 비교하는 것이 그래서 유효한 진단이 된다.
+
+동작은 세 단계로 나뉜다.
+
+```
+① Neighbor  이웃을 찾아 인접을 맺는다        <- 현장 장애의 대부분이 여기서 멈춘다
+② LSDB      사실 조각을 교환해 같은 지도를 만든다
+③ SPF       그 지도로 각자 최단 경로를 계산한다
+```
+
+### 2.3 인접(Neighbor)이 서는 과정
+
+라우터는 OSPF 를 켠 인터페이스로 {{ routing.ospf.timers.hello }}초마다 Hello 를 보낸다.
+상대가 조건에 맞으면 아래 순서를 밟아 `Full` 까지 간다.
 
 ```labdiagram
 kind: steps
@@ -190,60 +214,104 @@ under: { at: 4, text: DBD 교환 (여기서 MTU 를 확인한다) }
 
 | 상태 | 무슨 일이 일어나는 중인가 | 여기서 멈추면 |
 |---|---|---|
-| `Down` / `Init` | Hello 를 보냈는데 상대가 나를 인식 못 함 | Area · 인증 · 타이머 · 서브넷 불일치 |
-| `2-Way` | 서로 인식함 (브로드캐스트망에서는 정상일 수 있다) | P2P 링크에서 여기 머물면 이상 |
-| `ExStart` / `Exchange` | 데이터베이스 요약(DBD) 교환 중 | MTU 불일치 ★ |
-| `Loading` | 부족한 LSA 를 요청해 받는 중 | 드묾 |
+| `Down` / `Init` | Hello 를 보냈는데 상대가 나를 인식하지 못한다 | area · 인증 · 타이머 · 서브넷 불일치 |
+| `2-Way` | 서로 인식했다 | P2P 링크에서 여기 머물면 이상 |
+| `ExStart` / `Exchange` | 지도 요약(DBD)을 주고받는 중 | MTU 불일치 |
+| `Loading` | 부족한 조각을 요청해 받는 중 | 드물다 |
 | `Full` | 지도가 같아졌다. 정상 | — |
 
-멈춘 위치가 원인을 말해 준다. 이것이 OSPF 진단의 가장 강력한 단서다.
-> 주의 — `ExStart` 에서 멈춰 있으면 케이블이나 Area 를 볼 것이 아니라 곧장
-> **MTU** 를 본다.
+**멈춘 위치가 원인을 말해 준다.** 이것이 OSPF 진단의 가장 강력한 단서다.
+`ExStart` 에서 멈춰 있으면 케이블이나 area 를 볼 것이 아니라 곧장 MTU 를 본다.
 
-### 2.5 ★ 인접이 안 맺힐 때 — 점검 순서 4가지
-**이 순서를 외운다. 현장에서 "OSPF 가 안 붙어요" 의 90% 가 여기서 끝난다.**
+인접이 서려면 아래 넷이 양쪽에서 같아야 한다. 하나라도 다르면 서지 않는다.
 
-| 순서 | 확인 | 명령 | 어긋나면 |
+| 순서 | 같아야 하는 것 | 확인 명령 | 어긋나면 |
 |---|---|---|---|
-| ① | Area ID 가 같은가 | `show ip ospf interface <if>` | 인접이 아예 안 보인다 |
-| ② | 같은 서브넷 · 같은 마스크인가 | `ip -br addr show <if>` | Hello 가 버려진다 |
-| ③ | MTU 가 같은가 | `ip link show <if>` | `ExStart`/`Exchange` 에서 멈춘다 |
-| ④ | 인증 · Hello/Dead 타이머가 같은가 | `show ip ospf interface <if>` | 인접이 안 보이거나 뜨락말락 한다 |
+| ① | area ID | `show ip ospf interface <포트>` | 인접이 아예 안 보인다 |
+| ② | 서브넷과 마스크 | `ip -br addr show <포트>` | Hello 가 버려진다 |
+| ③ | MTU | `ip link show <포트>` | `ExStart` / `Exchange` 에서 멈춘다 |
+| ④ | 인증 · Hello/Dead 타이머 | `show ip ospf interface <포트>` | 안 보이거나 붙었다 끊겼다 한다 |
 
-왜 이 순서인가: 위쪽일수록 흔하고, 위쪽일수록 확인이 싸다.
-③ 은 특히 놓치기 쉽다 — 양쪽 인터페이스 설정을 나란히 놓고 봐야 보인다.
+이 순서로 보는 이유는 둘이다. 위쪽일수록 흔하고, 위쪽일수록 확인이 싸다.
+`show ip ospf interface eth2` 한 번이면 ① 과 ④ 를 같은 화면에서 볼 수 있다.
 
-`show ip ospf interface eth2` 한 번이면 ①·④ 를 동시에 볼 수 있다. 그것부터 치는 습관을 들이세요.
+### 2.4 area 와 router-id
 
-#### 같이 알아 둘 것
+**area** 는 지도를 나눠 갖는 단위다. 같은 area 의 라우터는 같은 지도를 갖는다.
+규모가 커지면 area 를 쪼개 지도를 작게 유지하는데, 이 랩은 라우터가 넉 대뿐이라
+전부 `area {{ routing.ospf.area }}`(백본) 하나에 넣는다.
 
-- router-id 는 달라야 한다. 같으면 인접이 붙었다 끊겼다 한다. 이 랩은 루프백 주소를 쓴다.
-- 네트워크 타입(P2P / Broadcast)이 다르면 안 붙는다. 이 랩은 전부 P2P 다.
-- `passive-interface` 로 지정된 인터페이스는 Hello 를 보내지 않는다. 실수로 지정해 놓고
-  "왜 안 붙지" 하는 일이 잦는다 (장애 주입에도 나온다).
+**router-id** 는 지도 위에서 이 라우터를 가리키는 이름표다. IPv4 주소 모양이지만
+통신에 쓰이는 주소가 아니라 **이름**이다. 정해 주지 않으면 장비가 자기 주소 중
+하나를 골라 쓰는데, 그 주소가 붙은 포트가 내려가면 이름이 바뀐다.
+이름이 바뀌면 지도가 통째로 다시 그려지고 인접이 전부 다시 선다.
 
-### 2.6 cost 와 경로 선택
+루프백은 물리 포트가 아니라 내려갈 일이 없으므로 이름표로 알맞다. 이 랩은
+`{{ loopback.r1 }}` `{{ loopback.r2 }}` `{{ loopback.r3 }}` `{{ loopback.r4 }}` 를 쓴다.
+
+> 주의 — router-id 는 라우터마다 **달라야** 한다. 겹치면 인접이 붙었다 끊겼다를 반복한다.
+
+### 2.5 cost — 어느 길로 갈지 사람이 정한다
+
 OSPF 는 경로상의 cost 를 더해 가장 작은 것을 고른다.
 
 ```
-r1 → Site-B
-   주 경로 : {{ p2p['r1-r2'].ospf_cost }}(r1→r2) + {{ p2p['r2-r4'].ospf_cost }}(r2→r4) + (r4 의 서버망) = 가장 작다  ✔
-   백업    : {{ p2p['r1-r3'].ospf_cost }}(r1→r3) + {{ p2p['r3-r4'].ospf_cost }}(r3→r4) + (r4 의 서버망)
+r1 에서 Site-B 로 가는 두 길
+  주 경로 : {{ p2p['r1-r2'].ospf_cost }}(r1->r2) + {{ p2p['r2-r4'].ospf_cost }}(r2->r4) = {{ p2p['r1-r2'].ospf_cost + p2p['r2-r4'].ospf_cost }}   <- 작다. 이쪽으로 간다
+  백업    : {{ p2p['r1-r3'].ospf_cost }}(r1->r3) + {{ p2p['r3-r4'].ospf_cost }}(r3->r4) = {{ p2p['r1-r3'].ospf_cost + p2p['r3-r4'].ospf_cost }}
 ```
 
 | 알아 둘 것 | 설명 |
 |---|---|
-| cost 는 나가는 방향에만 적용 | 한쪽만 바꾸면 비대칭 경로가 된다 |
-| 기본값은 대역폭에서 계산 | 가상 환경에서는 값이 들쭉날쭉한다 → 이 랩은 명시적으로 지정했다 |
-| 같은 cost 면 | 부하 분산(ECMP)된다 |
+| cost 는 **나가는 방향**에만 적용된다 | 한쪽만 바꾸면 가는 길과 오는 길이 달라진다 |
+| 기본값은 대역폭에서 계산된다 | 가상 환경에서는 값이 들쭉날쭉해서 이 랩은 명시적으로 지정한다 |
+| cost 가 같으면 | 두 길로 나눠 보낸다 (ECMP) |
 
-비대칭 경로 자체는 장애가 아니다. 다만 경로에 **상태를 기억하는 장비**(방화벽 · NAT · 로드밸런서)가
-있으면 한쪽 방향만 지나가 세션이 깨진다. 그래서 실무에서는 양쪽 cost 를 함께 조정한다.
-이 랩에서는 실습 4 에서 일부러 한쪽만 바꿔 비대칭을 만들어 본다.
+가는 길과 오는 길이 다른 것 자체는 장애가 아니다. 다만 경로에 상태를 기억하는 장비
+(방화벽 · NAT · 로드밸런서)가 있으면 한쪽 방향만 지나가 세션이 깨진다.
+그래서 실무에서는 양쪽 cost 를 함께 조정한다. 6.2 에서 일부러 한쪽만 바꿔 본다.
 
-### 2.7 수렴(convergence)과 — 제어 평면 / 데이터 평면
+### 2.6 passive-interface
 
-**수렴** = 토폴로지가 변한 뒤, 모든 라우터가 같은 지도를 갖고 각자 계산을 마친 상태.
+Hello 는 이웃을 찾기 위한 것이다. 라우터가 없는 곳으로 보내면 아무도 답하지 않는다.
+사용자망과 서버망이 그런 곳이다.
+
+| | 그 대역이 광고되는가 | Hello 를 보내는가 |
+|---|---|---|
+| 보통 인터페이스 | ○ | ○ |
+| `passive-interface` | ○ | ✗ |
+| OSPF 에 안 넣음 | ✗ | ✗ |
+
+가운데 줄이 우리가 원하는 것이다. 사용자망 대역은 다른 라우터가 알아야 하므로 광고는 하되,
+Hello 는 보내지 않는다. 이유는 둘이다. 낭비이고, 누군가 사용자망에 라우터를 꽂아
+인접을 맺는 것을 막는다.
+
+**passive 로 둘 곳은 셋이다** — `r1` 의 `eth1.10` `eth1.20`, `r4` 의 `eth3`, 그리고 네 대의 `lo0`.
+
+### 2.7 경로가 여럿일 때 무엇이 이기는가
+
+라우터가 같은 목적지에 대해 여러 정보를 갖고 있으면 아래 순서로 하나를 고른다.
+**순서를 헷갈리면 3.7 을 이해할 수 없다.**
+
+```
+① 가장 긴 프리픽스가 이긴다      /24 는 /19 를 이긴다. AD 는 보지도 않는다
+② 프리픽스가 같으면 AD 가 작은 쪽  정적 1 < OSPF 110
+③ AD 도 같으면 메트릭이 작은 쪽    OSPF 는 cost 합
+```
+
+이 랩에서 실제로 일어나는 일이 ① 이다. `r1` 의 정적 경로는 `{{ zone['site-b'] }}` 이고
+OSPF 가 배우는 서버망은 `{{ cidr.vlan40 }}` 이다. 목적지가 `{{ ip.web }}` 이면
+더 긴 `{{ cidr.vlan40 }}` 이 이기므로, **정적이 남아 있어도 OSPF 경로로 나간다.**
+
+그러면 정적을 왜 걷어내는가. `{{ zone['site-b'] }}` 안에서 OSPF 가 광고하지 않는 주소는
+여전히 정적 경로를 타기 때문이다. 그 경로는 링크 상태와 무관하게 살아 있어서,
+상대 라우터만 죽는 장애(6.3)에서는 죽은 길로 계속 내보내는 블랙홀이 된다.
+
+> 실무 — 정적을 동적으로 바꾸는 작업에서는 "OSPF 를 켜는 것"과 "정적을 걷어내는 것"이 한 작업 단위다. 반만 하고 끝내면 몇 달 뒤 원인 모를 블랙홀이 된다.
+
+### 2.8 수렴 — 제어 평면과 데이터 평면
+
+**수렴**은 토폴로지가 변한 뒤 모든 라우터가 같은 지도를 갖고 계산을 마친 상태다.
 
 ```labdiagram
 kind: steps
@@ -251,75 +319,58 @@ items: [변화 발생, 감지, LSA 생성·전파, 각 라우터 SPF 계산, 테
 span: { from: 0, to: 4, text: 이 구간이 수렴 시간 = 통신이 끊기는 시간 }
 ```
 
-**감지 방법이 두 가지**라는 것이 중요하다.
+감지 방법이 두 가지라는 것이 중요하다.
 
 | 감지 | 걸리는 시간 | 언제 |
 |---|---|---|
 | 링크 다운 (carrier 상실) | 즉시 | 내 쪽 포트가 죽었을 때 |
-| Dead timer 만료 | 기본 {{ routing.ospf.timers.dead }}초 | 링크는 UP 인데 상대가 조용할 때 |
+| Dead timer 만료 | {{ routing.ospf.timers.dead }}초 | 링크는 UP 인데 상대가 조용할 때 |
 
-실무에서 무서운 것은 두 번째다. 중간에 L2 스위치나 미디어 컨버터가 있으면
-상대 장비가 죽어도 내 포트는 UP 으로 남는다. 그동안 트래픽은 블랙홀로 들어간다.
+실무에서 무서운 것은 두 번째다. 중간에 L2 스위치나 미디어 컨버터가 있으면 상대 장비가
+죽어도 내 포트는 UP 으로 남는다. 그동안 트래픽은 블랙홀로 들어간다.
 이것을 밀리초 단위로 줄이려고 쓰는 것이 BFD 다.
 
-#### 제어 평면과 데이터 평면은 다르다.
+그리고 **인접과 경로는 다른 것**이다.
 
 | | 제어 평면 | 데이터 평면 |
 |---|---|---|
-| 하는 일 | 이웃과 대화하고 경로를 계산 | 실제로 패킷을 전달 |
-| 보는 명령 | `show ip ospf neighbor`, `show ip ospf database` | `show ip route`, 실제 ping |
+| 하는 일 | 이웃과 대화하고 경로를 계산한다 | 실제로 패킷을 전달한다 |
+| 보는 명령 | `show ip ospf neighbor` · `show ip ospf database` | `show ip route` · 실제 ping |
 
 인접이 `Full` 이어도 그 경로로 안 보낼 수 있고, 인접이 끊어지는 중에도 통신은 될 수 있다.
-**둘을 같은 것으로 여기면 실습 5 의 관찰을 이해할 수 없다.**
+둘을 같은 것으로 여기면 6.3 의 관찰을 이해할 수 없다.
 
-### 2.8 passive-interface 와 default-information originate
+### 2.9 사내망(IGP)과 인터넷(EGP)
 
-```
-router ospf
- passive-interface eth1.10      ← 사용자망: 광고는 하되 Hello 는 안 보낸다
-```
+OSPF 는 하나의 조직 안에서 쓰는 프로토콜이다. 조직과 조직 사이는 다른 것을 쓴다.
 
-| | 광고되는가 | Hello 를 보내는가 |
+| | IGP (OSPF · IS-IS · EIGRP) | EGP (BGP) |
 |---|---|---|
-| 일반 인터페이스 | ○ | ○ |
-| passive | ○ | ✗ |
-| OSPF 에 넣지 않음 | ✗ | ✗ |
+| 범위 | 하나의 조직(AS) 안 | AS 와 AS 사이 |
+| 고르는 기준 | 가장 빠른 길 (cost) | 정책 (계약 · 비용 · 경유 거부) |
+| 규모 | 수백~수천 경로 | 전 세계 90만 이상 |
+| 수렴 | 초 단위 | 분 단위 |
 
-이유는 둘이다. ① 사용자망에는 라우터가 없으니 Hello 는 낭비다
-② 누군가 사용자망에 라우터를 꽂아 인접을 맺는 것을 막는다 (보안).
-
-`default-information originate` 는 "나에게 기본 경로가 있으니 내게 보내라" 를 OSPF 로 알리는 것이다.
-이 랩에서는 M9 에서 `r4` 가 인터넷 경계를 갖게 될 때 쓴다.
-
-### 2.9 정적과 OSPF 가 함께 있으면 (M3 회수)
-
-```
-정적 AD 1  vs  OSPF AD 110   →  정적이 이긴다
-```
-
-M3 에서 넣은 정적 경로를 걷어내지 않고 OSPF 를 켜면 OSPF 는 잘 학습하는데 쓰이지 않는다.
-그리고 링크가 끊겨도 정적 경로는 그대로이므로 우회도 안 된다.
-
-가장 찾기 어려운 부류의 장애다. 원인이 OSPF 설정 안에 없기 때문이다.
-`show ip route` 에 `S>*` 가 보이면 그 순간 알아채야 한다.
-전환 작업에서는 "정적을 걷어내는 것"과 "OSPF 를 켜는 것"이 한 작업 단위다.
+AS(Autonomous System)는 하나의 정책으로 운영되는 네트워크 덩어리다. ISP 하나, 대기업 하나가 각각 AS 이다.
+사내망에 BGP 를 쓰는 일은 드물다. 사내에는 정책이랄 것이 없고 그냥 빠른 길로 가면 되기 때문이다.
+이 랩에서는 M9 에서 인터넷 경계를 정적 default 로 처리한다. 실무에서도 소규모는 그렇게 한다.
 
 ---
 
-## 3. 직접 만든다
+## 3. 직접 만든다 — 한 대씩, 그때마다 그림이 바뀐다
 
-여기서부터 **손으로 만든다.** 터미널 넷을 연다 — `r1`, `r2`, `r3`, `r4`.
-(`pc1` 하나를 더 열어 두면 4절에서 바로 확인할 수 있다.)
+여기서부터 손으로 만든다. 라우터 한 대를 끝낼 때마다 **무엇이 달라졌는지 그림과 명령으로 확인**하고 다음 대로 넘어간다.
 
-엉키면 **[이 모듈 적용]** 을 다시 누르면 된다. 초기 구성으로 되돌아온다.
+### 3.0 준비
 
-### 3.1 라우터 안으로 들어간다
+터미널을 다섯 개 연다 — `r1` `r2` `r3` `r4` `pc1`.
+`pc1` 은 4절에서 통신을 확인할 때 쓴다.
 
-이 랩의 라우터는 **FRRouting** 을 쓴다. `vtysh` 가 그 장비의 CLI 이고,
-**실장비 콘솔에 붙은 것과 같다** — Cisco IOS 명령이 거의 그대로 통한다.
+이 랩의 라우터는 **FRRouting** 을 쓴다. `vtysh` 가 그 장비의 CLI 이고, 실장비 콘솔에 붙은 것과 같다.
+Cisco IOS 명령이 거의 그대로 통한다.
 
 ```bash
-# r1 에서
+# r1 의 셸에서
 sudo vtysh
 ```
 
@@ -330,19 +381,20 @@ Copyright 1996-2005 Kunihiro Ishiguro, et al.
 r1#
 ```
 
-프롬프트가 `r1#` 으로 바뀌었다. **여기서부터는 리눅스 셸이 아니라 라우터 안이다.**
+프롬프트가 `r1#` 으로 바뀌었다. 여기서부터는 리눅스 셸이 아니라 **라우터 안**이다.
 
-| 하려는 것 | 명령 | 프롬프트 |
+| 하려는 것 | 명령 | 프롬프트가 이렇게 된다 |
 |---|---|---|
 | 상태 보기 | `show ip route` | `r1#` |
-| 설정 모드로 | `configure terminal` (줄여서 `conf t`) | `r1(config)#` |
+| 설정 모드로 들어가기 | `configure terminal` (줄여서 `conf t`) | `r1(config)#` |
 | 인터페이스 설정 | `interface eth2` | `r1(config-if)#` |
-| 한 칸 나가기 | `exit` | |
+| OSPF 프로세스 설정 | `router ospf` | `r1(config-router)#` |
+| 한 칸 나가기 | `exit` | 한 단계 위로 |
 | 맨 위로 한 번에 | `end` | `r1#` |
 | 설정 파일에 저장 | `write memory` (줄여서 `wr`) | `r1#` |
-| 셸로 나가기 | `exit` 또는 `Ctrl-D` | |
+| 셸로 나가기 | `exit` 또는 `Ctrl-D` | 셸 |
 
-**뒤에 무엇을 쓸 수 있는지 모를 때는 `?` 를 친다.** Tab 으로 완성도 된다.
+뒤에 무엇을 쓸 수 있는지 모를 때는 `?` 를 쳐 보세요. Tab 으로 완성도 된다.
 
 ```
 r1(config-if)# ip ospf ?
@@ -351,73 +403,60 @@ r1(config-if)# ip ospf ?
   cost           Interface cost
   dead-interval  Interval after which a neighbor is declared dead
   hello-interval Time between HELLO packets
-  ...
 ```
 
-> 실무 — 셸에서 `sudo vtysh -c 'show ip route'` 처럼 `-c` 를 붙이면 **한 줄로** 같은 일을
-> 한다. 스크립트나 빠른 확인에는 그쪽이 편하다. 이 교재는 실장비와 같은 감각을 위해
-> 3절부터 대화형을 쓴다. 둘이 같은 것이라는 점만 알고 있으면 된다.
+> 실무 — 셸에서 `sudo vtysh -c 'show ip route'` 처럼 `-c` 를 붙이면 한 줄로 같은 일을 한다. 스크립트나 빠른 확인에는 그쪽이 편하다. 이 교재는 실장비와 같은 감각을 위해 대화형을 쓴다.
 
-**설정은 친 즉시 반영되고, 저장은 따로다.** `write memory` 를 하지 않으면
-`sudo systemctl restart frr` 로 설정 파일 기준으로 되돌아간다 — 실습 중에는 그게 안전하다.
+**설정은 친 즉시 반영되고 저장은 따로다.** `write memory` 를 하지 않으면
+`sudo systemctl restart frr` 로 파일 기준으로 되돌아간다. 실습 중에는 그게 안전하므로
 **이 모듈에서는 `write memory` 를 하지 마세요.**
 
-### 3.2 정적 경로를 걷어낸다 (할 일 ①)
+엉키면 되돌리는 방법이 둘 있다. `sudo systemctl restart frr` 은 그 라우터 하나를
+마지막으로 저장된 설정 파일(= 초기 구성)로 되돌린다. 웹 콘솔의 **[이 모듈 적용]** 은
+랩 전체를 초기 구성으로 되돌리고, 주입해 둔 장애까지 함께 푼다.
 
-정적 경로는 AD 1, OSPF 는 AD 110 이다. 남겨 두면 OSPF 가 아무리 잘 배워도 쓰이지 않는다.
-**r1 · r2 · r4** 세 대에 있다 (`r3` 에는 없다).
+### 3.1 시작 상태를 눈으로 확인한다
 
-**할 일** — 세 라우터의 정적 경로를 지운다.
-**확인** — `show ip route static` 이 비어야 한다.
-
-<details>
-<summary>명령이 기억나지 않으면</summary>
-
-지우는 명령은 넣을 때 쓴 줄 앞에 `no` 를 붙이는 것이다.
+만들기 전에 지금 무엇이 있는지 본다. 나중에 "무엇이 달라졌나" 를 말하려면 시작점을 봐야 한다.
 
 ```
-r1# configure terminal
-r1(config)# no ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}
-r1(config)# end
-r1# show ip route static
+r1# show ip route
 ```
 
 ```
-r2# configure terminal
-r2(config)# no ip route {{ zone['site-a'] }} {{ p2p['r1-r2'].addresses.r1 }}
-r2(config)# no ip route {{ zone['site-b'] }} {{ p2p['r2-r4'].addresses.r4 }}
-r2(config)# end
+C>* {{ cidr.vlan10 }} is directly connected, eth1.10
+C>* {{ cidr.vlan20 }} is directly connected, eth1.20
+C>* {{ p2p['r1-r2'].cidr }} is directly connected, eth2
+C>* {{ p2p['r1-r3'].cidr }} is directly connected, eth3
+S>* {{ zone['site-b'] }} [1/0] via {{ p2p['r1-r2'].addresses.r2 }}, eth2
 ```
 
+| 글자 | 뜻 |
+|---|---|
+| `C` | 직접 연결된 대역. 포트에 주소를 붙이면 저절로 생긴다 |
+| `S` | 사람이 적어 준 정적 경로 |
+| `O` | OSPF 가 배운 경로. **지금은 한 줄도 없다** |
+| `>*` | 실제로 이 줄로 패킷을 내보내고 있다 |
+
 ```
-r4# configure terminal
-r4(config)# no ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}
-r4(config)# end
+r1# show ip ospf neighbor
 ```
 
-</details>
+아무것도 나오지 않는다. OSPF 를 켜지 않았으니 당연하다.
+`r3` 에서 같은 명령을 쳐 보면 정적 경로(`S`)조차 없다는 것을 볼 수 있다.
 
-이제 `pc1` 에서 `ping {{ ip.web }}` 을 해 보세요. **안 된다.** 당연하다 — 길을 아는 장비가 없다.
-여기서부터 OSPF 가 그 길을 스스로 찾게 만든다.
-
-### 3.3 r1 에 OSPF 를 켠다 (할 일 ②③④⑤)
-
-한 대를 끝까지 해 보고, 나머지는 같은 방식으로 반복한다.
+### 3.2 1단계 — `r1` 에 OSPF 를 켠다
 
 **할 일**
 
-1. OSPF 프로세스를 켜고 **router-id 를 `{{ loopback.r1 }}`** 로 못 박는다
-2. `eth2`(주 경로) · `eth3`(백업) · `eth1.10` · `eth1.20` · `lo0` 을 **area {{ routing.ospf.area }}** 에 넣는다
-3. `eth2` 는 cost {{ p2p['r1-r2'].ospf_cost }}, `eth3` 은 cost {{ p2p['r1-r3'].ospf_cost }}
-4. 사용자망(`eth1.10` · `eth1.20`)과 `lo0` 은 **passive** 로 둔다
+1. OSPF 프로세스를 켜고 router-id 를 `{{ loopback.r1 }}` 으로 못 박는다
+2. `eth2` `eth3` `eth1.10` `eth1.20` `lo0` 을 area `{{ routing.ospf.area }}` 에 넣는다
+3. `eth2` 는 cost `{{ p2p['r1-r2'].ospf_cost }}`, `eth3` 은 cost `{{ p2p['r1-r3'].ospf_cost }}`
+4. 사용자망(`eth1.10` `eth1.20`)과 `lo0` 은 passive 로 둔다
 
-**확인** — `show ip ospf interface eth2` 에 `Area 0.0.0.0` 과 `Cost: {{ p2p['r1-r2'].ospf_cost }}` 가 보인다.
-
-<details>
-<summary>명령이 기억나지 않으면</summary>
-
-인터페이스마다 "이 인터페이스는 area 0 이다" 를 적고, 프로세스에는 router-id 와
-passive 목록만 적는다. FRR 은 두 가지 방식을 다 지원하는데, 이 랩은 인터페이스 쪽에 적는다.
+FRR 은 "이 인터페이스는 area 0 이다" 를 인터페이스 쪽에 적는 방식과, `router ospf` 안에
+`network` 로 적는 방식을 다 지원한다. 이 랩은 **인터페이스 쪽에 적는 방식**을 쓴다.
+어느 포트가 OSPF 에 들어갔는지 `show running-config` 에서 한눈에 보이기 때문이다.
 
 ```
 r1# configure terminal
@@ -446,27 +485,53 @@ r1(config-if)# ip ospf area {{ routing.ospf.area }}
 r1(config-if)# end
 ```
 
-</details>
+**확인**
 
-> 주의 — router-id 를 안 정하면 장비가 자기 주소 중 하나를 골라 쓴다. 그 주소가 붙은
-> 인터페이스가 내려가면 router-id 가 바뀌고, 인접이 통째로 다시 선다.
-> **루프백은 절대 안 내려가므로** router-id 로 쓴다.
+```
+r1# show ip ospf interface eth2
+```
 
-### 3.4 나머지 세 대
+```
+eth2 is up
+  Internet Address {{ p2p['r1-r2'].addresses.r1 }}/{{ p2p['r1-r2'].cidr.split('/')[1] }}, Area {{ routing.ospf.area }}
+  MTU mismatch detection: enabled
+  Router ID {{ loopback.r1 }}, Network Type POINTOPOINT, Cost: {{ p2p['r1-r2'].ospf_cost }}
+  Timer intervals configured, Hello {{ routing.ospf.timers.hello }}s, Dead {{ routing.ospf.timers.dead }}s, Retransmit 5s
+```
 
-`r2` · `r3` · `r4` 도 같은 방식이다. 값만 다르다.
+`Area` · `Cost` · `Router ID` 셋이 방금 적은 값과 같은지 보세요.
 
-| 라우터 | router-id | area 0 에 넣을 것 | cost | passive |
-|---|---|---|---|---|
-| `r2` | `{{ loopback.r2 }}` | `eth1` `eth2` `lo0` | 둘 다 {{ p2p['r1-r2'].ospf_cost }} | `lo0` |
-| `r3` | `{{ loopback.r3 }}` | `eth1` `eth2` `lo0` | 둘 다 {{ p2p['r1-r3'].ospf_cost }} | `lo0` |
-| `r4` | `{{ loopback.r4 }}` | `eth1` `eth2` `eth3` `lo0` | `eth1` {{ p2p['r2-r4'].ospf_cost }} · `eth2` {{ p2p['r3-r4'].ospf_cost }} | `eth3` `lo0` |
+```
+r1# show ip ospf neighbor
+```
 
-**한 대를 끝낼 때마다 `show ip ospf neighbor` 를 쳐 보세요.** 상대도 켜져 있어야 이웃이 선다 —
-r1 만 켠 상태에서는 아무것도 안 보이는 것이 정상이다.
+**여전히 아무것도 없다.** 상대가 켜져 있지 않으니 대화 상대가 없다.
+Hello 는 나가고 있지만 답하는 사람이 없는 상태다.
 
-<details>
-<summary>r2 의 명령 (r3 · r4 도 같은 모양)</summary>
+```labdiagram
+kind: mini
+cols: [r1, [r2, r3], r4]
+links:
+  - { a: r1, b: r2, tone: dash, label: Hello 만 나간다 }
+  - { a: r1, b: r3, tone: dash, label: Hello 만 나간다 }
+  - { a: r2, b: r4, tone: dash }
+  - { a: r3, b: r4, tone: dash }
+marks:
+  r1: ["OSPF 켬", "이웃 0"]
+  r2: ["아직 없음"]
+  r3: ["아직 없음"]
+  r4: ["아직 없음"]
+notes:
+  - 점선은 아직 인접이 서지 않은 링크다
+  - 혼자 켠 라우터는 경로를 하나도 만들지 못한다
+```
+
+한 대만 켜고 "안 되는데요" 라고 하는 일이 현장에서 잦다.
+**OSPF 는 양쪽이 다 켜져야 한다.** 다음 대로 넘어간다.
+
+### 3.3 2단계 — `r2` 를 켠다. 첫 인접이 선다
+
+`r2` 는 포트가 둘뿐이라 `r1` 보다 짧다. passive 로 둘 것은 `lo0` 하나다.
 
 ```
 r2# configure terminal
@@ -487,31 +552,303 @@ r2(config-if)# ip ospf area {{ routing.ospf.area }}
 r2(config-if)# end
 ```
 
-`r4` 는 서버망 쪽 `eth3` 이 하나 더 있다. 그 너머에는 라우터가 없으므로 **passive** 다 —
+**확인** — 몇 초 기다린 뒤 `r1` 에서 본다.
+
+```
+r1# show ip ospf neighbor
+```
+
+```
+Neighbor ID     Pri State     Up Time    Dead Time  Address           Interface
+{{ loopback.r2 }}        1 Full/-    00:00:14     38.402s  {{ p2p['r1-r2'].addresses.r2 }}       eth2:{{ p2p['r1-r2'].addresses.r1 }}
+```
+
+| 열 | 뜻 |
+|---|---|
+| Neighbor ID | 상대의 router-id. `r2` 에 적어 준 `{{ loopback.r2 }}` 이 그대로 보인다 |
+| State | `Full` 이어야 정상. 다른 값이면 2.3 의 표를 보세요 |
+| Dead Time | 이 값이 0 이 되면 이웃이 죽은 것으로 판정한다. 계속 줄었다 리셋된다 |
+| Interface | 어느 포트로 만난 이웃인가 |
+
+`Full` 이 아니면 여기서 멈추고 원인을 찾으세요. 뒤 단계를 쌓아 봐야 원인만 늘어난다.
+
+```
+r1# show ip route ospf
+```
+
+```
+O>* {{ p2p['r2-r4'].cidr }} [110/20] via {{ p2p['r1-r2'].addresses.r2 }}, eth2, weight 1, 00:00:11
+```
+
+**아무도 적어 주지 않았는데 경로가 생겼다.** `r1` 이 `r2` 에게서 지도 조각을 받아
+직접 계산한 결과다. `[110/20]` 은 `[AD / 누적 cost]` 를 뜻한다.
+20 은 `r1` 의 `eth2`({{ p2p['r1-r2'].ospf_cost }}) 와 `r2` 의 `eth2`({{ p2p['r2-r4'].ospf_cost }}) 를 더한 값이다.
+`r2` 의 루프백 `{{ loopback.r2 }}/32` 도 한 줄 함께 올라온다.
+
+```labdiagram
+kind: mini
+cols: [r1, [r2, r3], r4]
+links:
+  - { a: r1, b: r2, label: Full }
+  - { a: r1, b: r3, tone: dash, label: Hello 만 나간다 }
+  - { a: r2, b: r4, tone: dash }
+  - { a: r3, b: r4, tone: dash }
+marks:
+  r1: ["OSPF 켬", "이웃 1"]
+  r2: ["OSPF 켬", "이웃 1"]
+  r3: ["아직 없음"]
+  r4: ["아직 없음"]
+notes:
+  - 첫 인접이 섰다. 둘은 서로의 대역을 배운다
+  - 아직 Site-B 로 가는 길은 없다. r4 가 조용하기 때문이다
+```
+
+### 3.4 3단계 — `r3` 를 켠다. 백업 경로가 생긴다
+
+`r3` 는 이 랩에서 처음 설정하는 장비다. 정적 경로도 없었으니 **아무것도 없는 상태에서 시작**한다.
+포트 구성은 `r2` 와 같고 cost 만 `{{ p2p['r1-r3'].ospf_cost }}` 으로 크다.
+
+```
+r3# configure terminal
+r3(config)# router ospf
+r3(config-router)# ospf router-id {{ loopback.r3 }}
+r3(config-router)# passive-interface lo0
+r3(config-router)# exit
+r3(config)# interface eth1
+r3(config-if)# ip ospf area {{ routing.ospf.area }}
+r3(config-if)# ip ospf cost {{ p2p['r1-r3'].ospf_cost }}
+r3(config-if)# exit
+r3(config)# interface eth2
+r3(config-if)# ip ospf area {{ routing.ospf.area }}
+r3(config-if)# ip ospf cost {{ p2p['r3-r4'].ospf_cost }}
+r3(config-if)# exit
+r3(config)# interface lo0
+r3(config-if)# ip ospf area {{ routing.ospf.area }}
+r3(config-if)# end
+```
+
+**확인**
+
+```
+r1# show ip ospf neighbor
+```
+
+이웃이 둘로 늘었다. `{{ loopback.r2 }}` 는 `eth2`, `{{ loopback.r3 }}` 는 `eth3` 로 보인다.
+
+```labdiagram
+kind: mini
+cols: [r1, [r2, r3], r4]
+links:
+  - { a: r1, b: r2, label: Full }
+  - { a: r1, b: r3, label: Full }
+  - { a: r2, b: r4, tone: dash }
+  - { a: r3, b: r4, tone: dash }
+marks:
+  r1: ["OSPF 켬", "이웃 2"]
+  r2: ["OSPF 켬", "이웃 1"]
+  r3: ["OSPF 켬", "이웃 1"]
+  r4: ["아직 없음"]
+notes:
+  - r3 도 지도에 올라왔다. 하지만 r3 가 아는 것은 r1 쪽뿐이다
+  - r4 가 켜지기 전까지 두 길 다 막다른 길이다
+```
+
+여기서 `r1` 의 `show ip route ospf` 를 다시 보면 서버망(`{{ cidr.vlan40 }}`) 경로는 아직 없다.
+`r4` 가 지도에 없기 때문이다. 지도에 없는 곳으로는 길을 계산할 수 없다.
+
+### 3.5 4단계 — `r4` 를 켠다. 지도가 완성된다
+
+`r4` 는 포트가 셋이다. 서버망 쪽 `eth3` 은 그 너머에 라우터가 없으므로 **passive** 로 둔다.
 대역은 광고하되 Hello 는 보내지 않는다.
 
-</details>
+```
+r4# configure terminal
+r4(config)# router ospf
+r4(config-router)# ospf router-id {{ loopback.r4 }}
+r4(config-router)# passive-interface eth3
+r4(config-router)# passive-interface lo0
+r4(config-router)# exit
+r4(config)# interface eth1
+r4(config-if)# ip ospf area {{ routing.ospf.area }}
+r4(config-if)# ip ospf cost {{ p2p['r2-r4'].ospf_cost }}
+r4(config-if)# exit
+r4(config)# interface eth2
+r4(config-if)# ip ospf area {{ routing.ospf.area }}
+r4(config-if)# ip ospf cost {{ p2p['r3-r4'].ospf_cost }}
+r4(config-if)# exit
+r4(config)# interface eth3
+r4(config-if)# ip ospf area {{ routing.ospf.area }}
+r4(config-if)# exit
+r4(config)# interface lo0
+r4(config-if)# ip ospf area {{ routing.ospf.area }}
+r4(config-if)# end
+```
 
-### 3.5 내가 적은 것을 눈으로 확인한다
+**확인** — 네 대 모두에서 이웃이 둘씩 보여야 한다.
+
+```
+r4# show ip ospf neighbor
+```
+
+```
+Neighbor ID     Pri State     Up Time    Dead Time  Address           Interface
+{{ loopback.r2 }}        1 Full/-    00:00:22     37.104s  {{ p2p['r2-r4'].addresses.r2 }}       eth1:{{ p2p['r2-r4'].addresses.r4 }}
+{{ loopback.r3 }}        1 Full/-    00:00:19     38.220s  {{ p2p['r3-r4'].addresses.r3 }}      eth2:{{ p2p['r3-r4'].addresses.r4 }}
+```
+
+```
+r1# show ip route ospf
+```
+
+```
+O>* {{ cidr.vlan40 }} [110/21] via {{ p2p['r1-r2'].addresses.r2 }}, eth2, weight 1, 00:00:19
+O>* {{ p2p['r2-r4'].cidr }} [110/20] via {{ p2p['r1-r2'].addresses.r2 }}, eth2, weight 1, 00:03:12
+O>* {{ p2p['r3-r4'].cidr }} [110/200] via {{ p2p['r1-r3'].addresses.r3 }}, eth3, weight 1, 00:00:19
+```
+
+서버망 `{{ cidr.vlan40 }}` 이 나타났고, next-hop 이 `{{ p2p['r1-r2'].addresses.r2 }}`(주 경로)다.
+백업 쪽으로 나간다면 cost 를 반대로 넣은 것이다. 1.5 의 표를 다시 보세요.
+
+누적 cost 의 절대값에 매달리지 마세요. 마지막 구간(서버망 포트)에는 cost 를 지정하지
+않아서 장비가 대역폭에서 계산한 기본값이 붙고, 그 값은 환경에 따라 조금씩 다르다.
+중요한 것은 주 경로 쪽 합이 백업 쪽보다 뚜렷하게 작다는 사실이다.
+OSPF 가 계산한 값 자체는 `show ip ospf route` 로 볼 수 있다.
+
+```labdiagram
+kind: mini
+cols: [r1, [r2, r3], r4]
+links:
+  - { a: r1, b: r2, label: Full, sub: "cost {{ p2p['r1-r2'].ospf_cost }}" }
+  - { a: r1, b: r3, label: Full, sub: "cost {{ p2p['r1-r3'].ospf_cost }}" }
+  - { a: r2, b: r4, label: Full, sub: "cost {{ p2p['r2-r4'].ospf_cost }}" }
+  - { a: r3, b: r4, label: Full, sub: "cost {{ p2p['r3-r4'].ospf_cost }}" }
+marks:
+  r1: ["OSPF 켬", "이웃 2"]
+  r2: ["OSPF 켬", "이웃 2"]
+  r3: ["OSPF 켬", "이웃 2"]
+  r4: ["OSPF 켬", "이웃 2"]
+notes:
+  - 네 대가 같은 지도를 갖는다
+  - 주 경로 합 {{ p2p['r1-r2'].ospf_cost + p2p['r2-r4'].ospf_cost }} · 백업 합 {{ p2p['r1-r3'].ospf_cost + p2p['r3-r4'].ospf_cost }} -> 트래픽은 r2 로 간다
+```
+
+### 3.6 네 대의 설정을 나란히 확인한다
 
 ```
 r1# show running-config
 ```
 
-지금까지 친 것이 그대로 보인다. `interface` 절과 `router ospf` 절을 훑어 보세요.
-빠뜨린 인터페이스가 있으면 여기서 보인다.
+`interface` 절과 `router ospf` 절이 방금 친 그대로 보인다. 네 대를 같은 눈으로 훑는다.
 
-**저장하지 마세요.** 실습 중 `write memory` 를 하면 되돌리기가 번거로워진다.
+| 확인할 것 | r1 | r2 | r3 | r4 |
+|---|---|---|---|---|
+| router-id | `{{ loopback.r1 }}` | `{{ loopback.r2 }}` | `{{ loopback.r3 }}` | `{{ loopback.r4 }}` |
+| area 에 넣은 포트 | eth1.10 · eth1.20 · eth2 · eth3 · lo0 | eth1 · eth2 · lo0 | eth1 · eth2 · lo0 | eth1 · eth2 · eth3 · lo0 |
+| cost 를 준 포트 | eth2 {{ p2p['r1-r2'].ospf_cost }} · eth3 {{ p2p['r1-r3'].ospf_cost }} | eth1 {{ p2p['r1-r2'].ospf_cost }} · eth2 {{ p2p['r2-r4'].ospf_cost }} | eth1 {{ p2p['r1-r3'].ospf_cost }} · eth2 {{ p2p['r3-r4'].ospf_cost }} | eth1 {{ p2p['r2-r4'].ospf_cost }} · eth2 {{ p2p['r3-r4'].ospf_cost }} |
+| passive | eth1.10 · eth1.20 · lo0 | lo0 | lo0 | eth3 · lo0 |
+| 이웃 수 | 2 | 2 | 2 | 2 |
+
+빠뜨린 포트가 있으면 여기서 보인다. **저장하지 마세요** — `write memory` 를 하면 되돌리기가 번거로워진다.
+
+### 3.7 5단계 — 정적 경로를 걷어낸다
+
+지우기 전에 한 가지를 먼저 확인한다. 정적이 남아 있는 지금, 서버로 가는 길은
+이미 OSPF 를 타고 있다.
+
+```
+r1# show ip route {{ ip.web }}
+```
+
+```
+Routing entry for {{ cidr.vlan40 }}
+  Known via "ospf", distance 110, metric 21, best
+  Last update 00:02:41 ago
+  * {{ p2p['r1-r2'].addresses.r2 }}, via eth2, weight 1
+```
+
+정적은 `{{ zone['site-b'] }}`, OSPF 는 `{{ cidr.vlan40 }}` 이다. 목적지 `{{ ip.web }}` 에는
+둘 다 맞지만 **더 긴 쪽이 이긴다.** AD 는 프리픽스가 같을 때에만 본다 (2.7).
+정적을 남겨 두면 OSPF 가 안 쓰인다는 말은 이 랩에서는 맞지 않는다.
+
+그러면 왜 걷어내는가. 이유는 셋이다.
+
+| # | 이유 | 언제 문제가 되는가 |
+|---|---|---|
+| ① | `{{ zone['site-b'] }}` 안에서 OSPF 가 광고하지 않는 주소는 여전히 정적을 탄다 | 대역이 늘어날 때 |
+| ② | 정적은 링크 상태만 본다. 상대 라우터만 죽으면 그대로 살아남는다 | 6.3 의 상황 |
+| ③ | 같은 목적지를 두 곳에서 관리하게 된다 | 다음 사람이 인수인계받을 때 |
+
+정적 경로는 `r1` · `r2` · `r4` 세 대에 있다. 지우는 명령은 넣을 때 쓴 줄 앞에 `no` 를 붙이는 것이다.
+
+```
+r1# configure terminal
+r1(config)# no ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}
+r1(config)# end
+```
+
+```
+r2# configure terminal
+r2(config)# no ip route {{ zone['site-a'] }} {{ p2p['r1-r2'].addresses.r1 }}
+r2(config)# no ip route {{ zone['site-b'] }} {{ p2p['r2-r4'].addresses.r4 }}
+r2(config)# end
+```
+
+```
+r4# configure terminal
+r4(config)# no ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}
+r4(config)# end
+```
+
+**확인** — 세 대 모두에서 비어 있어야 한다.
+
+```
+r1# show ip route static
+```
+
+`show ip route` 전체를 다시 보면 이제 `S` 로 시작하는 줄이 하나도 없다.
+남은 것은 `C`(직접 연결)와 `O`(OSPF 가 배운 것)뿐이다.
+
+```labdiagram
+kind: mini
+cols: [r1, [r2, r3], r4]
+links:
+  - { a: r1, b: r2, label: Full, sub: "cost {{ p2p['r1-r2'].ospf_cost }}" }
+  - { a: r1, b: r3, label: Full, sub: "cost {{ p2p['r1-r3'].ospf_cost }}" }
+  - { a: r2, b: r4, label: Full, sub: "cost {{ p2p['r2-r4'].ospf_cost }}" }
+  - { a: r3, b: r4, label: Full, sub: "cost {{ p2p['r3-r4'].ospf_cost }}" }
+marks:
+  r1: ["정적 0줄", "{{ loopback.r1 }}"]
+  r2: ["정적 0줄", "{{ loopback.r2 }}"]
+  r3: ["정적 0줄", "{{ loopback.r3 }}"]
+  r4: ["정적 0줄", "{{ loopback.r4 }}"]
+notes:
+  - 목표 구성에 도달했다. 사람이 적어 준 경로는 한 줄도 없다
+  - 대역이 하나 늘어도 이 라우터들은 손대지 않는다
+```
 
 ---
 
-## 4. 확인 — 내가 만든 것이 도는가
+## 4. 만든 것이 도는지 확인한다
 
-네 대를 다 켰으면 **먼저 통신부터** 해 본다. 만든 것이 실제로 도는지가 첫 번째 질문이다.
+설정을 다 쳤다는 것과 통신이 된다는 것은 다른 말이다. 여기서 실제로 확인한다.
+
+### 4.1 통신부터 해 본다
 
 ```bash
 # pc1 에서
 ping -c 3 {{ ip.web }}
+```
+
+```bash
+curl -sS -o /dev/null -w '%{http_code}\n' http://{{ ip.web }}/
+```
+
+`200` 이 나오면 Site-A 의 사용자 PC 에서 Site-B 의 서버까지 실제로 닿은 것이다.
+
+### 4.2 의도한 길로 가는지 본다
+
+```bash
+# pc1 에서
 traceroute -n -w1 -q1 {{ ip.web }}
 ```
 
@@ -522,118 +859,233 @@ traceroute -n -w1 -q1 {{ ip.web }}
  4  {{ ip.web }}
 ```
 
-**주 경로(r2)를 지나야 한다.** r3 를 지난다면 cost 를 반대로 넣은 것이다 —
-3.4 의 표를 다시 보세요.
+| 홉 | 누구인가 | 왜 이 주소가 보이는가 |
+|---|---|---|
+| 1 | `r1` 의 VLAN{{ vlans[10].id }} 게이트웨이 | pc1 이 처음 넘긴 곳 |
+| 2 | `r2` 의 `eth1` | r1 이 주 경로로 넘겼다 |
+| 3 | `r4` 의 `eth1` | r2 가 넘겼다 |
+| 4 | `web` | 목적지 |
 
-안 되면 아래 순서로 좁힌다.
+2번 홉이 `{{ p2p['r1-r3'].addresses.r3 }}`(r3)이면 cost 를 반대로 넣은 것이다.
+`r1` 에서 `show ip ospf interface eth2` 와 `eth3` 의 `Cost:` 를 비교해 보세요.
 
-| 증상 | 먼저 볼 것 |
-|---|---|
-| `show ip ospf neighbor` 에 이웃이 없다 | 상대 라우터도 켰는가 · 양쪽 area 가 같은가 (2.5 의 ①) |
-| 이웃은 `Full` 인데 경로가 없다 | 그 대역의 인터페이스를 area 에 넣었는가 |
-| 경로는 있는데 통신이 안 된다 | 정적 경로가 남아 있지 않은가 (`show ip route static`) |
-| 상태가 `ExStart` 에서 멈춘다 | MTU (2.5 의 ③) |
+### 4.3 제어 평면 세 화면
 
-되돌리려면 `sudo systemctl restart frr` (설정 파일 기준으로 돌아간다).
-아예 처음부터 다시 하려면 **[이 모듈 적용]** 이다.
-
-터미널은 여섯 개를 쓴다: `pc1`, `r1`, `r2`, `r3`, `r4`, `web`.
-
-### 실습 1 — 무엇이 사라지고 무엇이 생겼나
-
-내가 지운 것과 내가 만든 것을 나란히 본다.
+통신이 되든 안 되든 이 셋은 한 번씩 보고 넘어간다. 평상시 모습을 봐 둬야 이상을 알아본다.
 
 ```
-r1# show ip route static
+r1# show ip ospf neighbor
+r1# show ip ospf interface eth2
+r1# show ip ospf database
 ```
 
-```
-(아무것도 없다 — 3.2 에서 지웠다)
-```
+`show ip ospf database` 는 지도 그 자체다. `r1` 과 `r2` 에서 떠서 **두 출력이 같은지** 보세요.
+같은 area 의 라우터는 같은 지도를 갖는다. 다르면 그 자체가 문제다.
+
+### 4.4 안 될 때 좁히는 순서
+
+| 증상 | 먼저 볼 것 | 어디에 설명이 있는가 |
+|---|---|---|
+| 이웃이 하나도 안 보인다 | 상대 라우터도 켰는가 · 양쪽 area 가 같은가 | 5.1 |
+| `ExStart` 에서 멈춘다 | 양쪽 MTU | 5.2 |
+| 이웃은 `Full` 인데 경로가 없다 | 그 대역의 포트를 area 에 넣었는가 | 5.3 |
+| 경로는 있는데 통신이 안 된다 | 반대 방향 경로가 있는가 | 5.4 |
+| 엉뚱한 길로 간다 | 양쪽 cost | 5.5 |
+
+순서를 지키세요. 인접이 안 섰는데 `show ip route` 를 들여다보는 것은 시간 낭비다.
+경로는 인접이 선 뒤에 계산되는 결과물이기 때문이다.
+
+---
+
+## 5. 자주 나는 장애 — 증상에서 원인까지
+
+현장에서 실제로 자주 보는 순서대로 적었다. 앞의 셋이 신고의 대부분을 차지한다.
+
+| # | 증상 한 줄 | 가장 흔한 원인 |
+|---|---|---|
+| 5.1 | 이웃이 하나도 안 보인다 | 한쪽만 켰다 · area 가 다르다 |
+| 5.2 | `ExStart` 에서 멈춘다 | MTU 가 다르다 |
+| 5.3 | 이웃은 `Full` 인데 그 대역 경로가 없다 | 포트를 area 에 안 넣었다 |
+| 5.4 | 가는 길만 있고 오는 길이 없다 | 반대쪽 설정이 빠졌다 |
+| 5.5 | 통신은 되는데 엉뚱한 길로 간다 | cost 를 한쪽만 줬다 |
+| 5.6 | 인접이 붙었다 끊겼다 한다 | router-id 가 겹쳤다 |
+| 5.7 | 사용자망으로 Hello 가 나간다 | passive 를 안 걸었다 |
+| 5.8 | 링크는 UP 인데 통신이 죽는다 | 상대만 죽었다 (블랙홀) |
+
+### 5.1 이웃이 하나도 안 보인다
+
+가장 흔하다. `show ip ospf neighbor` 가 머리글만 찍고 비어 있다.
+
+**왜** — Hello 를 보내고 있지만 상대가 답하지 않는다. 답할 수 없는 이유는 여럿이다.
 
 ```
-r1# show ip route ospf
+r1# show ip ospf interface eth2
+r2# show ip ospf interface eth1
 ```
 
-```
-O>* {{ cidr.vlan40 }} [110/20] via {{ p2p['r1-r2'].addresses.r2 }}, eth2, weight 1, 00:03:12
-O>* {{ p2p['r2-r4'].cidr }} [110/20] via {{ p2p['r1-r2'].addresses.r2 }}, eth2, weight 1, 00:03:12
-O>* {{ p2p['r3-r4'].cidr }} [110/110] via {{ p2p['r1-r3'].addresses.r3 }}, eth3, weight 1, 00:03:12
-```
+두 출력을 나란히 놓고 아래를 비교한다.
 
-`S` 가 `O` 로 바뀌었다. 아무도 적어 주지 않았는데 경로가 생겼다.
+| 볼 것 | 양쪽이 같아야 한다 | 다르면 |
+|---|---|---|
+| `Area` | 같은 area ID | 인접이 아예 안 선다 |
+| `Internet Address` | 같은 서브넷 · 같은 마스크 | Hello 가 버려진다 |
+| `Timer intervals` | Hello 와 Dead 가 같다 | 안 서거나 불안정하다 |
+| `Network Type` | 양쪽 다 `POINTOPOINT` | 안 선다 |
 
-| 읽는 법 | |
-|---|---|
-| `O` | OSPF 로 배운 경로 |
-| `[110/20]` | `[AD / 누적 cost]` — 110 은 OSPF 의 AD |
-| 누적 cost | 경로상 cost 의 합이다 |
+**조치** — 다른 쪽을 맞춘다. 그 전에 상대 라우터에서 `show ip ospf interface` 자체가
+나오는지부터 보세요. 안 나오면 OSPF 를 안 켠 것이다.
 
-cost 숫자의 절대값에 매달리지 마세요. 인터페이스 대역폭 인식에 따라 조금씩 다를 수 있다.
-중요한 것은 주 경로 쪽 합이 백업 쪽 합보다 뚜렷하게 작다는 사실이다.
-확인: `show ip ospf route` 로 OSPF 가 계산한 cost 를 직접 볼 수 있다.
+**passive 로 잘못 걸어 둔 경우도 여기로 보인다.** passive 인터페이스는 Hello 를
+보내지 않으므로 증상이 똑같다. `show running-config` 의 `router ospf` 절을 보세요.
 
-r1 이 아는 대역이 몇 개인지는 셸에서 세는 편이 빠르다. `-c` 는 대화형에 들어가지 않고
-한 줄만 실행하는 방식이다.
+### 5.2 `ExStart` 에서 멈춘다
+
+인접이 보이기는 하는데 `Full` 로 못 간다.
+
+**왜** — `ExStart` / `Exchange` 는 지도 요약(DBD)을 주고받는 단계이고, 그 안에 서로의 MTU 가 들어 있다.
+MTU 가 다르면 여기서 멈춘다. area 문제였다면 인접이 **아예 안 보였을** 것이다.
 
 ```bash
-# r1 의 셸에서
-sudo vtysh -c 'show ip route' | grep -c '^O'
+# 양쪽 셸에서
+ip link show eth2
 ```
 
-정적일 때는 r1 에 1줄이었다. 지금은 라우터가 자기 몫으로 여러 대역을 알고 있다.
-그리고 Site-B 에 대역을 추가해도 r1 은 손대지 않는다. 설정이 아니라 학습이기 때문이다.
+```bash
+sudo journalctl -u frr --since '5 min ago' | grep -i mtu
+```
 
-### 실습 2 — 이웃과 지도를 본다
+```
+OSPF Packet[DD]: Neighbor {{ loopback.r3 }} MTU 1500 is larger than [eth3]'s MTU 1400
+```
+
+**조치** — 낮은 쪽을 올려 맞춘다. 실무에서는 중간 장비(스위치 · 터널 · VPN)가 MTU 를
+줄여 놓은 경우가 많으므로 경로 전체를 확인한다.
+
+### 5.3 이웃은 `Full` 인데 그 대역 경로가 없다
+
+인접은 정상인데 `show ip route ospf` 에 특정 대역이 없다.
+
+**왜** — 그 대역이 붙은 포트를 area 에 넣지 않았다. OSPF 는 area 에 들어간 포트의 대역만
+광고한다. 인접은 다른 포트에서 서 있으므로 `Full` 로 보인다.
+
+```
+r4# show ip ospf interface
+```
+
+포트 목록에 그 대역의 포트가 있는지 보세요. 없으면 광고되지 않는다.
+
+**조치** — 그 포트에 `ip ospf area {{ routing.ospf.area }}` 를 넣는다.
+서버망처럼 라우터가 없는 곳이면 `passive-interface` 도 함께 건다.
+
+이 랩에서 재현해 보려면 `r4` 의 `eth3` 를 area 에서 빼 보세요.
+`{{ cidr.vlan40 }}` 이 다른 라우터에서 통째로 사라진다.
+
+### 5.4 가는 길만 있고 오는 길이 없다
+
+`r1` 에서 서버망 경로는 보이는데 `pc1` 에서 ping 이 안 나간다.
+
+**왜** — 라우팅은 방향마다 따로다. 돌아오는 쪽 라우터가 Site-A 대역을 모르면
+요청은 도착하고 응답이 못 돌아온다. M3 에서 정적 경로를 양방향으로 넣어야 했던 이유와 같다.
+
+```
+r4# show ip route {{ ip.pc1 }}
+```
+
+**조치** — 반대쪽 라우터에서 그 대역이 보이는지 확인하고, 없으면 그쪽 포트의 area 설정을 본다.
+OSPF 는 양쪽이 다 켜져 있으면 이 문제가 저절로 사라진다. 한쪽만 켰을 때 생긴다.
+
+증상을 정확히 보려면 중간 라우터에서 패킷을 직접 본다.
+
+```bash
+# r4 의 셸에서
+sudo tcpdump -ni eth1 icmp
+```
+
+요청만 보이고 응답이 안 보이면 돌아오는 길이 없는 것이다.
+
+### 5.5 통신은 되는데 엉뚱한 길로 간다
+
+`traceroute` 결과가 의도한 경로와 다르다.
+
+**왜** — cost 는 **나가는 방향**에만 적용된다. 한쪽만 바꾸면 가는 길과 오는 길이 달라진다.
+또는 양쪽 cost 를 반대로 넣었다.
+
+```
+r1# show ip ospf interface eth2
+r1# show ip ospf interface eth3
+```
+
+`Cost:` 값을 비교한다. 주 경로가 더 작아야 한다.
+
+**조치** — 양쪽 라우터에서 함께 고친다. 한쪽만 고치면 비대칭이 남는다.
+경로에 방화벽이 있으면 비대칭만으로도 세션이 깨진다.
+
+### 5.6 인접이 붙었다 끊겼다 한다
+
+`show ip ospf neighbor` 를 칠 때마다 Up Time 이 초기화돼 있다.
+
+**왜** — router-id 가 두 장비에서 겹쳤을 때 가장 흔하다. 지도 위에서 두 장비가 같은 이름이라
+서로를 자기라고 여기고 지도를 계속 다시 그린다.
+router-id 를 안 정해서 장비가 아무 주소나 골랐고, 그 주소가 겹친 경우도 같은 증상이다.
+
+```
+r1# show ip ospf
+```
+
+첫 줄의 `OSPF Routing Process, Router ID:` 를 네 대에서 다 확인하세요.
+
+**조치** — 네 대의 router-id 를 서로 다른 루프백 주소로 못 박는다.
+바꾼 뒤에는 OSPF 프로세스를 다시 시작해야 반영된다.
+
+```
+r1# clear ip ospf process
+```
+
+### 5.7 사용자망으로 Hello 가 나간다
+
+장애는 아니지만 점검에서 지적되는 항목이다.
+
+**왜** — 사용자망 포트에 `passive-interface` 를 안 걸었다.
+
+```bash
+# pc1 의 셸에서
+sudo tcpdump -ni eth1 proto ospf
+```
+
+`{{ gw.vlan10 }}` 에서 `224.0.0.5` 로 가는 패킷이 {{ routing.ospf.timers.hello }}초마다 보이면 새고 있는 것이다.
+
+**조치** — `router ospf` 절에 `passive-interface eth1.10` 을 넣는다.
+누군가 사용자망에 라우터를 꽂아 인접을 맺는 것을 막는 보안 조치이기도 하다.
+
+### 5.8 링크는 UP 인데 통신이 죽는다
+
+가장 까다로운 부류다. 1차 점검(`ip link`)이 전부 정상으로 보인다.
+
+**왜** — 상대 장비만 죽고 내 포트는 UP 으로 남는 경우다. 중간에 L2 스위치나 미디어 컨버터가
+있으면 이렇게 된다. 내 라우터는 Dead timer {{ routing.ospf.timers.dead }}초를 기다린 뒤에야 이웃이 죽은 것을 안다.
+
+정적 경로가 남아 있으면 더 나쁘다. 정적은 링크 상태만 보므로 그 {{ routing.ospf.timers.dead }}초 동안
+죽은 길로 계속 내보낸다. 이것이 3.7 에서 정적을 걷어낸 이유다.
+
 ```
 r1# show ip ospf neighbor
 ```
 
-```
-Neighbor ID     Pri State     Up Time    Dead Time  Address           Interface
-{{ loopback.r2 }}        1 Full/-    00:04:31     38.402s  {{ p2p['r1-r2'].addresses.r2 }}       eth2:{{ p2p['r1-r2'].addresses.r1 }}
-{{ loopback.r3 }}        1 Full/-    00:04:29     37.884s  {{ p2p['r1-r3'].addresses.r3 }}       eth3:{{ p2p['r1-r3'].addresses.r1 }}
-```
+Dead Time 이 줄어들기만 하고 리셋되지 않으면 상대가 조용한 것이다.
 
-| 열 | 뜻 |
-|---|---|
-| Neighbor ID | 상대의 router-id (이 랩은 루프백 주소) |
-| State | `Full` 이어야 정상 |
-| Dead Time | 이 값이 0 이 되면 이웃이 죽은 것으로 판정한다. 계속 줄었다 리셋된다 |
+**조치** — 백업 경로가 있으면 OSPF 는 상대의 새 지도를 우회로로 받아 먼저 경로를 바꾼다.
+백업이 없으면 {{ routing.ospf.timers.dead }}초를 꽉 채운다. 이 시간을 밀리초로 줄이려고 쓰는 것이 BFD 다.
+6.3 에서 직접 만들어 본다.
 
-인터페이스 하나의 OSPF 설정을 본다 — 2.5 의 ①과 ④ 를 한 화면에서 확인할 수 있다.
+---
 
-```
-r1# show ip ospf interface eth2
-```
+## 6. 실습 — 만든 것을 흔들어 본다
 
-```
-eth2 is up
-  Internet Address {{ p2p['r1-r2'].addresses.r1 }}/{{ p2p['r1-r2'].cidr.split('/')[1] }}, Area 0.0.0.0
-  MTU mismatch detection: enabled
-  Router ID {{ loopback.r1 }}, Network Type POINTOPOINT, Cost: {{ p2p['r1-r2'].ospf_cost }}
-  Timer intervals configured, Hello {{ routing.ospf.timers.hello }}s, Dead {{ routing.ospf.timers.dead }}s, Retransmit 5s
-```
+터미널은 여섯 개를 쓴다: `pc1` `r1` `r2` `r3` `r4` `web`.
+각 실습 끝에 **정리** 가 있다. 다음 실습으로 넘어가기 전에 반드시 되돌려 놓으세요.
 
-점검할 때 가장 먼저 치는 명령이 이것이다. Area · Cost · 타이머 · MTU 감지 여부가 한 화면에 있다.
-양쪽 라우터에서 떠서 **나란히 놓고 비교**하는 것이 요령이다.
+### 6.1 링크를 끊고 수렴을 측정한다
 
-지도(LSDB) 자체를 본다.
-
-```
-r1# show ip ospf database
-```
-
-```
-r2# show ip ospf database
-```
-
-두 출력이 같아야 한다.
-
-같은 area 안의 라우터는 모두 같은 LSDB 를 갖는다. 다르면 그 자체가 문제다.
-"경로가 이상하다"는 신고에서 양쪽 LSDB 를 비교하는 것이 유효한 이유다.
-
-### 실습 3 — ★ 링크를 끊고 수렴을 측정한다
 **터미널 pc1** — 먼저 계속 ping 을 돌린다.
 
 ```bash
@@ -646,13 +1098,15 @@ ping -i 0.2 {{ ip.web }}
 sudo ip link set eth2 down
 ```
 
-#### pc1 화면에서 몇 개가 빠지는지 센다.
+pc1 화면에서 몇 개가 빠지는지 센다.
 
 ```
 64 bytes from {{ ip.web }}: icmp_seq=140 ttl=61 time=1.9 ms
 64 bytes from {{ ip.web }}: icmp_seq=141 ttl=61 time=1.8 ms
-64 bytes from {{ ip.web }}: icmp_seq=144 ttl=61 time=2.3 ms      ← 142, 143 이 없다
+64 bytes from {{ ip.web }}: icmp_seq=144 ttl=61 time=2.3 ms
 ```
+
+142 와 143 이 없다. 그 두 개가 수렴 시간이다.
 
 ```bash
 # pc1 — 경로가 바뀌었는지 확인
@@ -661,36 +1115,37 @@ traceroute -n {{ ip.web }}
 
 ```
  1  {{ gw.vlan10 }}
- 2  {{ p2p['r1-r3'].addresses.r3 }}      ← r3 다
+ 2  {{ p2p['r1-r3'].addresses.r3 }}
  3  {{ p2p['r3-r4'].addresses.r4 }}
  4  {{ ip.web }}
 ```
+
+2번 홉이 `r3` 로 바뀌었다. 라우터에서도 확인한다.
 
 ```
 r1# show ip ospf neighbor
 r1# show ip route ospf
 ```
 
-`show ip ospf neighbor` 에서는 r2 가 사라졌고, `show ip route ospf` 는 전부 eth3(r3) 경유로 바뀌었다.
+이웃 목록에서 `{{ loopback.r2 }}` 가 사라졌고, 경로는 전부 `eth3` 경유로 바뀌었다.
 
-#### 복구
+**왜 이렇게 빨랐나** — `eth2` 를 내리는 순간 `r1` 은 carrier 상실을 즉시 감지한다.
+Dead timer {{ routing.ospf.timers.dead }}초를 기다리지 않는다. 내 쪽 포트가 죽는 장애는 원래 빠르게 수렴한다.
+문제는 그렇지 않은 경우이고, 그것이 6.3 이다.
+
+**정리**
 
 ```bash
 # r1
 sudo ip link set eth2 up
 ```
 
-몇 초 뒤 경로가 다시 r2 로 돌아온다. ping 은 또 한두 개 빠진다.
+몇 초 뒤 경로가 다시 `r2` 로 돌아온다. **이때도 ping 이 한두 개 빠진다.**
+장애 복구 작업이 또 한 번의 순단이라는 사실은 실무 작업 계획에서 반드시 고려해야 한다.
 
-관찰 포인트 — 왜 이렇게 빨랐나?
-`eth2` 를 내리는 순간 r1 은 carrier 상실을 즉시 감지한다. Dead timer {{ routing.ospf.timers.dead }}초를 기다리지 않는다.
-내 쪽 포트가 죽는 장애는 원래 빠르게 수렴한다. 문제는 그렇지 않은 경우다 (실습 5).
+### 6.2 cost 로 경로를 유도한다
 
-복구 시에도 패킷이 빠진다는 것을 짚어 주세요. 장애 복구 작업이 **또 한 번의 순단**이라는 사실은
-실무 작업 계획에서 반드시 고려해야 한다.
-
-### 실습 4 — cost 로 경로를 유도한다
-장애 없이, **설정만으로** 트래픽을 백업 경로로 옮긴다.
+장애 없이, 설정만으로 트래픽을 백업 경로로 옮긴다.
 
 ```
 r1# configure terminal
@@ -705,14 +1160,7 @@ r1# show ip route ospf
 traceroute -n {{ ip.web }}
 ```
 
-```
- 1  {{ gw.vlan10 }}
- 2  {{ p2p['r1-r3'].addresses.r3 }}      ← r3 경유로 바뀌었다
- 3  {{ p2p['r3-r4'].addresses.r4 }}
- 4  {{ ip.web }}
-```
-
-#### 이제 반대 방향을 본다.
+2번 홉이 `{{ p2p['r1-r3'].addresses.r3 }}`(r3)로 바뀌었다. 이제 반대 방향을 본다.
 
 ```bash
 # web
@@ -721,18 +1169,18 @@ traceroute -n {{ ip.pc1 }}
 
 ```
  1  {{ gw.vlan40 }}
- 2  {{ p2p['r2-r4'].addresses.r2 }}      ← 여전히 r2 다
+ 2  {{ p2p['r2-r4'].addresses.r2 }}
  3  {{ p2p['r1-r2'].addresses.r1 }}
  4  {{ ip.pc1 }}
 ```
 
-비대칭 경로가 만들어졌다.
-가는 길은 r3, 오는 길은 r2. 통신은 정상이다 — 하지만 경로에 방화벽이 있었다면
-한쪽 방향만 지나가 세션이 깨진다. 이것이 M9 에서 다시 나온다.
+**여전히 `r2` 다.** 가는 길은 r3, 오는 길은 r2 인 비대칭 경로가 만들어졌다.
+통신은 정상이다. 하지만 경로에 방화벽이 있었다면 한쪽 방향만 지나가 세션이 깨진다.
+이것이 M9 에서 다시 나온다.
 
-cost 는 **나가는 방향에만** 적용된다. 양쪽을 함께 바꿔야 대칭이 유지된다.
+cost 는 나가는 방향에만 적용된다. 양쪽을 함께 바꿔야 대칭이 유지된다.
 
-#### 정리 (반드시 할 것)
+**정리**
 
 ```
 r1# configure terminal
@@ -742,11 +1190,10 @@ r1(config-if)# end
 r1# show ip ospf interface eth2
 ```
 
-### 실습 5 — ★ "링크는 UP 인데 상대가 죽었다"
-#### 실무에서 가장 까다로운 상황을 재현한다.
+### 6.3 링크는 UP 인데 상대가 죽었다
 
-r2 쪽 포트를 내린다. 이 랩의 링크는 가상 브리지를 거치므로 — 실장비로 치면 중간에 L2 스위치가 있는 것과 같다 —
-r1 쪽 포트는 UP 으로 남는다.
+5.8 의 상황을 직접 만든다. 이 랩의 링크는 가상 브리지를 거치므로, 실장비로 치면
+중간에 L2 스위치가 있는 것과 같다. `r2` 쪽 포트를 내려도 `r1` 쪽 포트는 UP 으로 남는다.
 
 ```bash
 # pc1 (계속 돌려 둔다)
@@ -758,10 +1205,10 @@ ping -i 0.2 {{ ip.web }}
 sudo ip link set eth1 down
 ```
 
-#### ① r1 의 링크는 여전히 UP 다
+**① r1 의 링크는 여전히 UP 이다**
 
 ```bash
-# r1
+# r1 의 셸에서
 ip -br link show eth2
 ```
 
@@ -769,58 +1216,50 @@ ip -br link show eth2
 eth2   UP   52:54:00:31:00:02 <BROADCAST,MULTICAST,UP,LOWER_UP>
 ```
 
-"링크가 UP 이니 정상"이 왜 위험한 말인지가 여기서 드러난다.
-M1 에서 배운 1차 판정은 여전히 유효하지만, 그것만으로는 부족하다.
+"링크가 UP 이니 정상" 이 왜 위험한 말인지가 여기서 드러난다.
 
-#### ② 그런데 경로는 이미 바뀌어 있다
+**② 인접은 아직 살아 있다**
 
 ```
 r1# show ip ospf neighbor
 ```
 
-```
-{{ loopback.r2 }}   1 Full/-   00:06:12   12.104s  {{ p2p['r1-r2'].addresses.r2 }}   eth2:{{ p2p['r1-r2'].addresses.r1 }}
-{{ loopback.r3 }}   1 Full/-   00:06:10   35.882s  {{ p2p['r1-r3'].addresses.r3 }}   eth3:{{ p2p['r1-r3'].addresses.r1 }}
-```
+`{{ loopback.r2 }}` 가 아직 `Full` 이고 Dead Time 만 줄어든다.
 
-r2 가 **아직 `Full`** 이다. Dead Time 만 줄어들고 있다.
+**③ 그런데 경로는 이미 바뀌어 있다**
 
 ```
 r1# show ip route ospf
 ```
 
-**그런데 경로는 이미 `eth3`(r3) 로 바뀌어 있다.**
-
+`r2` 는 자기 포트가 죽자마자 "나는 r1 과 연결돼 있지 않다" 는 새 지도를 뿌렸다.
+그 지도가 `r4 → r3 → r1` 로 돌아 `r1` 에 도착했고, `r1` 은 계산을 다시 했다.
+**인접은 Dead timer 를 기다리지만 경로 계산은 지도가 바뀌는 즉시 일어난다.**
 이것이 제어 평면과 데이터 평면의 차다.
-r2 는 자기 포트가 죽자마자 "나는 r1 과 연결돼 있지 않다" 는 새 지도를 뿌렸다.
-그 지도가 `r4 → r3 → r1` 경로로 돌아 r1 에 도착했고, r1 은 SPF 를 다시 돌렸다.
-인접은 Dead timer 를 기다리지만, 경로 계산은 지도가 바뀌는 즉시 일어난다.
 
-**③ {{ routing.ospf.timers.dead }}초 뒤**
+**④ {{ routing.ospf.timers.dead }}초 뒤**
 
 ```
 r1# show ip ospf neighbor
 ```
 
-r2 가 목록에서 사라진다.
+`{{ loopback.r2 }}` 가 목록에서 사라진다.
 
-#### 복구
+여기서 반드시 스스로 물어보세요 — **백업 경로가 없었다면 어땠을까.**
+`r2` 의 새 지도가 `r1` 에게 도달할 길이 없다. `r1` 은 Dead timer {{ routing.ospf.timers.dead }}초를 꽉 채워 기다리고,
+그동안 트래픽은 죽은 링크로 계속 나간다. {{ routing.ospf.timers.dead }}초짜리 블랙홀이다.
+이것을 밀리초로 줄이려고 쓰는 것이 BFD 다.
+
+**정리**
 
 ```bash
 # r2
 sudo ip link set eth1 up
 ```
 
-여기서 반드시 물어볼 것 — "만약 백업 경로가 없었다면?"
-r2 의 새 지도가 r1 에게 도달할 길이 없다. 그러면 r1 은 Dead timer {{ routing.ospf.timers.dead }}초를 꽉 채워 기다리고,
-그동안 트래픽은 죽은 링크로 계속 나간다 — {{ routing.ospf.timers.dead }}초 블랙홀.
-이것을 밀리초로 줄이려고 쓰는 것이 BFD(Bidirectional Forwarding Detection)다.
-Hello 를 훨씬 자주 주고받아 장애를 빨리 알아채는 별도 프로토콜이며, 실무 백본에서는 거의 항상 켠다.
+### 6.4 MTU 불일치로 `ExStart` 에 갇히기
 
-### 실습 6 — MTU 불일치로 `ExStart` 에 갇히기
-M2 에서 배운 MTU 가 **OSPF 를 멈추게** 하는 것을 본다.
-
-MTU 는 리눅스 쪽 값이라 셸에서 바꾼다. 그다음 라우터 안에서 인터페이스를 껐다 켜
+5.2 를 직접 만든다. MTU 는 리눅스 쪽 값이라 셸에서 바꾸고, 라우터 안에서 포트를 껐다 켜
 인접을 다시 세운다.
 
 ```bash
@@ -836,8 +1275,6 @@ r1(config-if)# no shutdown
 r1(config-if)# end
 ```
 
-*(인접을 다시 맺게 하려는 것이다. 그냥 두어도 재시도하지만 시간이 걸린다)*
-
 잠시 뒤 확인한다.
 
 ```
@@ -845,14 +1282,15 @@ r1# show ip ospf neighbor
 ```
 
 ```
-{{ loopback.r2 }}   1 Full/-      00:12:31   38.402s  {{ p2p['r1-r2'].addresses.r2 }}   eth2:{{ p2p['r1-r2'].addresses.r1 }}
-{{ loopback.r3 }}   1 ExStart/-   00:00:14   38.100s  {{ p2p['r1-r3'].addresses.r3 }}   eth3:{{ p2p['r1-r3'].addresses.r1 }}
+Neighbor ID     Pri State     Up Time    Dead Time  Address           Interface
+{{ loopback.r2 }}        1 Full/-      00:12:31   38.402s  {{ p2p['r1-r2'].addresses.r2 }}       eth2:{{ p2p['r1-r2'].addresses.r1 }}
+{{ loopback.r3 }}        1 ExStart/-   00:00:14   38.100s  {{ p2p['r1-r3'].addresses.r3 }}       eth3:{{ p2p['r1-r3'].addresses.r1 }}
 ```
 
-#### `ExStart` 에서 멈췄다.
+`ExStart` 에서 멈췄다. 로그가 이유를 그대로 말해 준다.
 
 ```bash
-# r1 — 로그를 본다
+# r1
 sudo journalctl -u frr --since '2 min ago' | grep -i mtu
 ```
 
@@ -860,13 +1298,10 @@ sudo journalctl -u frr --since '2 min ago' | grep -i mtu
 OSPF Packet[DD]: Neighbor {{ loopback.r3 }} MTU 1500 is larger than [eth3]'s MTU 1400
 ```
 
-상태가 원인을 말해 준다. `ExStart`/`Exchange` 는 DBD 를 주고받는 단계이고,
-그 안에 서로의 MTU 가 들어 있다. Area 문제였다면 인접이 **아예 안 보였을** 것이다.
+**그리고 지금 통신은 멀쩡하다.** 주 경로가 살아 있기 때문이다.
+이중화가 조용히 죽어 있는 상태다. 정기 점검을 하지 않으면 진짜 장애 때 알게 된다.
 
-그리고 지금 통신은 멀쩡한다. 주 경로가 살아 있기 때문이다.
-이중화가 조용히 죽어 있는 상태 — 정기 점검을 하지 않으면 진짜 장애 때 알게 된다.
-
-#### 정리 (반드시 할 것)
+**정리**
 
 ```bash
 # r1 의 셸에서
@@ -882,31 +1317,30 @@ r1(config-if)# end
 r1# show ip ospf neighbor
 ```
 
-둘 다 `Full` 인지 확인할 것.
+둘 다 `Full` 인지 확인하세요.
 
 ---
 
-## 5. 관찰 포인트 정리
+## 7. 관찰 포인트 정리
 
 | 확인할 것 | 명령 | 정상이라면 |
 |---|---|---|
-| 인접이 섰는가 | `show ip ospf neighbor` (라우터 안) | 이웃 수만큼 `Full` |
-| 어디서 멈췄는가 | 같은 명령의 State 열 | `ExStart` → MTU, `Init` 이하 → Area·인증·타이머 |
-| Area · cost · 타이머 | `show ip ospf interface <if>` | 양쪽이 같다 |
+| 인접이 섰는가 | `show ip ospf neighbor` | 이웃 수만큼 `Full` |
+| 어디서 멈췄는가 | 같은 명령의 State 열 | `ExStart` 는 MTU · `Init` 이하는 area/인증/타이머 |
+| area · cost · 타이머 | `show ip ospf interface <포트>` | 양쪽이 같다 |
 | 지도가 같은가 | `show ip ospf database` (양쪽) | 두 출력이 일치 |
 | 배운 경로 | `show ip route ospf` | `O>*` 로 의도한 next-hop |
 | 정적이 남았는가 | `show ip route static` | 비어 있다 |
 | 실제 경로 | `traceroute -n` (pc1) | 주 경로(r2) 경유 |
 | 수렴 시간 | `ping -i 0.2` 중 손실 개수 | 링크 다운은 1~2개 |
 
-순서: ① 인접 → ② 멈춘 위치로 원인 좁히기 → ③ 양쪽 인터페이스 설정 비교 → ④ 경로 확인.
-인접이 안 섰는데 `show ip route` 를 들여다보는 것은 시간 낭비다.
+순서는 ① 인접 → ② 멈춘 위치로 원인 좁히기 → ③ 양쪽 포트 설정 비교 → ④ 경로 확인이다.
 
 ---
 
-## 6. 장애 연습 — 증상만 보고 원인 찾기
+## 8. 장애 연습 — 증상만 보고 원인 찾기
 
-**언제 하나** — [과제] 탭의 마지막 과제다. 실습을 다 끝낸 뒤에 오세요.
+**언제 하나** — [과제] 탭의 마지막 과제다. 6절 실습을 다 끝낸 뒤에 오세요.
 설정이 손에 익기 전에는 증상을 봐도 무엇이 이상한지 보이지 않는다.
 
 실행 패널의 [장애 연습] 에서 아래 중 하나를 고르고 [주입] 을 누른다.
@@ -914,41 +1348,40 @@ r1# show ip ospf neighbor
 
 | # | 증상 | 힌트 |
 |---|---|---|
-| m04-01 | 통신은 정상. 그런데 이중화 점검을 하라는 지시가 내려왔다 | 백업 경로의 인접은 서 있는가? |
+| m04-01 | 통신은 정상. 그런데 이중화 점검을 하라는 지시가 내려왔다 | 백업 경로의 인접은 서 있는가 |
 | m04-02 | 통신은 되는데 경로가 백업으로 돌아간다. 주 경로 링크는 UP | 인접 상태가 어디서 멈춰 있는가 |
-| m04-03 | r4 의 인접 하나가 사라졌다. 링크·주소는 정상 | ①②③ 이 다 맞으면 남은 것은? |
-| m04-04 | 백업 경로의 인접이 서지 않는다. Area · 주소 · MTU 는 전부 정상 | 양쪽이 같은 박자로 대화하고 있는가 |
+| m04-03 | r4 의 인접 하나가 사라졌다. 링크와 주소는 정상 | 2.3 의 ①②③ 이 다 맞으면 남은 것은 |
+| m04-04 | 백업 경로의 인접이 서지 않는다. area · 주소 · MTU 는 전부 정상 | 양쪽이 같은 박자로 대화하고 있는가 |
 
-**규칙**: 복구하기 전에 원인을 먼저 말한다. 근거(`show` 출력 · 로그)를 함께 제시해 주세요.
+**규칙** — 복구하기 전에 원인을 먼저 말한다. 근거(`show` 출력 · 로그)를 함께 제시해 주세요.
 
-다 찾았으면 **[복구]** 로 되돌린다.
-여기저기 건드려서 엉킨 것 같으면 [이 모듈 적용] 이 더 확실하다 — 주입한 장애까지 한 번에 푼다.
+다 찾았으면 [복구] 로 되돌린다.
+여기저기 건드려서 엉킨 것 같으면 [이 모듈 적용] 이 더 확실하다. 주입한 장애까지 한 번에 푼다.
 
-m04-01 은 증상이 없다. 실무의 정기 이중화 점검이 왜 필요한지를 그대로 보여 주는 시나리오다.
-"지금 잘 되니 괜찮다"가 왜 위험한 판단인지 여기서 체감해 주세요.
-
-m04-01 과 m04-04 는 증상이 거의 같다. 원인은 완전히 다르다.
-찍어서 맞히는 것이 아니라 2.5 의 순서를 그대로 밟아 구분해 낼 것 — 그것이 이 챌린지의 목적이다.
+m04-01 은 증상이 없다. "지금 잘 되니 괜찮다" 가 왜 위험한 판단인지 여기서 체감해 주세요.
+m04-01 과 m04-04 는 증상이 거의 같고 원인은 완전히 다르다.
+찍어서 맞히는 것이 아니라 2.3 의 순서를 그대로 밟아 구분해 낼 것.
 
 ---
 
-## 7. 흔한 오해 · 실무 팁
+## 9. 흔한 오해 · 실무 팁
 
 | 오해 | 사실 |
 |---|---|
-| "OSPF 를 켰으니 정적은 놔둬도 된다" | 정적(AD 1)이 이겨서 OSPF 경로가 안 쓰인다. 반드시 걷어낸다. |
-| "인접이 Full 이면 그 경로로 간다" | 인접과 경로 선택은 별개다. 지도(LSDB)가 결정한다. |
-| "링크가 UP 이면 정상" | 상대가 죽어도 내 포트는 UP 일 수 있다. Dead timer 를 기다리게 된다. |
-| "OSPF 는 경로를 주고받는다" | 지도(LSA) 를 주고받고, 경로는 각자 계산한다. |
-| "cost 는 속도다" | 사람이 정하는 설계 의도다. 대역폭 기반 기본값은 참고일 뿐. |
-| "cost 를 바꾸면 양방향이 바뀐다" | 나가는 방향만 바뀐다. 비대칭 경로가 생긴다. |
-| "이중화가 있으니 안전하다" | 백업 경로의 인접이 서 있는지 주기적으로 확인해야 한다 (m04-01). |
-| "수렴은 항상 빠르다" | 링크 다운은 빠르다. 상대만 죽은 경우는 {{ routing.ospf.timers.dead }}초다. |
+| "OSPF 를 켰으니 정적은 놔둬도 된다" | 프리픽스가 겹치면 사람이 헷갈리고, 상대만 죽는 장애에서 블랙홀이 된다 |
+| "AD 가 작으면 무조건 이긴다" | 프리픽스가 같을 때만 AD 를 본다. `/24` 는 `/19` 를 이긴다 |
+| "인접이 Full 이면 그 경로로 간다" | 인접과 경로 선택은 별개다. 지도가 결정한다 |
+| "링크가 UP 이면 정상" | 상대가 죽어도 내 포트는 UP 일 수 있다 |
+| "OSPF 는 경로를 주고받는다" | 지도 조각을 주고받고 경로는 각자 계산한다 |
+| "cost 는 속도다" | 사람이 정하는 설계 의도다. 대역폭 기반 기본값은 참고일 뿐이다 |
+| "cost 를 바꾸면 양방향이 바뀐다" | 나가는 방향만 바뀐다. 비대칭 경로가 생긴다 |
+| "이중화가 있으니 안전하다" | 백업 경로의 인접이 서 있는지 주기적으로 확인해야 한다 |
+| "수렴은 항상 빠르다" | 링크 다운은 빠르다. 상대만 죽은 경우는 {{ routing.ospf.timers.dead }}초다 |
 
 #### 실무 팁
 
 - OSPF 문제는 `show ip ospf neighbor` 한 줄에서 시작한다. State 가 원인의 절반을 말해 준다.
-- 양쪽 라우터의 `show ip ospf interface <if>` 를 나란히 놓고 본다. 눈으로 비교하면 대부분 보인다.
+- 양쪽 라우터의 `show ip ospf interface <포트>` 를 나란히 놓고 본다. 눈으로 비교하면 대부분 보인다.
 - 변경 전 `show ip ospf neighbor` 를 저장해 둔다. 평상시 상태를 모르면 이상을 알아볼 수 없다.
 - 이중화는 정기적으로 끊어 봐야 살아 있음을 안다. 안 끊어 본 백업은 백업이 아니다.
 - 실장비 명령 대응:
@@ -959,25 +1392,20 @@ m04-01 과 m04-04 는 증상이 거의 같다. 원인은 완전히 다르다.
   | `show ip ospf interface eth2` | `show ip ospf interface GigabitEthernet0/1` |
   | `show ip ospf database` | `show ip ospf database` |
   | `show ip route ospf` | `show ip route ospf` |
-  | `interface eth2` / `ip ospf cost 200` | `interface …` / `ip ospf cost 200` |
-  | `interface eth2` / `ip ospf area 0.0.0.0` | `network … area 0` 또는 `ip ospf 1 area 0` |
+  | `interface eth2` · `ip ospf cost 200` | `interface …` · `ip ospf cost 200` |
+  | `interface eth2` · `ip ospf area {{ routing.ospf.area }}` | `network … area 0` 또는 `ip ospf 1 area 0` |
 
 ---
 
-### 여기서 끝이 아니다
-
-위쪽 탭에서 [퀴즈](#quiz) → [과제](#tasks) → [검증](#verify) 순으로 진행한다.
-퀴즈로 개념을 확인하고, 과제에서 랩에 직접 만들고, 검증에서 그 결과를 기계가 본다.
-
 ## 다음 — [퀴즈]
 
-교재는 여기까지다. 이 모듈은 아직 안 끝났다 — 순서는 이렇다.
+교재는 여기까지다. 이 모듈은 아직 안 끝났다. 순서는 이렇다.
 
 **교재 → [퀴즈] → [과제] → [검증] → 다음 모듈**
 
-웹 콘솔 위쪽의 **[퀴즈]** 탭을 눌러 개념부터 확인해 주세요.
+웹 콘솔 위쪽의 [퀴즈] 탭을 눌러 개념부터 확인해 주세요.
 횟수 제한은 없고, 틀린 문항은 그 자리에서 해설이 나온다.
 
 [검증]까지 통과하면 다음 모듈이 열린다 — M5. IPv6. 지금까지 만든 모든 것을 IPv6 로 한 번 더 한다.
 주소 표기부터 다르고, ARP 가 없고, NAT 도 없다.
-"주소가 부족해서 생긴 모든 우회로"가 사라지면 네트워크가 어떻게 달라지는지를 본다.
+주소가 부족해서 생긴 모든 우회로가 사라지면 네트워크가 어떻게 달라지는지를 본다.
