@@ -469,9 +469,9 @@ bridge vlan show
 
 ```
 port              vlan-id
-eth1              1 PVID Untagged
-eth2              1 PVID Untagged
-eth3              1 PVID Untagged
+eth1              1 PVID Egress Untagged
+eth2              1 PVID Egress Untagged
+eth3              1 PVID Egress Untagged
 ```
 
 포트 셋이 전부 VLAN 1 에 있습니다. 스위치가 한 덩어리라는 뜻입니다.
@@ -525,10 +525,13 @@ bridge vlan show
 
 ```
 port              vlan-id
-eth1              {{ vlans[10].id }} PVID Untagged
-eth2              {{ vlans[20].id }} PVID Untagged
-eth3              1 PVID Untagged
+eth1              {{ vlans[10].id }} PVID Egress Untagged
+eth2              {{ vlans[20].id }} PVID Egress Untagged
 ```
+
+손대지 않은 `{{ port.sw1.r1 }}` 줄이 통째로 사라졌습니다. `vlan_default_pvid 0` 이
+"지정하지 않은 포트에는 아무것도 주지 마라" 는 뜻이라, 그 포트의 VLAN 1 도 함께
+없어진 것입니다. 3.4 에서 여기에 트렁크를 만듭니다.
 
 ```bash
 # pc1
@@ -549,6 +552,9 @@ ip neigh show dev eth1
 ```
 {{ ip_at('pc2', 'm1') }} dev eth1  FAILED
 ```
+
+`ping` 을 막 돌린 직후라면 `INCOMPLETE` 로 보입니다 — 아직 물어보는 중이라는 뜻이고,
+커널이 포기하면 `FAILED` 가 됩니다. 둘 다 **응답이 오지 않았다**는 같은 이야기입니다 (M1 실습 2).
 
 `FAILED` 는 ARP 응답이 오지 않았다는 뜻입니다. `pc1` 의 ARP Request 는 브로드캐스트이고,
 그 브로드캐스트는 VLAN {{ vlans[10].id }} 밖으로 나가지 못합니다. `pc2` 는 질문 자체를 듣지 못합니다.
@@ -647,11 +653,11 @@ bridge vlan show
 
 ```
 port              vlan-id
-eth1              {{ vlans[10].id }} PVID Untagged
-eth2              {{ vlans[20].id }} PVID Untagged
+eth1              {{ vlans[10].id }} PVID Egress Untagged
+eth2              {{ vlans[20].id }} PVID Egress Untagged
 eth3              {{ vlans[10].id }}
                   {{ vlans[20].id }}
-                  {{ vlans[999].id }} PVID Untagged
+                  {{ vlans[999].id }} PVID Egress Untagged
 ```
 
 `eth3` 만 여러 VLAN 을 갖고 있고 대부분이 태그된 것이 트렁크의 모습입니다.
@@ -1309,17 +1315,28 @@ ping -c 2 {{ ip.pc2 }}                    # 작은 것은 여전히 잘 된다
 
 이제 **큰 전송**을 해 봅니다. TCP 라야 합니다.
 
+받는 쪽이 **몇 바이트를 받았는지 세게** 합니다. 이게 판정의 전부입니다 —
+보내는 쪽은 성공하든 실패하든 똑같이 10초 뒤에 끝나기 때문입니다.
+
 ```bash
 # pc2 (터미널 2) — 받는 쪽
-nc -l 9000 > /dev/null
+nc -l 9000 | wc -c
 ```
 
 ```bash
 # pc1 — 3MB 를 보낸다
-head -c 3M /dev/zero | nc -w 10 {{ ip.pc2 }} 9000 ; echo "종료 코드 = $?"
+head -c 3M /dev/zero | nc -w 10 {{ ip.pc2 }} 9000
 ```
 
-멈춥니다. `ping` 은 되고, TCP 연결도 맺어지는데(작은 패킷) 데이터만 안 갑니다.
+```
+# pc2 화면
+0
+```
+
+**0 바이트.** `ping` 은 되고, TCP 연결도 맺어지는데(작은 패킷) 데이터만 안 갑니다.
+
+> 주의 — 보내는 쪽만 보면 아무것도 알 수 없습니다. `nc -w 10` 은 성공했든
+> 막혔든 10초를 채우고 종료 코드 0 으로 끝납니다. **받은 바이트 수**를 보세요.
 
 ```bash
 # pc1 — 무엇이 반복되고 있나
@@ -1342,15 +1359,21 @@ sudo nft add rule ip mangle forward tcp flags syn tcp option maxseg size set rt 
 
 ```bash
 # pc2 — 다시 받는다
-nc -l 9000 > /dev/null
+nc -l 9000 | wc -c
 ```
 
 ```bash
 # pc1 — 같은 전송을 다시
-head -c 3M /dev/zero | nc -w 10 {{ ip.pc2 }} 9000 ; echo "종료 코드 = $?"
+head -c 3M /dev/zero | nc -w 10 {{ ip.pc2 }} 9000
 ```
 
-이번에는 갑니다. SYN 을 잡아 보면 값이 바뀌어 있습니다.
+```
+# pc2 화면
+3145728
+```
+
+**3MB 가 다 갔습니다.** 걸린 시간도 보이는 화면도 아까와 똑같습니다 — 달라진 것은
+이 숫자 하나뿐입니다. SYN 을 잡아 보면 이유가 나옵니다.
 
 ```bash
 # pc2 — handshake 만 본다

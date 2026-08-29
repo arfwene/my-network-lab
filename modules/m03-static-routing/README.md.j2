@@ -448,6 +448,17 @@ C>* {{ p2p['r1-r2'].cidr }} is directly connected, eth2
 `C` 로 시작하는 줄뿐입니다. **직접 붙어 있는 대역만 압니다.**
 `S`(정적)도 `O`(OSPF)도 한 줄이 없습니다. `r2` 와 `r4` 에서도 같습니다.
 
+실제 화면에는 두 줄이 더 있습니다.
+
+```
+C>* {{ loopback.r1 }}/32 is directly connected, lo0
+C>* {{ mgmt_cidr }} is directly connected, mgmt0
+```
+
+`mgmt0` 는 관리망이라 실습과 무관합니다 (M0). `lo0` 은 장비마다 하나씩 있는
+가상 인터페이스이고, 케이블을 다 뽑아도 사라지지 않아 **장비의 이름표**로 씁니다.
+M4 에서 OSPF 의 router-id 로 쓸 때 다시 나옵니다. 지금은 있다는 것만 봐 두세요.
+
 ```bash
 # pc1
 ping -c 2 -W 2 {{ ip.web }}

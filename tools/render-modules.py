@@ -64,6 +64,16 @@ def module_dirs():
 
 def render(lab_id=1, only=None):
     OUT.mkdir(parents=True, exist_ok=True)
+    # 없어진 모듈의 폴더를 치운다.
+    #   이 스크립트는 덮어쓰기만 한다. 모듈 번호가 바뀐 적이 있으면 옛 폴더가
+    #   그대로 남아, `dist/` 를 통째로 교육생에게 주면 **같은 내용의 M5 가 두 개**
+    #   간다. 실제로 12개 모듈에 18개 폴더가 있었다.
+    if not only:
+        keep = {d.name for d in module_dirs()}
+        for d in OUT.iterdir():
+            if d.is_dir() and d.name not in keep:
+                shutil.rmtree(d)
+                print(f"  치움: dist/modules/{d.name} (없어진 모듈)")
     index = []
     for d in module_dirs():
         meta = yaml.safe_load((d / "meta.yml").read_text(encoding="utf-8"))

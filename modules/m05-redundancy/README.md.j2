@@ -266,8 +266,11 @@ Skew Time          = (256 - 우선순위) / 256 초
 Master Down Interval = 광고 간격 × 3 + Skew Time
 ```
 
-`r1`(우선순위 {{ vrrp.vlan10.routers.r1.priority }})이면 Skew 는 (256−{{ vrrp.vlan10.routers.r1.priority }})/256 ≈ 0.41초,
-Master Down Interval 은 1초 × 3 + 0.41 = **3.41초** 입니다.
+기다리는 쪽은 BACKUP 이므로 **BACKUP 의 우선순위**로 계산합니다.
+`r3`(우선순위 {{ vrrp.vlan10.routers.r3.priority }})이면 Skew 는
+(256−{{ vrrp.vlan10.routers.r3.priority }})/256 ≈ 0.61초,
+Master Down Interval 은 1초 × 3 + 0.61 = **약 3.6초** 입니다.
+`show vrrp` 가 `3600 ms` 로 보여 주는 값이 이것입니다.
 
 우선순위를 Skew 에 넣은 이유가 있습니다. BACKUP 이 여럿일 때
 **우선순위가 높은 쪽이 먼저 나서게** 하려는 것입니다.
@@ -362,10 +365,10 @@ bridge vlan show
 ```
 {{ port.sw1.r1 }}              {{ vlans[10].id }}
                   {{ vlans[20].id }}
-                  {{ vlans[999].id }} PVID Untagged
+                  {{ vlans[999].id }} PVID Egress Untagged
 {{ port.sw1.r3 }}              {{ vlans[10].id }}
                   {{ vlans[20].id }}
-                  {{ vlans[999].id }} PVID Untagged
+                  {{ vlans[999].id }} PVID Egress Untagged
 ```
 
 트렁크가 둘입니다. `{{ port.sw1.r3 }}` 쪽은 M2 에서 한 것과 똑같은 설정이고,
@@ -559,7 +562,19 @@ sudo ip addr add {{ vrrp.vlan10.virtual_ip }}/{{ cidr.vlan10.split('/')[1] }} de
 sudo ip link set {{ port.r3.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }} up
 ```
 
-VLAN {{ vlans[20].id }} 도 같은 방식으로 만듭니다. VRID 와 가상 MAC 만 바꿉니다.
+VLAN {{ vlans[20].id }} 도 같은 방식으로 만듭니다. 이름·VRID·가상 MAC·주소만 바뀝니다.
+
+```bash
+# r1
+sudo ip link add eth1.{{ vlans[20].id }}-{{ vrrp.vlan20.vrid }} link eth1.{{ vlans[20].id }} address {{ vrrp.vlan20.virtual_mac }} type macvlan mode bridge
+sudo ip addr add {{ vrrp.vlan20.virtual_ip }}/{{ cidr.vlan20.split('/')[1] }} dev eth1.{{ vlans[20].id }}-{{ vrrp.vlan20.vrid }}
+sudo ip link set eth1.{{ vlans[20].id }}-{{ vrrp.vlan20.vrid }} up
+```
+
+`r3` 도 부모만 `{{ port.r3.sw1 }}.{{ vlans[20].id }}` 로 바꿔 같은 것을 만듭니다.
+
+이름 끝의 숫자는 **VRID** 입니다. 부모 포트 번호가 아닙니다 —
+`eth1.{{ vlans[20].id }}-{{ vrrp.vlan10.vrid }}` 처럼 만들면 FRR 이 짝을 못 찾습니다.
 
 | 조각 | 뜻 |
 |---|---|
@@ -623,7 +638,7 @@ r1# show vrrp
  Priority                                {{ vrrp.vlan10.routers.r1.priority }}
  Preempt Mode                            Yes
  Advertisement Interval                  1000 ms
- Master Down Interval (v4)               3410 ms
+ Master Down Interval (v4)               3600 ms
  IPv4 Addresses                          1
  ..................................      {{ vrrp.vlan10.virtual_ip }}
 ```
@@ -891,11 +906,12 @@ sudo ip link set eth1.{{ vlans[10].id }} down
 ```
 
 ```
-100 packets transmitted, 83 received, 17% packet loss
+100 packets transmitted, 85 received, 15% packet loss
 ```
 
-**17개 × 0.2초 ≈ 3.4초.** 2.5 에서 계산한 Master Down Interval 과 같습니다.
-계산이 실제와 맞는 것을 확인하는 것이 이 실습의 목적입니다.
+**열댓 개 × 0.2초 ≈ 3초.** 2.5 에서 계산한 Master Down Interval(약 3.6초)과
+같은 자리입니다. 개수는 매번 조금씩 다릅니다 — 포트를 내린 순간이 광고 주기의
+어디였느냐에 따라 갈리기 때문입니다. 계산과 실측이 같은 크기인지만 보면 됩니다.
 
 이제 되돌리면서 다시 잽니다.
 

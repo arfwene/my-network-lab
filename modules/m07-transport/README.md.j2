@@ -445,7 +445,7 @@ time nc -vz -w8 {{ ip.web }} 8080
 ```
 
 ```
-nc: connect to {{ ip.web }} port 8080 (tcp) failed: Connection timed out
+nc: connect to {{ ip.web }} port 8080 (tcp) timed out: Operation now in progress
 real  0m8.0s
 ```
 
@@ -569,7 +569,7 @@ curl -sS -m 5 http://<주소>/   # 부르는 쪽에서
 ### 5.2 아무 말 없이 매달린다
 
 **왜** — 경로 어딘가에서 조용히 버려집니다(DROP). 버린 쪽이 아무 말도 하지 않으므로
-보내는 쪽은 SYN 을 재전송합니다 타임아웃합니다.
+보내는 쪽은 SYN 을 몇 번 재전송하다 타임아웃합니다.
 
 ```bash
 sudo tcpdump -ni eth1 "host <상대> and tcp port <포트>"
