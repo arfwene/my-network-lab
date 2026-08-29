@@ -247,7 +247,14 @@ checks:
       kind: connectivity
       title: "외부 → FTP 공개 IP 로 Passive 전송이 되는가 ★"
       host: inet
-      run: "curl -sS -m10 -u {{ services.ftp.test_user }}:{{ services.ftp.test_password }} ftp://{{ (public.nat_pool.dnat | selectattr('node','equalto','ftp') | first).public }}/hello.txt"
+      # 두 옵션이 없으면 이 검사는 pasv_address 를 **전혀 보지 않는다.**
+      #   --disable-epsv        요즘 curl 은 EPSV 를 먼저 쓴다. EPSV 응답에는 주소가
+      #                         없고 포트만 있어, 서버가 뭐라고 알려 주든 상관이 없다.
+      #   --no-ftp-skip-pasv-ip curl 7.74 부터는 PASV 응답의 주소를 무시하고 제어
+      #                         연결의 주소를 재사용하는 것이 기본값이다.
+      # 둘 다 끄면 "서버가 227 로 알려 준 주소" 로 실제로 접속한다 — 그래야
+      # 이 모듈이 가르치는 "FTP 가 NAT 를 싫어하는 이유" 를 검사가 확인한다.
+      run: "curl -sS -m10 --disable-epsv --no-ftp-skip-pasv-ip -u {{ services.ftp.test_user }}:{{ services.ftp.test_password }} ftp://{{ (public.nat_pool.dnat | selectattr('node','equalto','ftp') | first).public }}/hello.txt"
       expect: "my-network-lab"
       hint: |
         21 은 되는데 전송만 안 되면 두 가지를 봅니다.
