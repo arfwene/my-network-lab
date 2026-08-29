@@ -267,7 +267,7 @@ checks:
       kind: connectivity
       title: "FTP Passive 모드로 파일을 실제로 받아오는가 ★"
       host: pc1
-      run: "curl -sS -m10 -u ftpuser:labpass ftp://{{ ip.ftp }}/hello.txt"
+      run: "curl -sS -m10 -u {{ services.ftp.test_user }}:{{ services.ftp.test_password }} ftp://{{ ip.ftp }}/hello.txt"
       expect: "my-network-lab"
       hint: |
         배너(21)는 뜨는데 이것만 안 되면 **데이터 채널** 문제입니다.

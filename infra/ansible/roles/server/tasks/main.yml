@@ -57,8 +57,8 @@
 
     - name: FTP 테스트 계정
       ansible.builtin.user:
-        name: ftpuser
-        password: "{{ 'labpass' | password_hash('sha512', 'labsalt') }}"
+        name: "{{ service_ports.ftp.test_user }}"
+        password: "{{ service_ports.ftp.test_password | password_hash('sha512', 'labsalt') }}"
         shell: /usr/sbin/nologin
         home: /srv/ftp
         create_home: true
@@ -67,7 +67,7 @@
       ansible.builtin.copy:
         dest: /srv/ftp/hello.txt
         content: "my-network-lab FTP test file\n"
-        owner: ftpuser
+        owner: "{{ service_ports.ftp.test_user }}"
         mode: "0644"
 
     - name: vsftpd 활성화

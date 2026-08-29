@@ -578,10 +578,30 @@ seccomp_sandbox=NO
 pasv_enable=YES
 pasv_min_port={{ services.ftp.passive_range.split('-')[0] }}
 pasv_max_port={{ services.ftp.passive_range.split('-')[1] }}
+pasv_address={{ public.nat_pool.dnat | selectattr('node','equalto','ftp') | map(attribute='public') | first }}
 
 port_enable=YES
 connect_from_port_20=YES
 ```
+
+`pasv_address` 는 **밖에서 접속했을 때 알려 줄 주소**입니다. 지금은 쓸 일이 없지만
+M10 에서 이 서버가 NAT 뒤로 들어가면 반드시 필요해집니다 — 그때 왜 그런지 봅니다.
+
+익명 접속을 껐으니 **계정이 있어야 들어갑니다.** 시험용으로 하나 만들고
+받아 볼 파일도 하나 둡니다.
+
+```bash
+# ftp
+sudo useradd -m -d /srv/ftp -s /usr/sbin/nologin ftpuser
+echo 'ftpuser:{{ services.ftp.test_password }}' | sudo chpasswd
+echo '/usr/sbin/nologin' | sudo tee -a /etc/shells
+echo 'my-network-lab FTP test file' | sudo tee /srv/ftp/hello.txt
+sudo chown ftpuser /srv/ftp/hello.txt
+```
+
+`nologin` 을 `/etc/shells` 에 넣는 이유 — vsftpd 는 PAM 으로 로그인 셸을 확인합니다.
+목록에 없는 셸이면 **비밀번호가 맞아도 530 으로 거부합니다.** 이 계정은 SSH 로는
+못 들어오게 해 두고 FTP 만 열어 주는 것이라 이 한 줄이 필요합니다.
 
 ```bash
 # ftp
@@ -597,10 +617,16 @@ M10 에서 이 범위를 그대로 정책에 씁니다.
 
 ```bash
 # pc1
-curl -sS -m 5 ftp://ftp.{{ dns.zone }}/ 2>&1 | head -3
+curl -sS -m 5 -u ftpuser:{{ services.ftp.test_password }} ftp://ftp.{{ dns.zone }}/hello.txt
 ```
 
-접속 자체가 되는지만 봅니다. 두 채널이 어떻게 움직이는지는 6.5 에서 캡처로 봅니다.
+```
+my-network-lab FTP test file
+```
+
+계정 없이 `curl ftp://ftp.{{ dns.zone }}/` 만 치면 `530 Access denied` 가 납니다 —
+익명 접속을 껐기 때문이고, 정상입니다.
+두 채널이 어떻게 움직이는지는 6.5 에서 캡처로 봅니다.
 
 ```labdiagram
 kind: mini

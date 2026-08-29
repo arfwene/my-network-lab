@@ -293,6 +293,10 @@ services:
   ftp:
     tcp: [21]
     passive_range: "50000-50100"
+    # 익명 접속을 끄므로 계정이 하나 필요하다. 교재(M9 3.4)와 검사와 roles/server 가
+    # 같은 값을 봐야 해서 여기에 둔다 — 세 곳에 따로 적으면 한 곳만 낡는다.
+    test_user: ftpuser
+    test_password: labpass
     note: "passive 데이터 포트 범위를 고정해야 방화벽 정책을 쓸 수 있다 — M10 핵심"
   dns:  {udp: [53], tcp: [53], note: "UDP 우선, 응답이 크면 TCP 로 전환 → M7 TCP/UDP 선택 기준 사례"}
   ssh:  {tcp: [22], note: "관리 접근. telnet(23) 은 진단 도구로만 사용 — G4"}

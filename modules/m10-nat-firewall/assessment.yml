@@ -247,7 +247,7 @@ checks:
       kind: connectivity
       title: "외부 → FTP 공개 IP 로 Passive 전송이 되는가 ★"
       host: inet
-      run: "curl -sS -m10 -u ftpuser:labpass ftp://{{ (public.nat_pool.dnat | selectattr('node','equalto','ftp') | first).public }}/hello.txt"
+      run: "curl -sS -m10 -u {{ services.ftp.test_user }}:{{ services.ftp.test_password }} ftp://{{ (public.nat_pool.dnat | selectattr('node','equalto','ftp') | first).public }}/hello.txt"
       expect: "my-network-lab"
       hint: |
         21 은 되는데 전송만 안 되면 두 가지를 봅니다.
