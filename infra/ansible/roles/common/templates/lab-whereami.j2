@@ -28,6 +28,7 @@ dev_by_mac() {
 }
 
 missing=0
+down_no_addr=0
 declare -a RENAMED
 # 머리글은 printf 로 채우지 않고 손으로 맞춘다.
 #   printf 의 %-10s 는 **글자 수**로 채우는데 한글은 터미널에서 두 칸을 쓴다.
@@ -57,8 +58,14 @@ a=$(live_addr "$dev")
    주소가 있으면 && 가 끊어져 printf 가 아예 실행되지 않는다. 그래서 이 표에
    관리망 한 줄만 나오고 랩 인터페이스는 한 줄도 안 보였다 — 교육생이 자기
    장비를 파악하는 첫 화면인데. #}
+{# 주소가 없어도 **링크가 내려가 있으면** 설정이 안 올라간 것이 아니다.
+   M0 실습 4 가 `ip link set eth1 down` 을 시킨다. 그 상태에서 이 화면이
+   "설정이 안 올라간 상태입니다 — [이 모듈 적용] 을 누르면 올라갑니다" 라고
+   하면, 시킨 대로 한 사람이 시킨 것을 되돌리게 된다. #}
 {% if i.ipv4 is defined and i.ipv4 %}
-[ -z "$a" ] && missing=1
+if [ -z "$a" ]; then
+  if [ "$(live_state "$dev")" = up ]; then missing=1; else down_no_addr=1; fi
+fi
 {% endif %}
 printf '%-10s %-8s %-20s %-14s %s\n' "$dev" \
   "$(live_state "$dev")" "${a:--}" "{{ i.peer | default('-') }}" \
@@ -79,6 +86,10 @@ fi
 if [ "$missing" = 1 ]; then
   echo "이 노드에 아직 주소가 없습니다 — 설정이 안 올라간 상태입니다."
   echo "웹 콘솔에서 [이 모듈 적용] 을 누르면 올라갑니다 (1분쯤)."
+  echo
+elif [ "$down_no_addr" = 1 ]; then
+  echo "위 표에 down 인 포트가 있습니다. 내려간 포트는 주소도 함께 사라집니다."
+  echo "일부러 내린 것이면 정상입니다:  sudo ip link set <포트> up"
   echo
 fi
 echo "설계 단계: {{ lab_stage }}   |   전체 지도: 웹 콘솔 [랩 지도]"

@@ -30,6 +30,6 @@
     - name: 안내
       ansible.builtin.debug:
         msg: >-
-          {{ 'r4 에서 ' ~ src ~ ' 출발 HTTP 만 버리게 했다. ping 과 pc2 는 정상이다. show 명령 금지 규칙을 반드시 붙일 것.'
+          {{ 'r4 에서 ' ~ src ~ ' 출발 HTTP 만 버리게 했다. ping 과 pc2 는 정상이다.'
              if scenario_action | default('break') == 'break'
              else 'r4 방화벽 규칙 제거 완료 (nft list ruleset 으로 확인).' }}
