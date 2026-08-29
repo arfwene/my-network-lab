@@ -489,11 +489,17 @@ r1# show ip route 0.0.0.0/0
 ```
 
 ```
-O>* 0.0.0.0/0 [110/11] via {{ p2p['r1-r2'].addresses.r2 }}, eth2
+Routing entry for 0.0.0.0/0
+  Known via "ospf", distance 110, metric 10, best
+  Last update 00:00:16 ago
+  * {{ p2p['r1-r2'].addresses.r2 }}, via eth2, weight 1
 ```
 
-`O` 입니다. `r4` 하나에만 적었는데 `r1` 이 배웠습니다 — `default-information originate`
+`ospf` 입니다. `r4` 하나에만 적었는데 `r1` 이 배웠습니다 — `default-information originate`
 가 한 일입니다.
+
+경로 하나를 지정해서 물으면 이렇게 풀어서 보여 줍니다. `O>*` 로 시작하는 한 줄
+형태를 보고 싶으면 `show ip route ospf` 처럼 목록으로 물어보면 됩니다.
 
 ```bash
 # pc1 — 다시 보내 본다

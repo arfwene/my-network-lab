@@ -200,7 +200,7 @@ Host: web.{{ dns.zone }}
 
 ```
 HTTP/1.1 200 OK
-Server: nginx
+Server: nginx/1.24.0 (Ubuntu)
 X-Lab-Node: web
 Content-Type: text/plain
 
@@ -426,10 +426,14 @@ dig +short @{{ ip.dns }} web.{{ dns.zone }} A
 
 ```bash
 # dns
-ss -lunp | grep :53
+ss -lunp | grep {{ ip.dns }}
 ```
 
 아무것도 없습니다. `ftp` 에서도 21번을 아무도 듣지 않습니다.
+
+> 주의 — `grep :53` 으로 거르면 `127.0.0.53` · `127.0.0.54` 두 줄이 나옵니다.
+> 이 노드의 `systemd-resolved` 가 자기 자신을 위해 열어 둔 것이라 이 실습과 무관합니다.
+> 밖에서 물어볼 수 있는 자리는 **서비스망 주소**뿐이므로 그것으로 거릅니다.
 
 ### 3.2 1단계 — 존 파일을 만들고 물립니다 (할 일 ①)
 
@@ -481,7 +485,7 @@ OK
 ```bash
 # dns
 sudo systemctl restart named
-ss -lunp | grep :53
+ss -lunp | grep {{ ip.dns }}
 ```
 
 이제 53번을 듣습니다. `pc1` 에서 서버를 직접 지정해 물어봅니다.
@@ -656,8 +660,9 @@ exec 3<&-
 
 ```
 HTTP/1.1 200 OK
-Server: nginx
+Server: nginx/1.24.0 (Ubuntu)
 Content-Type: text/html
+X-Lab-Node: web
 ```
 
 `curl` 없이 TCP 소켓에 글자를 써서 웹 페이지를 받아 온 것입니다.
@@ -671,7 +676,7 @@ HTTP 가 사람이 읽을 수 있는 글자 프로토콜이라는 것이 여기�
 | 확인할 것 | 명령 | 어디서 | 정상이라면 |
 |---|---|---|---|
 | 존이 올라갔나 | `sudo named-checkzone {{ dns.zone }} /etc/bind/db.{{ dns.zone }}` | `dns` | `OK` |
-| 53번을 듣나 | `ss -lunp` | `dns` | 53 이 보입니다 |
+| 53번을 듣나 | `ss -lunp \| grep {{ ip.dns }}` | `dns` | 서비스망 주소의 53 이 보입니다 |
 | 이름이 되나 | `dig +short web.{{ dns.zone }}` | `pc1` | `{{ ip.web }}` |
 | 검색 도메인 | `ping -c1 web` | `pc1` | 됩니다 |
 | 21번을 듣나 | `ss -ltnp` | `ftp` | 21 이 보입니다 |
@@ -934,7 +939,7 @@ Host: web.{{ dns.zone }}
 
 ```
 HTTP/1.1 200 OK
-Server: nginx/1.24.0
+Server: nginx/1.24.0 (Ubuntu)
 Content-Type: text/plain
 X-Lab-Node: web
 
@@ -982,7 +987,7 @@ curl -sS -I http://{{ ip.web }}/
 
 ```
 HTTP/1.1 200 OK
-Server: nginx/1.24.0
+Server: nginx/1.24.0 (Ubuntu)
 X-Lab-Node: web
 ```
 
@@ -1234,7 +1239,7 @@ systemctl is-active systemd-resolved    # inactive — 일부러 꺼 두었다
 | m09-02 | 이름으로는 아무것도 안 되고, IP 로는 다 됩니다 | 판별표의 첫 줄 |
 | m09-03 | 이름 해석이 느리게 실패합니다. IP 는 정상 | 어느 서버에게 물어보고 있는가 |
 | m09-04 | FTP 접속은 되는데 파일 전송만 안 됩니다 | 연결이 몇 개인지 기억할 것 |
-| m09-05 | 서버망이 전부 안 됩니다. 이름 조회도 실패. 그런데 서버끼리는 정상 | 서버에서 게이트웨이의 MAC 을 봐 주세요 (M1 2.7) |
+| m09-05 | 서버망이 됐다 안 됐다 합니다. 그런데 서버끼리는 늘 정상 | 서버에서 게이트웨이의 MAC 을 **여러 번** 봐 주세요 (M1 2.7) |
 
 **규칙**: 복구 전에 원인을 먼저 말합니다. 그리고 판별표의 어느 칸인지까지 답해 주세요.
 
