@@ -1,16 +1,20 @@
 ---
 # M9-05 : dns 가 서버망 게이트웨이 주소를 가져간다 (중복 IP · ARP 충돌)
-#   증상  : pc1 에서 서버망(web·ftp·dns) 이 **전부** 안 된다. 이름 조회도 실패한다.
-#           그런데 서버망 안에서는 서로 잘 통하고, r4 의 설정과 경로는 완벽하다.
-#   한줄  : pc1 에서 서버망 전체가 안 됨
+#   증상  : pc1 에서 서버망(web·ftp·dns) 이 **될 때도 있고 안 될 때도 있다.**
+#           같은 명령을 열 번 치면 서너 번 실패한다. 그런데 서버망 안에서는 서로 잘
+#           통하고, r4 의 설정과 경로는 완벽하다.
+#   한줄  : 서버망이 됐다 안 됐다 함
 #   목표  : pc1 에서 web·ftp·dns 가 모두 된다
-#   정답  : web 에서 `ip neigh show <vlan40 게이트웨이>` 의 MAC 이 r4 가 아니라 dns 다.
+#   정답  : web 에서 `ip neigh show <vlan40 게이트웨이>` 의 MAC 이 볼 때마다 바뀐다.
 #           dns 가 게이트웨이 주소를 자기 인터페이스에 붙이고 gratuitous ARP 로 알렸다.
-#           서버들이 그 말을 믿어, 밖으로 나가는 프레임이 전부 dns 로 간다 (그리고 버려진다).
+#           같은 주소에 두 대가 답하므로 **나중에 답한 쪽이 이긴다** — 그래서 간헐적이다.
+#           dns 가 이긴 동안에는 밖으로 나가는 프레임이 전부 dns 로 간다 (그리고 버려진다).
 #   노림수: ARP 에는 검증 절차가 없다 (M1 2.7). "라우터가 정상" 과 "라우터에게 가고 있다" 는
 #           다른 문장이다. 계층을 건너뛰지 않고 아래부터 보는가. (B4, B5, D3)
-#   주의  : 캡스톤 풀에 넣지 않는다 — 회복 뒤 ARP 캐시가 스스로 정리될 때까지
-#           수십 초가 걸려, 채점 시점에 따라 결과가 흔들린다.
+#           그리고 **간헐적 장애**를 한 번의 성공으로 "정상" 이라 부르지 않는가.
+#   주의  : 캡스톤 풀에 넣지 않고, 검사로도 판정하지 않는다 (site.yml 의
+#           ungraded_scenarios). 증상이 간헐적이라 [검증] 이 도는 그 순간에는
+#           멀쩡할 수 있다 — 실제로 주입한 채로 8/8 이 나온다. 판정이 성립하지 않는다.
 - name: "scenario m09-05 :: 게이트웨이 주소를 누가 가져갔다"
   hosts: dns,web,ftp,r4
   become: true
@@ -18,6 +22,11 @@
   vars:
     vlan40_gw: >-
       {{ (hostvars['web'].lab_interfaces | selectattr('gateway', 'defined') | first).gateway }}
+    victims: >-
+      {{ ['web', 'ftp'] | map('extract', hostvars)
+         | map(attribute='lab_interfaces') | map('selectattr', 'ipv4', 'defined')
+         | map('selectattr', 'gateway', 'defined') | map('first')
+         | map(attribute='ipv4') | map('regex_replace', '/.*', '') | list }}
   tasks:
     - name: dns 가 게이트웨이 주소를 가로챈다
       ansible.builtin.shell: |
@@ -25,6 +34,21 @@
         ip addr add {{ vlan40_gw }}/32 dev eth1 2>/dev/null || true
         # 일방적 통보. 이걸 해야 이웃들의 캐시가 즉시 바뀐다 (실무의 사고와 같은 경로).
         arping -U -c 3 -I eth1 {{ vlan40_gw }} || true
+        # arping -U 만으로는 부족하다. 리눅스는 기본값(arp_accept=0)에서 **이미 갖고
+        # 있는 항목만** 일방적 통보로 갱신하고, 없던 항목은 새로 만들지 않는다.
+        # 그래서 마침 캐시가 비어 있던 노드는 멀쩡하고, 장애가 걸리는지 아닌지가
+        # 그 순간의 캐시 상태에 따라 달라졌다 — 주입해도 [검증] 이 8/8 로 통과했다.
+        # 가로챈 주소에서 한 번 말을 걸어 준다. 상대는 그 요청에 답하면서
+        # "{{ vlan40_gw }} = dns 의 MAC" 을 반드시 배운다.
+        for t in {{ victims | join(' ') }}; do
+          ping -c 1 -W 1 -I {{ vlan40_gw }} "$t" >/dev/null 2>&1 || true
+        done
+        # 한 번만 알리면 몇십 초 뒤 캐시가 만료되고, 그때 다시 물어보면 r4 도
+        # 함께 답하므로 장애가 저절로 사라진다. 실제 중복 IP 사고는 그 호스트가
+        # 살아 있는 내내 계속 답한다 — 그래서 [복구] 전까지 계속 알리게 둔다.
+        systemctl stop lab-arp-steal 2>/dev/null || true
+        systemd-run --unit=lab-arp-steal --collect /bin/sh -c \
+          'while :; do arping -U -c 1 -I eth1 {{ vlan40_gw }} >/dev/null 2>&1; sleep 2; done'
       changed_when: true
       when:
         - scenario_action | default('break') == 'break'
@@ -32,6 +56,7 @@
 
     - name: 가로챈 주소를 반납한다
       ansible.builtin.shell: |
+        systemctl stop lab-arp-steal 2>/dev/null || true
         ip addr del {{ vlan40_gw }}/32 dev eth1 2>/dev/null || true
       changed_when: true
       failed_when: false
