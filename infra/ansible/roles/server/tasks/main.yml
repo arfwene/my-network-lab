@@ -3,6 +3,22 @@
   ansible.builtin.set_fact:
     svc_active: "{{ stages.index(config_stage | default(lab_stage)) >= stages.index(stage) }}"
 
+# ---------------------------------------------------------------------------
+#  nginx 만 config_stage 를 안 본다 (node_active).
+#
+#  교재 어디에도 nginx 를 올리라는 할 일이 없다. `web` 의 nginx 는 M3 의 목적지고,
+#  `inet` 의 nginx 는 "남의 사이트"다 — 둘 다 교육생이 만드는 것이 아니라
+#  **랩이 깔아 주는 배경**이다. 그런데 직접 만드는 단계에서는 [이 모듈 적용] 이
+#  config_stage 를 한 칸 낮춰 올리므로, 그 배경이 자기 단계에 도달하지 못한다.
+#
+#    M3  config_stage=m2 < web 의 m3   → web 의 nginx 가 안 뜬다
+#    M10 config_stage=m9 < inet 의 m10 → 외부 사이트가 안 뜬다
+#
+#  M10 3.5 는 `curl http://<외부 사이트>/` 가 200 이 되는 것으로 SNAT 를 증명하는데,
+#  듣는 쪽이 없으면 RST 가 돌아온다. 검사 snat-outbound 도 같이 떨어진다.
+#  높은 단계까지 갔던 랩을 되돌리면 nginx 가 살아 있어 안 보이던 것이라,
+#  **새로 만든 랩에서만** 드러났다.
+# ---------------------------------------------------------------------------
 - block:
     # ---------------- nginx (web, inet) ----------------
     - name: nginx 사이트 설정
@@ -31,7 +47,7 @@
 
     - name: nginx 활성화
       ansible.builtin.systemd: {name: nginx, enabled: true, state: started}
-  when: "'nginx' in services and svc_active"
+  when: "'nginx' in services and node_active"
 
 - block:
     # ---------------- vsftpd (ftp) ----------------
