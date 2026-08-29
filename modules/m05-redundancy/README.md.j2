@@ -906,12 +906,16 @@ sudo ip link set eth1.{{ vlans[10].id }} down
 ```
 
 ```
-100 packets transmitted, 85 received, 15% packet loss
+100 packets transmitted, 83 received, 17% packet loss
 ```
 
-**열댓 개 × 0.2초 ≈ 3초.** 2.5 에서 계산한 Master Down Interval(약 3.6초)과
+**17개 × 0.2초 ≈ 3.4초.** 2.5 에서 계산한 Master Down Interval(약 3.6초)과
 같은 자리입니다. 개수는 매번 조금씩 다릅니다 — 포트를 내린 순간이 광고 주기의
 어디였느냐에 따라 갈리기 때문입니다. 계산과 실측이 같은 크기인지만 보면 됩니다.
+
+> 주의 — 여기서 **하나도 안 돌아오면** 3.3 의 OSPF 두 줄을 빠뜨린 것입니다.
+> 자리는 넘어갔는데 돌아오는 길이 없는 상태입니다. `r4` 에서
+> `show ip route {{ cidr.vlan10 }}` 이 비어 있으면 그것입니다.
 
 이제 되돌리면서 다시 잽니다.
 
