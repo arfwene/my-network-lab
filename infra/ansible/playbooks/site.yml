@@ -42,7 +42,11 @@
       when: node_role in ['router', 'edge'] and node_active
     - role: host
       when: node_role == 'host' and node_active
+    # server 만 node_active 를 안 본다. 아직 등장하지 않은 노드에서 **내리는 일**을
+    # 해야 하기 때문이다 — 예전에 M9·M10 까지 갔던 랩을 앞으로 되돌리면 named 와
+    # vsftpd 가 그대로 살아 있어서, M9 를 처음 여는 교육생이 "3장이 이미 다 되어
+    # 있는" 랩을 받는다. 올리는 쪽은 역할 안에서 svc_active 가 막는다.
     - role: server
-      when: services | length > 0 and node_active
+      when: services | length > 0
     - role: edge
       when: node_role == 'edge' and node_active

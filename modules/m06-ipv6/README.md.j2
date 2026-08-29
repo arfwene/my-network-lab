@@ -593,9 +593,11 @@ r1(config-if)# ipv6 ospf6 passive
 r1(config-if)# exit
 r1(config)# interface {{ port.r1.r2 }}
 r1(config-if)# ipv6 ospf6 area {{ routing.ospf6.area }}
+r1(config-if)# ipv6 ospf6 network point-to-point
 r1(config-if)# exit
 r1(config)# interface {{ port.r1.r3 }}
 r1(config-if)# ipv6 ospf6 area {{ routing.ospf6.area }}
+r1(config-if)# ipv6 ospf6 network point-to-point
 r1(config-if)# exit
 r1(config)# interface lo0
 r1(config-if)# ipv6 ospf6 area {{ routing.ospf6.area }}
@@ -606,9 +608,14 @@ r1(config-if)# end
 **router-id 가 IPv4 주소 모양인 것에 주목하세요.** OSPFv3 는 IPv6 를 나르지만
 지도 위의 이름표는 여전히 32비트입니다. IPv6 전용 망에서도 router-id 는 손으로 정해 줘야 합니다.
 
+**라우터 간 링크에는 `ipv6 ospf6 network point-to-point` 도 겁니다.** M4 2.6 에서
+IPv4 에 걸었던 그것이고 이유도 같습니다 — 상대가 하나뿐인 선에서 대표(DR)를 뽑을
+이유가 없습니다. 빠뜨리면 인접이 `Waiting` 으로 40초를 보낸 뒤 `Full/DR` 로 서고,
+6.5 에서 볼 화면(`Full/PointToPoint`)과 달라집니다. 통신은 되므로 그냥 지나치기 쉽습니다.
+
 `r2` · `r3` · `r4` 도 같은 방식입니다. 값만 다릅니다.
 
-| 라우터 | router-id | area 에 넣을 것 | passive |
+| 라우터 | router-id | area 에 넣을 것 (라우터 간 링크는 p2p) | passive |
 |---|---|---|---|
 | `r2` | `{{ loopback.r2 }}` | `{{ port.r2.r1 }}` `{{ port.r2.r4 }}` `lo0` | `lo0` |
 | `r3` | `{{ loopback.r3 }}` | `{{ port.r3.r1 }}` `{{ port.r3.r4 }}` `lo0` | `lo0` |
@@ -901,7 +908,7 @@ python3 -c "import ipaddress as i; print(i.ip_address('{{ ip6.pc1 }}').exploded)
 **[퀴즈] 탭**에 문제 세트가 있습니다.
 
 ### 6.3 ★ ARP 대신 NDP 를 본다
-**터미널 pc1** — 캡처를 먼저 것입니다.
+**터미널 pc1** — 캡처를 먼저 겁니다.
 
 ```bash
 sudo tcpdump -i eth1 -e -n icmp6
