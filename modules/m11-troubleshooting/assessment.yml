@@ -261,8 +261,12 @@ checks:
       title: r3 의 링크가 모두 살아 있는가 (백업 경로 라우터)
       kind: state
       host: r3
+      # VRRP 가상 인터페이스(`eth3.10-10` 처럼 `-<vrid>` 로 끝나는 것)는 뺀다.
+      #   r3 는 BACKUP 이라 **내려가 있는 것이 정상**이다 — vrrpd 가 MASTER 인
+      #   쪽에서만 올린다 (M5 3.5). 이걸 안 빼면 아무 장애도 없는 랩이
+      #   캡스톤에서 실패한다. 실제로 정상 m11 랩이 70/72 로 떨어졌다.
       run: |
-        for i in $(ls /sys/class/net | grep -E '^eth'); do
+        for i in $(ls /sys/class/net | grep -E '^eth' | grep -vE '\-[0-9]+$'); do
           s=$(cat /sys/class/net/$i/operstate)
           [ "$s" = up ] || echo "$i=$s"
         done

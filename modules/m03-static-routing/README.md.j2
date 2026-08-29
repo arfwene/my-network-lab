@@ -490,15 +490,46 @@ S>* {{ zone['site-b'] }} [1/0] via {{ p2p['r1-r2'].addresses.r2 }}, eth2, weight
 ping -c 2 -W 2 {{ ip.web }}
 ```
 
-**여전히 안 됩니다.** 그런데 아까와 답이 다릅니다. `Destination Net Unreachable` 이
-`r1` 이 아니라 `{{ p2p['r1-r2'].addresses.r2 }}`(`r2`)에서 옵니다.
-**패킷이 한 홉 더 갔다는 증거입니다.**
+**여전히 안 됩니다.** 그런데 아까와 화면이 다릅니다.
+
+```
+PING {{ ip.web }} ({{ ip.web }}) 56(84) bytes of data.
+
+--- {{ ip.web }} ping statistics ---
+2 packets transmitted, 0 received, 100% packet loss
+```
+
+3.1 에서는 `r1` 이 `Destination Net Unreachable` 이라고 **말이라도 해 줬습니다.**
+지금은 **아무 말도 없습니다.** 이 침묵이 진행의 증거입니다 — 패킷이 `r1` 을 지나
+`r2` 까지 갔다는 뜻이기 때문입니다.
+
+왜 `r2` 는 말을 안 하는가. `r2` 도 Site-B 를 모르니 버리기는 합니다. 그런데
+`Destination Net Unreachable` 을 보내려면 **`{{ ip.pc1 }}` 로 가는 길을 알아야
+합니다.** `r2` 에는 그 길이 없습니다. 그래서 오류를 만들고도 못 보냅니다.
+
+정말 `r2` 까지 갔는지는 그 구간을 떠서 확인합니다.
+
+```bash
+# r1 의 셸에서
+sudo tcpdump -i eth2 -n icmp
+```
+
+```
+IP {{ ip.pc1 }} > {{ ip.web }}: ICMP echo request, seq 1
+IP {{ ip.pc1 }} > {{ ip.web }}: ICMP echo request, seq 2
+```
+
+나가기만 하고 돌아오는 것이 없습니다. **`r1` 은 자기 일을 했습니다.**
 
 ```
 r2# show ip route
 ```
 
-`r2` 에는 Site-B 로 가는 줄이 없습니다. 여기가 지금의 끝입니다.
+`r2` 에는 Site-B 로 가는 줄도, Site-A 로 돌아오는 줄도 없습니다. 여기가 지금의 끝입니다.
+
+> 주의 — "오류가 오지 않는다" 를 "아무 일도 안 일어났다" 로 읽지 마세요.
+> 오류를 돌려주려면 **오류를 보낼 길**이 있어야 합니다. 그 길이 없는 구간은
+> 조용합니다. 3.3 에서 이 이야기를 한 번 더, 더 크게 만납니다.
 
 ```labdiagram
 kind: mini
