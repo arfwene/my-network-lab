@@ -165,13 +165,26 @@
       ansible.builtin.systemd: {name: lab-switch, state: restarted}
       when: node_role == 'switch' and reset_files.results[0].stat.exists
 
-    - name: 방화벽 규칙 다시 넣기
+    - name: 방화벽 규칙 다시 넣기 (그 단계에서 있어야 할 때만)
       # 위에서 `nft flush ruleset` 을 했다. nftables.conf 가 그대로면
       # site.yml 은 그냥 지나간다.
+      #
+      # 단계를 봐야 한다. 예전에 M10 까지 갔던 랩은 파일이 남아 있어서,
+      # 그냥 다시 읽으면 **M10 시작 상태인데 방화벽이 이미 다 서 있다.**
+      # 교재 3.1 은 `nft list ruleset` 이 비어 있다고 말하는 자리다.
       ansible.builtin.command: nft -f /etc/nftables.conf
       changed_when: true
       failed_when: false
-      when: node_role == 'edge' and reset_files.results[1].stat.exists
+      when:
+        - node_role == 'edge'
+        - reset_files.results[1].stat.exists
+        - stages.index(config_stage | default(lab_stage)) >= stages.index('m10')
+
+    - name: 아직 M10 이 아니면 경계 규칙 파일도 지운다
+      ansible.builtin.file: {path: /etc/nftables.conf, state: absent}
+      when:
+        - node_role == 'edge'
+        - stages.index(config_stage | default(lab_stage)) < stages.index('m10')
 
 - name: 설정 재적용
   ansible.builtin.import_playbook: site.yml

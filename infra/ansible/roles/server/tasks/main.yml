@@ -100,3 +100,35 @@
     - name: bind9 활성화
       ansible.builtin.systemd: {name: named, enabled: true, state: started}
   when: "'bind9' in services and svc_active"
+
+# ---------------------------------------------------------------------------
+#  단계를 내려갈 때는 **내려야 한다.**
+#
+#  위 블록들은 `svc_active`(= 그 단계 이상)일 때만 올린다. 내리는 갈래가 없으면,
+#  한 번 M9·M10 까지 갔던 랩을 앞으로 되돌려도 서비스가 그대로 살아 있다.
+#  M9 를 처음 여는 교육생이 이런 화면을 본다:
+#
+#      $ dig +short @10.10.40.13 web.lab.local A
+#      10.10.40.11          <- 3장에서 만들 것이 이미 다 되어 있다
+#
+#  그러면 그 모듈이 통째로 사라진다. 랩을 물려받는 다음 기수도 같다.
+#  파일까지 지우는 이유 — 서비스만 멈추면 [이 모듈 적용] 한 번에 되살아난다.
+# ---------------------------------------------------------------------------
+- block:
+    - name: 아직 이 단계가 아니면 서비스를 내린다
+      ansible.builtin.systemd: {name: "{{ item }}", state: stopped, enabled: false}
+      loop: "{{ svc_units }}"
+      failed_when: false
+
+    - name: 아직 이 단계가 아니면 만들어 둔 설정도 지운다
+      ansible.builtin.file: {path: "{{ item }}", state: absent}
+      loop: "{{ svc_files }}"
+  vars:
+    svc_units: >-
+      {{ (['vsftpd'] if 'vsftpd' in services else [])
+       + (['named'] if 'bind9' in services else []) }}
+    svc_files: >-
+      {{ (['/etc/vsftpd.conf'] if 'vsftpd' in services else [])
+       + (['/etc/bind/named.conf.local', '/etc/bind/db.' ~ dns.zone]
+          if 'bind9' in services else []) }}
+  when: not svc_active and (svc_units | length) > 0

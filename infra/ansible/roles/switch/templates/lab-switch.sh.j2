@@ -54,7 +54,14 @@ if [ -n "$MISSING" ]; then
   exit 1
 fi
 
-ip link show "$BR" >/dev/null 2>&1 || ip link add name "$BR" type bridge
+# 브리지가 이미 있으면 **지우고 새로 만든다.**
+#   이 스크립트는 VLAN 을 더하기만 한다. 앞 단계에서 붙은 VLAN 을 지우는 줄은
+#   `vf` 가 참일 때만 돌기 때문에, 필터링이 꺼지는 단계로 내려오면 예전 VLAN 이
+#   그대로 남는다. 교재(M2 3.0)는 `systemctl restart lab-switch` 로 초기 구성으로
+#   돌아간다고 약속하는데, 그 약속이 지켜지지 않았다.
+#   지우고 다시 만들면 포트도 VLAN 도 이 파일이 말하는 대로만 남는다.
+ip link del "$BR" 2>/dev/null || true
+ip link add name "$BR" type bridge
 {% if vf %}
 # VLAN 필터링 ON — 포트마다 VLAN 을 할당해야 통신이 된다
 ip link set "$BR" type bridge vlan_filtering 1 vlan_default_pvid 0

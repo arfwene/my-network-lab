@@ -23,6 +23,26 @@
       {% endif %}
   when: stages.index(config_stage | default(lab_stage)) >= stages.index('m9')
 
+# 내려갈 때도 내려가야 한다.
+#   위 두 task 는 M9 이상에서만 **올린다.** 내릴 때 내리는 갈래가 없으면,
+#   M9 를 한 번 지난 랩은 앞 단계로 되돌려도 resolv.conf 가 그대로 남는다.
+#   그러면
+#     · M9 3.1 의 시작 상태("No such file or directory")가 거짓이 되고
+#     · M2~M8 내내 sshd 의 역조회가 아직 없는 DNS 서버로 나가
+#       모든 캡처에 ICMP net unreachable 이 섞인다
+#   실제로 m7 단계 랩에서 nameserver 10.10.40.13 이 살아 있었다.
+- name: M9 이전에는 이름 해석을 도로 내린다
+  ansible.builtin.file: {path: /etc/resolv.conf, state: absent}
+  when: stages.index(config_stage | default(lab_stage)) < stages.index('m9')
+
+- name: M9 이전에는 systemd-resolved 를 되살린다
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    enabled: true
+    state: started
+  failed_when: false
+  when: stages.index(config_stage | default(lab_stage)) < stages.index('m9')
+
 - name: M9 이전에는 이름 해석 없음 (의도된 상태)
   ansible.builtin.debug:
     msg: "단계 {{ lab_stage }} — DNS 미구성. 통신 확인은 IP 로 할 것."
