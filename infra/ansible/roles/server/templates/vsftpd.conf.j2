@@ -15,10 +15,15 @@ seccomp_sandbox=NO
 pasv_enable=YES
 pasv_min_port={{ service_ports.ftp.passive_range.split('-')[0] }}
 pasv_max_port={{ service_ports.ftp.passive_range.split('-')[1] }}
-{% if stages.index(config_stage | default(lab_stage)) >= stages.index('m10') %}
+{% if stages.index(config_stage | default(lab_stage)) >= stages.index('m9') %}
 pasv_address={{ public.ipv4.nat_pool.dnat | selectattr('private','equalto', ipv4.segments.vlan40.hosts.ftp) | map(attribute='public') | first }}
 # NAT 뒤에서는 서버가 알려주는 주소가 사설 IP 면 클라이언트가 접속하지 못한다.
 # 그래서 공개 IP 를 명시한다 — 이것이 "FTP 가 NAT 를 싫어하는" 이유의 실체.
+#
+# 기준이 m10 이 아니라 m9 인 이유 — M9 3.4 가 교육생에게 이 줄을 직접 쓰게 한다.
+# M10 에서 [이 모듈 적용] 을 누르면 config_stage 는 m9 이므로, 기준이 m10 이면
+# 방금 손으로 쓴 줄이 지워진 채 파일이 다시 깔린다. 그러면 M10 의 검사
+# ftp-pasv-address 가 교육생이 무엇을 하든 떨어진다 (8/9 고정).
 {% endif %}
 
 # ---- Active 모드 (M9 비교 실습용으로 켜 둔다) ------------------------------
