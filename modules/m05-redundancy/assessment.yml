@@ -181,6 +181,25 @@ checks:
         3.3 을 건너뛰었을 수 있습니다. r3 도 그 대역에서 말을 할 수 있어야 합니다.
         sudo ip link add link {{ port.r3.sw1 }} name {{ port.r3.sw1 }}.{{ vlans[10].id }} type vlan id {{ vlans[10].id }}
 
+    - id: backup-advertises-user-nets
+      kind: config
+      title: "r3 도 사용자망을 OSPF 로 광고하는가 ★"
+      host: r3
+      # 이게 없으면 VRRP 는 넘어가는데 통신은 안 돌아온다.
+      #   사용자망을 광고하는 것이 r1 하나뿐이면, r1 이 죽는 순간 그 대역이
+      #   라우팅 도메인에서 사라진다 — 가는 길만 살고 오는 길이 죽는다.
+      #   교재 3.3 을 다 따라 하고도 여기가 비어 있으면 6.1 의 페일오버가
+      #   "끝까지 안 돌아오는" 것으로 나타난다. 검사가 그것을 먼저 잡는다.
+      run: |
+        vtysh -c 'show ip ospf interface {{ port.r3.sw1 }}.{{ vlans[10].id }}' | grep -c 'Area'
+        vtysh -c 'show ip ospf interface {{ port.r3.sw1 }}.{{ vlans[20].id }}' | grep -c 'Area'
+      expect_none: ["0"]
+      hint: |
+        3.3 의 마지막 단계입니다. r3 의 두 서브인터페이스를 area 에 넣고 passive 로 둡니다.
+        r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[10].id }}
+        r3(config-if)# ip ospf area {{ routing.ospf.area }}
+        r3(config-if)# ip ospf passive
+
     - id: vmac-device
       kind: config
       title: "가상 MAC 인터페이스가 양쪽에 있는가 ★"

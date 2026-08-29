@@ -121,7 +121,7 @@ notes:
 | # | 할 일 | 어디서 | 왜 필요한가 |
 |---|---|---|---|
 | ① | 게이트웨이 주소를 실주소에서 내립니다 | `r1` | 그 주소를 가상 IP 로 쓰려면 아무도 실주소로 갖고 있으면 안 됩니다 |
-| ② | 서브인터페이스를 만들고 자기 주소를 줍니다 | `r3` | 두 번째 게이트웨이가 그 대역에서 말을 할 수 있어야 합니다 |
+| ② | 서브인터페이스를 만들고 자기 주소를 준 뒤 **OSPF 에 넣습니다** | `r3` | 그 대역에서 말을 할 수 있고, `r1` 이 죽어도 대역이 남습니다 |
 | ③ | 가상 MAC 을 단 인터페이스를 만듭니다 | `r1` `r3` | VRRP 의 실체가 이것입니다. 넘어갈 때 MAC 까지 함께 넘어갑니다 |
 | ④ | VRRP 를 켜고 우선순위를 정합니다 | `r1` `r3` | 누가 평소에 들고 있을지, 언제 넘길지를 정합니다 |
 
@@ -378,17 +378,35 @@ bridge vlan show
 
 **할 일** — `r1` 의 두 서브인터페이스를 `{{ vrrp.vlan10.routers.r1.ipv4 }}` · `{{ vrrp.vlan20.routers.r1.ipv4 }}` 로 바꿉니다.
 
+이 주소는 **netplan 이 올린 것**이라 라우터 안(`vtysh`)에서는 못 지웁니다.
+FRR 은 자기가 넣은 주소만 지웁니다 — `no ip address` 를 쳐도 조용히 아무 일도
+일어나지 않고, `ip address` 는 주소를 **하나 더** 붙입니다. 그러면 `r1` 이
+가상 IP 를 실주소로 계속 들고 있게 되어 이 단계가 하려던 일이 통째로 무산됩니다
+(그 상태의 증상이 5.2 입니다).
+
+그래서 여기는 리눅스 쪽에서 합니다. 3.3 · 3.4 도 같은 이유로 셸에서 합니다.
+
+```bash
+# r1 의 셸에서
+sudo ip addr del {{ gw.vlan10 }}/{{ cidr.vlan10.split('/')[1] }} dev eth1.{{ vlans[10].id }}
+sudo ip addr add {{ vrrp.vlan10.routers.r1.ipv4 }}/{{ cidr.vlan10.split('/')[1] }} dev eth1.{{ vlans[10].id }}
+
+sudo ip addr del {{ gw.vlan20 }}/{{ cidr.vlan20.split('/')[1] }} dev eth1.{{ vlans[20].id }}
+sudo ip addr add {{ vrrp.vlan20.routers.r1.ipv4 }}/{{ cidr.vlan20.split('/')[1] }} dev eth1.{{ vlans[20].id }}
 ```
-r1# configure terminal
-r1(config)# interface eth1.{{ vlans[10].id }}
-r1(config-if)# no ip address {{ gw.vlan10 }}/{{ cidr.vlan10.split('/')[1] }}
-r1(config-if)# ip address {{ vrrp.vlan10.routers.r1.ipv4 }}/{{ cidr.vlan10.split('/')[1] }}
-r1(config-if)# exit
-r1(config)# interface eth1.{{ vlans[20].id }}
-r1(config-if)# no ip address {{ gw.vlan20 }}/{{ cidr.vlan20.split('/')[1] }}
-r1(config-if)# ip address {{ vrrp.vlan20.routers.r1.ipv4 }}/{{ cidr.vlan20.split('/')[1] }}
-r1(config-if)# end
+
+바뀌었는지 먼저 확인합니다. 주소가 **하나씩만** 남아야 합니다.
+
+```bash
+ip -br addr show eth1.{{ vlans[10].id }}
 ```
+
+```
+eth1.{{ vlans[10].id }}@eth1     UP    {{ vrrp.vlan10.routers.r1.ipv4 }}/{{ cidr.vlan10.split('/')[1] }}
+```
+
+`{{ gw.vlan10 }}` 이 아직 같이 보이면 지워지지 않은 것입니다. 그대로 두고 다음으로
+가면 3.5 까지 끝내도 통신이 이상하게 됩니다.
 
 **확인**
 
@@ -459,6 +477,39 @@ ping -c 2 {{ vrrp.vlan10.routers.r1.ipv4 }}
 ```
 
 응답이 옵니다. 같은 대역에 둘이 함께 있습니다.
+
+#### 그리고 이 두 대역을 OSPF 에 넣습니다 ★
+
+빠뜨리기 가장 쉬운 자리이고, 빠뜨리면 **이 모듈이 만들려는 것이 안 만들어집니다.**
+
+지금 `{{ cidr.vlan10 }}` 을 OSPF 에 광고하는 것은 `r1` 의 `eth1.{{ vlans[10].id }}`
+하나뿐입니다 (M4 3.2 에서 passive 로 넣었습니다). `r1` 이 죽으면 그 광고가 사라지고,
+**대역이 라우팅 도메인에서 통째로 없어집니다.** `r3` 가 게이트웨이 자리를 넘겨받아도
+`web` 의 응답이 돌아올 길이 없습니다 — 가는 길만 살고 오는 길이 죽습니다 (M3 3.3).
+
+`r3` 도 같은 대역을 광고하게 해 둡니다. 사용자망이므로 passive 입니다 (M4 2.7).
+
+```
+r3# configure terminal
+r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[10].id }}
+r3(config-if)# ip ospf area {{ routing.ospf.area }}
+r3(config-if)# ip ospf passive
+r3(config-if)# exit
+r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[20].id }}
+r3(config-if)# ip ospf area {{ routing.ospf.area }}
+r3(config-if)# ip ospf passive
+r3(config-if)# end
+```
+
+**확인** — 반대편에서 이 대역이 두 길로 보이는지 봅니다.
+
+```
+r4# show ip route {{ cidr.vlan10 }}
+```
+
+`r1` 을 지나는 길과 `r3` 를 지나는 길이 함께 있어야 합니다. cost 가 달라 평소에는
+`r1` 쪽이 쓰이지만, **`r1` 이 사라져도 대역 자체는 남습니다.** 4.2 에서 한 대를
+내려 볼 때 통신이 돌아오는 것이 이 두 줄 덕분입니다.
 
 ```bash
 # pc1
