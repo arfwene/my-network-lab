@@ -197,7 +197,15 @@ scp /tmp/lab.img root@<proxmox>:/var/lib/vz/template/lab/
 - 손으로 걸 때만 `[관리자 → 설치] → [점프 계정 적용]`. 콘솔에서 사라진 사람은 **접근을 회수한다**.
 - 랩 구성(주소 · 랩 수)을 바꿨으면: `python3 tools/gen-policy.py | sudo tee /etc/my-network-lab/policy.json >/dev/null`
 
-**교육생이 할 일** — `[접속 키]` 에서 공개키 등록, `[내 SSH 설정 내려받기]`. 관리자가 파일을 나눠 줄 일이 없다.
+**교육생이 할 일** — `[접속 키]` 에서 공개키 등록, 그리고 쓰는 프로그램에 맞는 접속 설정 내려받기. 관리자가 파일을 나눠 줄 일이 없다.
+
+| 받는 것 | 무엇 | 손이 가는 곳 |
+|---|---|---|
+| `[내 SSH 설정 내려받기]` | `~/.ssh/config` 조각 (ProxyJump) | 붙여넣기 한 번 |
+| `[Xshell 세션 내려받기]` | `my-network-lab` 폴더 · 세션 14개 (zip) | 폴더를 Xshell 세션 폴더에 넣고, **프록시 1회 등록** |
+
+- Xshell 에는 `ProxyJump` 가 없다. 대신 **프록시 종류 JUMPHOST** 가 같은 일을 하는데, 프록시는 세션 파일이 아니라 Xshell 의 **프록시 목록**(전역)에 등록된다 → 교육생이 처음 한 번만 직접 만든다. 절차는 zip 안 `읽어보세요.txt` 에 있다.
+- CLI 로 같은 것을 만들려면 `make xshell LAB=1` (→ `dist/my-network-lab/`).
 
 **Proxmox 콘솔 계정 (M0 실습 5 가 요구한다)**
 교육생이 자기 관리 링크를 내리면 SSH 자체가 죽는다. 되돌릴 유일한 길이 화면 콘솔이다.
@@ -375,6 +383,8 @@ sudo rm /etc/systemd/system/my-network-lab.service && sudo systemctl daemon-relo
 | `[검증]` 탭 | `python3 tools/run-checks.py --lab 1 --module m03` |
 | `[연결 확인]` | `make verify LAB=1 STAGE=m3` |
 | `[주입]` / `[복구]` | `make break SCENARIO=m03-01` / `make fix SCENARIO=m03-01` |
+| `[내 SSH 설정 내려받기]` | `python3 tools/gen-ssh-config.py --lab 1 --user trainee01` |
+| `[Xshell 세션 내려받기]` | `make xshell LAB=1` |
 | `[계정 관리]` | `python3 tools/console-user.py add trainee01 --lab 1` |
 | `[점프 계정 적용]` | `make jumpaccess` → `sudo ./dist/jump-access.sh` |
 | 교재 · 부록 파일로 뽑기 | `make gen LAB=1` (인쇄 · 오프라인 배포용. 화면은 이 파일 없이도 나온다) |

@@ -13,7 +13,7 @@ VENV := console/.venv
 # 웹 콘솔(jobs.py)도 같은 규칙으로 고르므로, CLI 와 콘솔이 같은 ansible 을 쓴다.
 APB := $(shell test -x $(VENV)/bin/ansible-playbook && echo $(CURDIR)/$(VENV)/bin/ansible-playbook || echo ansible-playbook)
 
-.PHONY: help doctor check gen docs modules appendix diagrams opsvm mgmt ipam deploy config verify \
+.PHONY: help doctor check gen docs modules appendix diagrams opsvm xshell mgmt ipam deploy config verify \
         reset break fix scenarios console console-setup service pack users clean jumpaccess \
         mgmt-net mgmt-net-dry consoleaccess policy uninstall uninstall-check
 
@@ -37,6 +37,7 @@ help:
 	@echo "make appendix                부록 렌더링 (dist/appendix/)"
 	@echo "make mgmt-net                운영 서버를 관리망에 연결 (1회. NIC 부착 + VLAN 설정)"
 	@echo "make opsvm VMID=9100         위를 손으로 할 때의 절차 문서 (dist/ops-server.md)"
+	@echo "make xshell LAB=1            교육생용 Xshell 세션 폴더 (dist/my-network-lab/)"
 	@echo "make jumpaccess              교육생 점프 계정 생성 절차 (dist/jump-access.*)"
 	@echo "make consoleaccess           Proxmox 콘솔 계정 절차 — 랩당 1개 (dist/console-access.sh)"
 	@echo "make policy                  root 헬퍼용 정책 파일 출력 (랩 구성 바꿨을 때)"
@@ -106,6 +107,10 @@ mgmt-net-dry:
 # 교육생 점프 계정 — 셸 없는 ProxyJump 전용. 콘솔에 등록된 키에서 만든다.
 jumpaccess:
 	@$(PY) tools/gen-jumpaccess.py $(if $(LAB),--lab $(LAB),)
+
+# 교육생용 Xshell 세션 폴더. 웹 콘솔 [접속 키] 의 [Xshell 세션 내려받기] 와 같은 것.
+xshell:
+	@$(PY) tools/gen-xshell.py --lab $(LAB) $(if $(USER_),--user $(USER_),)
 
 # root 헬퍼(/usr/local/sbin/lab-access-apply)가 읽는 정책. 랩 주소를 바꾸면 다시 만든다.
 policy:

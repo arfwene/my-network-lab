@@ -24,7 +24,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import (HTMLResponse, JSONResponse, PlainTextResponse,
-                               RedirectResponse, StreamingResponse)
+                               RedirectResponse, Response, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -378,6 +378,8 @@ def _sshkey_ctx(request, user, errors=(), saved="", onboard=False):
             "jump_user": A["jump_host"]["user"], "jump_ip": A["jump_host"]["office_ip"],
             "lab_user": A["lab_user"],
             "example_node": node, "example_ip": L.mgmt_ip(lab_id or 1, node),
+            # Xshell 세션 zip 이 몇 개짜리인지 화면에 적는다
+            "node_count": len(L.TOPO["nodes"]),
             # 콘솔(화면) 접속용. SSH 는 키로만 받지만 콘솔은 키를 못 쓴다.
             # 만들어져 있을 때만 보여준다 — 아직 배포 전이면 굳이 만들지 않는다.
             "console_pw": db.lab_console_password(create=False),
@@ -598,6 +600,35 @@ async def sshkey_config(request: Request):
         proc.stdout,
         headers={"Content-Disposition":
                  f'attachment; filename="ssh-config-lab{lab_id}"'})
+
+
+@app.get("/sshkey/xshell")
+async def sshkey_xshell(request: Request):
+    """이 교육생의 Xshell 세션 폴더를 zip 으로 내려준다.
+
+    `~/.ssh/config` 를 쓰지 않는 사람을 위한 두 번째 경로다. 받는 것은
+    **폴더 하나**라 Xshell 의 세션 폴더에 통째로 넣으면 끝난다.
+    생성기는 CLI(`make xshell`) 와 같은 것을 쓴다.
+    """
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    lab_id = pick_lab(user)
+    if not lab_id:
+        return HTMLResponse("배정된 랩이 없습니다.", status_code=403)
+    proc = await asyncio.to_thread(
+        subprocess.run,
+        [sys.executable, str(HERE.parent / "tools/gen-xshell.py"),
+         "--lab", str(lab_id), "--user", user["username"], "--zip", "-"],
+        capture_output=True)
+    if proc.returncode:
+        return HTMLResponse(
+            f"세션을 만들지 못했다: {proc.stderr.decode(errors='replace')[:300]}",
+            status_code=500)
+    return Response(
+        proc.stdout, media_type="application/zip",
+        headers={"Content-Disposition":
+                 f'attachment; filename="my-network-lab-lab{lab_id}.zip"'})
 
 
 @app.post("/sshkey/apply")

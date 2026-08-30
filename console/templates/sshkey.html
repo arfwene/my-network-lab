@@ -143,9 +143,10 @@ cat ~/.ssh/id_ed25519.pub</code></pre>
       <pre><code>ssh -J {{ jump_user }}@{{ jump_ip }} {{ lab_user }}@{{ example_ip }}   # {{ example_node }}</code></pre>
       <p>아래에서 내 설정을 받아 <code>~/.ssh/config</code> 에 붙이면
          <code>ssh {{ example_node }}</code> 한 줄로 끝납니다.</p>
+      <p>쓰는 프로그램에 맞는 쪽을 받으세요. <b>둘 다 받아도 됩니다</b> — 서로 방해하지 않습니다.</p>
       <p>
         <a class="btn primary" href="/sshkey/config">내 SSH 설정 내려받기</a>
-        <span class="muted">ssh-config-lab{{ lab_id }}</span>
+        <span class="muted">ssh-config-lab{{ lab_id }} · 터미널에서 <code>ssh {{ example_node }}</code></span>
       </p>
       <p><b>Windows</b> — 받은 파일은 보통 <code>다운로드</code> 폴더에 있습니다.</p>
       <pre><code>New-Item -ItemType Directory -Force $HOME\.ssh | Out-Null
@@ -157,6 +158,18 @@ cat ~/Downloads/ssh-config-lab{{ lab_id }} >> ~/.ssh/config
 chmod 600 ~/.ssh/config
 ssh {{ example_node }}</code></pre>
       </details>
+
+      <p>
+        <a class="btn primary" href="/sshkey/xshell">Xshell 세션 내려받기</a>
+        <span class="muted">my-network-lab-lab{{ lab_id }}.zip · 세션 {{ node_count }}개</span>
+      </p>
+      <p>압축을 풀면 <code>my-network-lab</code> 폴더가 나옵니다. 그 폴더를 통째로
+         Xshell 의 세션 폴더에 넣으면 세션 목록에 그대로 나타납니다.</p>
+      <pre><code>문서\NetSarang Computer\8\Xshell\Sessions\</code></pre>
+      <p class="note">Xshell 에는 <code>ProxyJump</code> 가 없습니다. 대신 <b>프록시 종류
+         JUMPHOST</b> 가 같은 일을 하는데, 프록시는 세션 파일이 아니라 Xshell 의
+         <b>프록시 목록</b>에 등록됩니다. 그래서 <b>처음 한 번만</b> 직접 만들어 주셔야 합니다 —
+         폴더 안 <code>읽어보세요.txt</code> 에 그 절차가 있습니다.</p>
       <p class="muted">이 설정은 <b>배정된 랩({{ lab_label }})</b> 기준입니다.
          랩이 바뀌면 다시 받아야 합니다.</p>
 
