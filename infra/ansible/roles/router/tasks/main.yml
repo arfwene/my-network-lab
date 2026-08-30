@@ -125,6 +125,13 @@
     groups: [frr, frrvty]
     append: true
 
+# 그룹은 **다음 로그인부터** 붙는다. ansible 은 ControlPersist 로 세션을 재사용하므로,
+# 방금 만든 라우터에서는 이 뒤에 오는 것들이 여전히 옛 그룹으로 돈다 —
+# 검사가 곧바로 `vtysh` 를 치면 /etc/frr/vtysh.conf 에 Permission denied 가 난다.
+# (실제로 r5 를 새로 넣은 직후 m05 검사 두 개가 그렇게 떨어졌다.)
+- name: 그룹이 붙도록 접속을 다시 연다
+  ansible.builtin.meta: reset_connection
+
 - name: FRR 활성화
   ansible.builtin.systemd:
     name: frr
