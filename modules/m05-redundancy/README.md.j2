@@ -411,11 +411,11 @@ eth1.{{ vlans[10].id }}@eth1     UP    {{ vrrp.vlan10.routers.r1.ipv4 }}/{{ cidr
 `{{ gw.vlan10 }}` 이 아직 같이 보이면 지워지지 않은 것입니다. 그대로 두고 다음으로
 가면 3.5 까지 끝내도 통신이 이상하게 됩니다.
 
-**확인**
+**확인** — 넉넉히 보냅니다. 짧게 치면 아무 말도 없이 100% 손실만 나옵니다.
 
 ```bash
 # pc1
-ping -c 2 -W 2 {{ ip.web }}
+ping -c 10 -W 2 {{ ip.web }}
 ```
 
 ```
@@ -424,6 +424,12 @@ From {{ ip.pc1 }} icmp_seq=1 Destination Host Unreachable
 
 **끊겼습니다.** `pc1` 의 라우팅 테이블에는 여전히 `default via {{ gw.vlan10 }}` 가 있는데,
 이제 그 주소를 가진 장비가 아무 데도 없습니다.
+
+> 주의 — 3.1 에서 방금 통신했으므로 `pc1` 의 이웃 캐시에 `{{ gw.vlan10 }}` 가 아직
+> `r1` 의 MAC 으로 남아 있습니다. **첫 몇 초는 통신이 그대로 되기도 합니다** —
+> `r1` 이 그 MAC 으로 오는 프레임을 받아 계속 넘겨 주기 때문입니다. 그다음에는
+> 위 문구도 없이 그냥 100% 손실이고, 커널이 포기해야 비로소 `Destination Host
+> Unreachable` 이 나옵니다. 화면이 조용하면 몇 초 뒤 한 번 더 쳐 보세요.
 
 ```bash
 # pc1
@@ -786,6 +792,20 @@ sudo ip link set eth1.{{ vlans[10].id }} up
 
 몇 초 뒤 `r1` 이 다시 MASTER 입니다 (preempt).
 
+> 주의 — 포트를 내렸다 올리면 **netplan(systemd-networkd)이 원래 설정을 다시 얹습니다.**
+> `r1` 의 `eth1.{{ vlans[10].id }}` 에 `{{ gw.vlan10 }}` 가 되살아나 있을 것입니다 —
+> 3.2 에서 손으로 지운 그 주소입니다. 부모 포트가 다시 가상 IP 를 들면 그쪽이
+> 자기 MAC 으로 ARP 에 답해 이 모듈이 만든 것이 도로 무너집니다.
+>
+> ```bash
+> # r1 — 확인하고, 있으면 3.2 처럼 다시 지웁니다
+> ip -br addr show eth1.{{ vlans[10].id }}
+> sudo ip addr del {{ gw.vlan10 }}/{{ cidr.vlan10.split('/')[1] }} dev eth1.{{ vlans[10].id }}
+> ```
+>
+> 선언형 설정은 이렇게 되살아납니다. 손으로 고친 것을 링크가 한 번 내려갔다
+> 올라오는 것만으로 잃는다는 것 — 실무에서 자주 겪는 자리입니다.
+
 ---
 
 ## 5. 자주 나는 장애 — 증상에서 원인까지
@@ -928,6 +948,20 @@ ping -i 0.2 -c 100 {{ ip.web }}
 # r1 — 5초쯤 뒤에
 sudo ip link set eth1.{{ vlans[10].id }} up
 ```
+
+> 주의 — 포트를 내렸다 올리면 **netplan(systemd-networkd)이 원래 설정을 다시 얹습니다.**
+> `r1` 의 `eth1.{{ vlans[10].id }}` 에 `{{ gw.vlan10 }}` 가 되살아나 있을 것입니다 —
+> 3.2 에서 손으로 지운 그 주소입니다. 부모 포트가 다시 가상 IP 를 들면 그쪽이
+> 자기 MAC 으로 ARP 에 답해 이 모듈이 만든 것이 도로 무너집니다.
+>
+> ```bash
+> # r1 — 확인하고, 있으면 3.2 처럼 다시 지웁니다
+> ip -br addr show eth1.{{ vlans[10].id }}
+> sudo ip addr del {{ gw.vlan10 }}/{{ cidr.vlan10.split('/')[1] }} dev eth1.{{ vlans[10].id }}
+> ```
+>
+> 선언형 설정은 이렇게 되살아납니다. 손으로 고친 것을 링크가 한 번 내려갔다
+> 올라오는 것만으로 잃는다는 것 — 실무에서 자주 겪는 자리입니다.
 
 ```
 100 packets transmitted, 100 received, 0% packet loss
