@@ -1,303 +1,275 @@
-# 배포 — 리눅스 서버 한 대에 랩 운영 환경 올리기
+# 배포 절차
 
-이 문서는 **Proxmox 호스트가 아닌 별도의 리눅스 서버**에 이 저장소를 올려
-Terraform·Ansible·웹 콘솔을 돌리는 절차다.
+**대상** — 랩 관리자 / 강사. 이 저장소를 리눅스 서버 한 대에 올려 Terraform · Ansible · 웹 콘솔을 돌린다.
 
-> 왜 별도 서버인가
-> Proxmox 호스트에 개발 도구를 얹으면 하이퍼바이저가 범용 서버가 된다.
-> 호스트가 흔들리면 랩 6개가 같이 죽는다. 그리고 이 저장소의 원칙 —
-> **"Proxmox 호스트 설정을 자동으로 바꾸지 않는다"** — 는 실행 주체가 호스트 밖에 있을 때 지켜진다.
+**원칙** — Proxmox 호스트가 아닌 **별도 서버**에 올린다.
+- 하이퍼바이저에 개발 도구를 얹지 않는다. 호스트가 흔들리면 전 랩이 같이 죽는다.
+- "Proxmox 호스트 설정을 자동으로 바꾸지 않는다"는 원칙은 실행 주체가 호스트 밖일 때만 지켜진다.
+- 가장 쉬운 선택은 **같은 Proxmox 위의 VM 하나**. 물리 서버여도 되지만 [4. 관리망](#4-관리망-연결--1회) 을 읽어야 한다.
 
 ---
 
-## 0. 한 장 요약
+## 1. 구성
 
 ```
-사무실 LAN                         Proxmox VE 호스트
-┌──────────────┐                  ┌────────────────────────────────┐
-│ 교육생 PC     │                  │  vmbr0   ─ 사무실 LAN            │
-│              │                  │                                │
-│ 랩 운영 서버   │ ── API 8006 ──▶  │  vmbr9  ─ 관리망 (전 랩 공용)      │
-│  (이 문서)    │ ── SSH  22  ──▶  │           랩N = VLAN 300N        │
-│  · terraform │      랩 노드      │  vmbr1101.. ─ 랩 서비스망 (격리)    │
-│  · ansible   │                  │                                │
-│  · 웹 콘솔    │                  │  VM 13대 × 랩 수                 │
-└──────────────┘                  └────────────────────────────────┘
-      ▲
+사무실 LAN                          Proxmox VE 호스트
+┌──────────────┐                   ┌──────────────────────────────┐
+│ 교육생 PC     │                   │ vmbr0      사무실 LAN          │
+│              │                   │                              │
+│ 랩 운영 서버   │ ── API 8006 ──▶   │ vmbr9      관리망 (전 랩 공용)   │
+│  · terraform │ ── SSH   22 ──▶   │            랩N = VLAN 300N     │
+│  · ansible   │      (랩 노드)     │ vmbr1101…  랩 서비스망 (격리)    │
+│  · 웹 콘솔    │                   │                              │
+└──────────────┘                   │ VM 13대 × 랩 수                │
+      ▲                            └──────────────────────────────┘
       └── 교육생 브라우저 :8080
 ```
 
-랩 운영 서버가 **두 곳에 닿아야** 한다.
+**운영 서버가 두 곳에 닿아야 한다.**
 
 | 대상 | 포트 | 쓰는 곳 | 없으면 |
 |---|---|---|---|
-| Proxmox API | tcp/8006 | Terraform · 콘솔 상태 점검 | VM 을 만들 수 없다 |
-| 각 랩 관리망 `172.30.N.0/24` | tcp/22 | Ansible | VM 은 생기지만 설정이 안 들어간다 |
+| Proxmox API | tcp/8006 | Terraform · 상태 점검 | VM 을 만들 수 없다 |
+| 랩 관리망 `172.30.N.0/24` | tcp/22 | Ansible | VM 은 생기지만 설정이 안 들어간다 |
 
-두 번째가 배포에서 가장 자주 막히는 지점이다. → [3절](#3-랩-관리망에-닿게-한다)
+두 번째가 배포에서 가장 자주 막히는 지점이다 → [4. 관리망 연결](#4-관리망-연결--1회).
 
-### 이 문서를 다 읽어야 하는가 — 아니다
-
-터미널에서 하는 일은 **네 줄**이고, 나머지는 웹 콘솔 **[관리자 → 설치]** 화면에서 끝난다.
-
-```bash
-./install.sh --service                       # 운영 서버에서
-vi config/site.local.yml                     # 사내 값
-# ── 아래 둘은 Proxmox 호스트에서 root 로 (다른 호스트라 콘솔이 대신 못 한다)
-./infra/proxmox-setup.sh
-./infra/template/build-golden-template.sh --storage local-lvm
-```
-
-그다음 브라우저로 `:8080` → `admin/admin` → 비밀번호 변경 → **[연결 설정]** 에 토큰 →
-확인을 누르면 **[설치]** 화면으로 넘어간다. 그 화면이
-
-* `make doctor` 와 **같은 검사**를 돌려 무엇이 안 됐는지 보여 주고,
-* 콘솔이 대신 할 수 있는 것은 **버튼**으로 실행하고 (관리망 브리지 · 접속 파일 · 문서),
-* root 나 다른 호스트가 필요한 것만 **복사할 명령**으로 보여 준다.
-
-아래 2~5절은 그 화면에서 막혔을 때 읽는 배경 설명이다. 순서대로 다 할 필요는 없다.
-
-> **`make gen` 은 이제 필요 없다.** 웹 콘솔은 교재·부록·랩 지도를 요청 때마다
-> 설계 파일에서 직접 만들고, [랩 생성]·[설정 적용] 은 tfvars·인벤토리를 스스로 만든다.
-> `make` 는 CLI 로 같은 일을 하고 싶을 때 쓰는 **대안**이지, 거쳐야 하는 단계가 아니다.
-
----
-
-## 1. 랩 운영 서버 준비
-
-### 요구사항
+## 2. 요구사항
 
 | 항목 | 값 |
 |---|---|
-| OS | Ubuntu 22.04+ / Debian 12+ (다른 배포판은 `--no-apt` 로 수동 설치) |
-| Python | 3.10 이상 |
-| CPU · RAM | 2 vCPU · 2 GB (Terraform·Ansible 실행용. VM 은 Proxmox 가 돌린다) |
-| 디스크 | 5 GB |
-| 인터넷 | 설치 시에만 필요 (Terraform 바이너리 · 프로바이더 · pip). 폐쇄망은 [7절](#7-폐쇄망) |
-| 계정 | **root 아님.** sudo 가 되는 일반 계정 |
+| 랩 운영 서버 OS | Ubuntu 22.04+ / Debian 12+ (그 외는 `./install.sh --no-apt`) |
+| Python | 3.10+ |
+| 운영 서버 자원 | 2 vCPU · 2 GB RAM · 5 GB 디스크 |
+| 운영 서버 계정 | **root 아님.** sudo 되는 일반 계정 |
+| Proxmox | VE 8.x · 랩당 RAM 약 9 GB (64 GB → 6랩 권장) |
+| 인터넷 | 설치 시에만 필요. 없으면 [8. 폐쇄망](#8-폐쇄망) |
 
-**가장 쉬운 선택은 Proxmox 위의 VM 하나다.** 관리망 브리지에 NIC 을 붙이기만 하면
-3절의 도달성 문제가 사라진다. 물리 서버여도 되지만 그때는 3절을 읽어야 한다.
+Terraform · Ansible 을 손으로 깔지 않는다. `install.sh` 가 Terraform 을 `/usr/local/bin` 에,
+Ansible 을 `console/.venv` 안에 넣는다 — 콘솔과 CLI 가 **같은 ansible** 을 쓴다.
 
-### 저장소 옮기기
+## 3. 절차 한눈에 — CLI 와 GUI
 
-git 원격이 있으면 `git clone`. 없으면 개발 PC 에서:
+| # | 단계 | 어디서 | 방식 | 횟수 |
+|---|---|---|---|---|
+| 1 | 저장소 배치 · `./install.sh --service` | 랩 운영 서버 | **CLI** | 1회 |
+| 2 | `config/site.local.yml` 사내 값 입력 | 랩 운영 서버 | **CLI** | 1회 |
+| 3 | `./infra/proxmox-setup.sh` — API 토큰 | Proxmox 호스트 · root | **CLI** | 1회 |
+| 4 | `build-golden-template.sh` — 골든 템플릿 | Proxmox 호스트 · root | **CLI** | 1회 |
+| 5 | `[관리자 → 연결 설정]` — 주소 · 토큰 입력 | 웹 콘솔 | **GUI** | 1회 |
+| 6 | `[관리자 → 설치]` — 점검 · 관리망 브리지 생성 | 웹 콘솔 | **GUI** | 1회 |
+| 7 | `[랩 생성]` → `[이 모듈 적용]` → `[검증]` | 웹 콘솔 | **GUI** | 수시 |
+| 8 | `[관리자 → 계정 관리]` — 교육생 계정 | 웹 콘솔 | **GUI** | 수시 |
+
+- **터미널은 1~4 뿐이다.** 3·4 는 다른 호스트(Proxmox)라 콘솔이 대신할 수 없다.
+- 5~8 은 전부 화면이다. 일상 운영에 `make` 를 칠 일은 없다.
+- `make` 타깃은 GUI 와 **같은 일을 하는 대안**이다 → [부록 A](#부록-a-cli-대안-표).
+- `[관리자 → 설치]` 화면이 `make doctor` 와 **같은 검사**를 돌리고, 콘솔이 할 수 있는 것은 버튼으로,
+  root 가 필요한 것은 복사할 명령으로 보여 준다. **오류 0 을 확인하고 랩을 만든다.**
+
+---
+
+## 단계별
+
+### 1단계 — 운영 서버 설치 · CLI
+
+저장소 배치. git 원격이 없으면 개발 PC 에서 `make pack` → `scp`.
 
 ```bash
-make pack                              # → /tmp/my-network-lab.tar.gz
-scp /tmp/my-network-lab.tar.gz lab@<운영서버>:~
-```
-
-```bash
-# 운영 서버에서
 tar xzf my-network-lab.tar.gz && cd my-network-lab
-```
-
-`make pack` 은 **`var/` 를 담지 않는다.** 계정 DB 에 Proxmox API 토큰이 들어 있어서다.
-토큰은 옮긴 서버에서 콘솔 [연결 설정] 으로 다시 넣는다.
-tfstate 와 인벤토리도 제외한다 — 같은 tfstate 를 두 서버가 들고 있으면 같은 VM 을 두 곳에서 관리하게 된다.
-
-### 설치
-
-```bash
 ./install.sh --service
 ```
 
-한 번에 이걸 다 한다.
-
-1. OS 패키지 (`python3-venv` · `curl` · `unzip` · `rsync` · `openssh-client`)
-2. **Terraform** — 공식 배포처에서 받아 SHA256 검증 후 `/usr/local/bin` 에 설치
-3. `console/.venv` 에 FastAPI·Jinja2·**ansible-core** + `ansible.posix` 컬렉션
-4. 이 서버의 SSH 키 생성 (`~/.ssh/id_ed25519`) — **공개키를 화면에 찍어 준다**
-5. `config/site.local.yml` 을 예시에서 생성, `var/` 를 0700 으로
-6. `--service` 면 systemd 등록 + 기동
-7. 마지막에 사전 점검을 돌려 남은 할 일을 알려준다
-
-> Ansible 을 시스템이 아니라 venv 안에 넣는 이유: 버전을 이 저장소가 정하고,
-> 웹 콘솔(`jobs.py`)과 CLI(`make config`)가 **같은 ansible** 을 쓰게 하기 위해서다.
-> 시스템 ansible 을 따로 깔면 "콘솔에서는 되는데 터미널에서는 안 된다"가 생긴다.
-
-옵션:
+`install.sh` 가 하는 일 — OS 패키지 · Terraform(SHA256 검증) · venv(FastAPI + ansible-core) ·
+SSH 키 생성(**공개키를 화면에 찍는다**) · `site.local.yml` 생성 · systemd 등록 · 사전 점검.
 
 | 옵션 | 언제 |
 |---|---|
 | `--no-apt` | 패키지를 이미 깔았거나 apt 가 아닌 배포판 |
-| `--service` | 부팅 시 자동 기동. 없으면 `make console` 로 직접 띄운다 |
-| `TERRAFORM_ZIP=/path/to.zip` | 폐쇄망 |
+| `--service` | 부팅 시 자동 기동 (없으면 `make console` 로 수동) |
+| `TERRAFORM_ZIP=/path.zip` | 폐쇄망 |
 | `PORT=9000` | 콘솔 포트 변경 |
 
----
+- `make pack` 은 `var/` 와 tfstate 를 담지 않는다 — 토큰이 들어 있고, 같은 tfstate 를 두 서버가 들면 안 된다.
 
-## 2. 사내 값 채우기
+### 2단계 — 사내 값 입력 · CLI
 
-`config/site.local.yml` 을 연다. 이 파일은 **git 에 올라가지 않는다.**
-
-> 아래 주소는 **예시(RFC5737 문서 전용 대역)** 다. 사내 실제 값으로 바꿔 쓴다.
-> 이 저장소의 공개 대상 파일에는 사내 값을 적지 않는다 — `make check` 가 막는다.
+`config/site.local.yml` (git 제외). 아래는 예시값(RFC5737)이므로 사내 실제 값으로 바꾼다.
 
 ```yaml
 access:
-  office_lan: 192.0.2.0/24            # 교육생 PC 가 있는 대역
+  office_lan: 192.0.2.0/24                 # 교육생 PC 대역
   proxmox:
     host_ip:      192.0.2.10
     api_endpoint: "https://192.0.2.10:8006/"
-    node_name:    pve01                 # Proxmox 에서 `hostname -s`
+    node_name:    pve01                    # Proxmox 에서 `hostname -s` 의 값
     datastore:    local-lvm
   ssh_public_keys:
-    - "ssh-ed25519 AAAA... my-network-lab@labsrv"   # ← install.sh 가 찍어 준 이 서버의 공개키
-    - "ssh-ed25519 AAAA... trainee01@office"        # ← 교육생 공개키
-
+    - "ssh-ed25519 AAAA... my-network-lab@labsrv"   # install.sh 가 찍어 준 이 서버의 공개키
 forbidden:
-  - {cidr: 10.99.0.0/16, severity: error, reason: "사내 사용 중 — 실제 대역으로 바꿀 것"}
+  - {cidr: 10.99.0.0/16, severity: error, reason: "사내 사용 중"}
 ```
-
-**`ssh_public_keys` 에 이 서버의 공개키를 반드시 넣는다.** cloud-init 이 이 목록으로
-랩 노드의 `authorized_keys` 를 만든다. 빠지면 VM 은 뜨지만 Ansible 이 한 대도 로그인하지 못한다.
 
 ```bash
 make check      # 대역 충돌 · 용량 · 공개 안전성
-make ipam       # 계산된 주소 계획 — 사내 대역과 겹치는 게 없는지 눈으로 확인
+make ipam       # 계산된 주소 계획 — 사내 대역과 겹치는지 눈으로 확인
 ```
 
-### 노드 이름을 틀리면
+**주의**
+- `ssh_public_keys` 에 **이 서버의 공개키를 반드시 넣는다.** cloud-init 이 이 목록으로 노드의 `authorized_keys` 를 만든다. 빠지면 VM 은 뜨지만 Ansible 이 한 대도 로그인하지 못한다.
+- 여기 넣은 키는 전 랩 전 노드에 박히고 바꾸려면 VM 을 다시 만들어야 한다. **교육생 키는 넣지 않는다** — 콘솔 `[접속 키]` 로 등록한다.
+- `node_name` 을 틀리면 증상이 401/403 이 아니라 **"노드가 없다"** 다.
+- 접속 값 우선순위: `site.yml` → `site.local.yml` → **`var/runtime.yml`(콘솔 [연결 설정])**. 뒤가 이긴다. 콘솔에서 한 번이라도 저장했으면 파일을 고쳐도 덮인다. 되돌리려면 `rm var/runtime.yml`. 지금 어느 쪽이 이기는지는 `make doctor` 의 "접속 값 출처".
 
-`node_name` 은 Proxmox 노드의 호스트명이다. 기본값 `pve` 를 그대로 두는 경우가 많은데,
-설치할 때 다른 이름을 줬다면 안 맞는다. 증상은 401/403 이 아니라 **"노드가 없다"** 다.
+### 3단계 — Proxmox API 토큰 · CLI (Proxmox 호스트 · root)
 
 ```bash
-hostname -s                        # Proxmox 호스트에서 — 이 값이 정답이다
-./infra/proxmox-setup.sh --show    # 노드 이름도 같이 보여 준다
+./infra/proxmox-setup.sh              # 역할 생성 · 사용자 · 토큰 발급 · 권한 검증
+./infra/proxmox-setup.sh --show       # 상태만 점검 (변경 없음)
+./infra/proxmox-setup.sh --new-token  # 비밀값을 잃었을 때 재발급
 ```
 
-`make doctor` 가 이 Proxmox 의 노드 목록을 대고, 노드가 하나뿐이면 그 이름을 짚어 준다.
+- **손으로 `pveum` 을 치지 않는다.** 권한 하나가 빠져도 티가 안 나고 `terraform apply` 가 403 으로 멈춘다.
+- **웹 UI 로 토큰을 만들지 않는다.** Privilege Separation 이 기본 ON 이라 역할을 물려받지 못해 계속 403 이다 (`--privsep 0` 필요). 이 스크립트는 감지해서 꺼 준다.
+- 토큰 비밀값은 **한 번만** 출력된다. 콘솔 `[연결 설정]` 에 넣는다 — **어떤 파일에도 쓰지 않는다** (`var/console.db` 0600 에 저장, 실행 순간에만 환경변수로 전달).
 
-### 접속 값이 세 곳에서 온다 — 뒤가 이긴다
-
-```
-config/site.yml  →  config/site.local.yml  →  var/runtime.yml
-                                                (콘솔 [연결 설정] 이 저장)
-```
-
-**콘솔에서 한 번이라도 저장했으면 `var/runtime.yml` 이 생기고, 그 뒤로는
-`site.local.yml` 을 고쳐도 덮인다.** 노드 이름·주소가 안 바뀐다면 대개 이것이다.
-
-| 상황 | 고칠 곳 |
+| 권한 | 없으면 |
 |---|---|
-| `var/runtime.yml` 이 없다 | `config/site.local.yml` → `make gen` |
-| `var/runtime.yml` 이 있다 | 콘솔 **[관리자 → 연결 설정]** |
-| 파일 쪽으로 되돌리고 싶다 | `rm var/runtime.yml` |
+| `Sys.Modify` (`/nodes/<node>`) | 브리지가 안 생긴다. VM 은 생겨도 랜선이 없다 |
+| `VM.Clone` | 골든 템플릿을 복제하지 못한다 |
+| `VM.Config.Cloudinit` | 관리망 주소 · SSH 키가 안 들어가 접속 불가 |
+| `Datastore.AllocateSpace` | 디스크 · cloud-init 드라이브 생성 실패 |
 
-`make doctor` 의 **"접속 값 출처"** 항목이 지금 어느 쪽이 이기고 있는지 알려준다.
+### 4단계 — 골든 템플릿 · CLI (Proxmox 호스트 · root)
 
-### Proxmox 접속 정보는 웹에서 넣어도 된다
+랩 노드는 인터넷에 못 나간다. 필요한 패키지(FRR · nftables · bind9 · tcpdump …)를 템플릿에 미리 넣는다.
 
-`site.local.yml` 대신 콘솔 **[관리자 → 연결 설정]** 에서 주소·노드·데이터스토어를 넣으면
-`var/runtime.yml` 로 저장되어 `site.local.yml` 보다 우선한다.
-**API 토큰은 어느 쪽이든 파일에 쓰지 않는다** — `var/console.db`(0600)에 두고 실행 시 환경변수로만 넘어간다.
+**권장 — 이미지는 운영 서버에서 만들고 Proxmox 는 등록만 한다.**
+`libguestfs-tools` 는 Debian main 에 있어 하이퍼바이저에 저장소를 추가해야 하기 때문이다.
+
+```bash
+# ① 운영 서버 (apt 가 자유롭다)
+sudo apt install -y libguestfs-tools
+./infra/template/build-golden-template.sh --image-only --out /tmp/lab.img
+scp /tmp/lab.img root@<proxmox>:/var/lib/vz/template/lab/
+
+# ② Proxmox 호스트 (qm 만 있으면 된다)
+./infra/template/build-golden-template.sh --from-image /var/lib/vz/template/lab/lab.img --storage local-lvm
+```
+
+호스트에서 전부 하려면 `apt install -y libguestfs-tools` 후 `--storage local-lvm` 만으로 실행한다.
+
+- VMID 는 `config/site.yml` 의 `labs.template_vmid` (기본 9000) 과 맞아야 한다.
+- `supermin exited with error status 1` → 커널 권한(`sudo chmod 0644 /boot/vmlinuz-*`) 또는 `/dev/kvm` 없음(`export LIBGUESTFS_BACKEND_SETTINGS=force_tcg`, 10~25분 소요). 스크립트가 시작 전에 둘 다 확인한다.
+
+### 5~6단계 — 연결 설정 · 설치 점검 · GUI
+
+브라우저 `http://<운영서버>:8080` → `admin / admin` → **비밀번호 변경 강제** (변경 전에는 아무 화면도 안 보인다).
+
+1. `[관리자 → 연결 설정]` — Proxmox 주소 · 노드 이름 · 데이터스토어 · **API 토큰** 입력 → 확인
+2. `[관리자 → 설치]` — 점검 결과가 나온다
+   - 콘솔이 대신 할 수 있는 것 → **버튼** (관리망 브리지 생성 · 교육생 접속 파일 · 문서 생성)
+   - root / 다른 호스트가 필요한 것 → **복사할 명령**
+3. **오류 0** 을 확인한 뒤 다음으로 넘어간다
+
+### 7단계 — 랩 배포 · GUI
+
+`[랩 생성]` → `[이 모듈 적용]` → `[검증]`.
+
+- tfvars 와 인벤토리는 버튼을 누를 때마다 다시 만든다. 미리 생성해 둘 것이 없다.
+- **배선은 항상 전체 토폴로지**다. 모듈을 넘어갈 때 VM 은 그대로 두고 설정 범위만 넓힌다.
+- `[이 모듈 적용]` 은 랩을 그 모듈의 시작 상태로 되돌린다 — 교육생이 망가뜨렸을 때의 복구 버튼이기도 하다.
+
+### 8단계 — 교육생 접속 · GUI
+
+교육생은 **운영 서버를 ProxyJump 로 거쳐** 랩 노드에 SSH 한다.
+
+```
+교육생 PC ──ssh──▶ 운영 서버(점프 계정) ──ssh──▶ 랩 노드 (pc1 · r1 · web …)
+```
+
+점프 계정은 **셸이 없고 자기 랩 노드로만 나간다** (`ForceCommand` + nologin, `PermitOpen` = 자기 랩 13대:22).
+운영 서버 셸을 주면 강사용 해설(`answers.md`)과 캡스톤 대응표를 읽을 수 있기 때문이다.
+
+**관리자가 할 일**
+- `[관리자 → 계정 관리]` 에서 계정 발급. 그 뒤는 자동이다.
+- 교육생이 첫 로그인에서 비밀번호를 바꾸고 `[접속 키]` 에 공개키를 등록하면 콘솔이 점프 계정 적용과 랩 노드 반영을 **자동으로 건다**.
+- 손으로 걸 때만 `[관리자 → 설치] → [점프 계정 적용]`. 콘솔에서 사라진 사람은 **접근을 회수한다**.
+- 랩 구성(주소 · 랩 수)을 바꿨으면: `python3 tools/gen-policy.py | sudo tee /etc/my-network-lab/policy.json >/dev/null`
+
+**교육생이 할 일** — `[접속 키]` 에서 공개키 등록, `[내 SSH 설정 내려받기]`. 관리자가 파일을 나눠 줄 일이 없다.
+
+**Proxmox 콘솔 계정 (M0 실습 5 가 요구한다)**
+교육생이 자기 관리 링크를 내리면 SSH 자체가 죽는다. 되돌릴 유일한 길이 화면 콘솔이다.
+
+```bash
+make consoleaccess                          # → dist/console-access.sh
+scp dist/console-access.sh root@<proxmox>:/tmp/ && ssh root@<proxmox> /tmp/console-access.sh
+```
+
+- **랩당 1계정**이다 (1인 1계정 아님). 교육생이 늘어도 다시 하지 않고, **랩을 늘릴 때만** 한다.
+- 계정 `lab<N>-console@pve` 는 **그 랩 VM 13대의 콘솔만** 열린다.
+- 비밀번호는 `var/console.db` 에 있고 교육생 `[접속 키] → 5. 콘솔` 에 자기 랩 것만 표시된다.
 
 ---
 
-## 3. 랩 관리망에 닿게 한다 — **1회 작업**
+## 4. 관리망 연결 — 1회
 
-Terraform 은 API(8006)로만 붙으므로 문제가 없다. 막히는 쪽은 **Ansible** 이다.
-Ansible 은 `172.30.N.11` 같은 관리망 주소로 SSH 해야 하는데, 그 대역은 Proxmox 안의 브리지에만 있다.
+Terraform 은 API(8006)로만 붙으므로 문제없다. 막히는 쪽은 **Ansible** 이다 — `172.30.N.11` 은 Proxmox 안의 브리지에만 있다.
 
-### 관리망은 브리지 하나를 VLAN 으로 나눈다
-
-랩마다 관리망 브리지를 따로 두지 않는다. 그러면 랩을 만들 때마다 운영 서버에 NIC 을 붙여야 하고,
-더 나쁘게는 `terraform destroy` 가 **운영 서버의 NIC 이 꽂힌 브리지를 지우려 든다.**
+**설계** — 랩마다 관리망 브리지를 두지 않는다. 브리지 **하나**를 VLAN 으로 나눈다.
 
 ```
-vmbr9   VLAN-aware · 물리 포트 없음 · 전 랩 공용        ← 1회 생성, 지우지 않는다
-  ├ 랩1 노드 net0   tag 3001    ← 랩 Terraform 이 붙인다
+vmbr9   VLAN-aware · 물리 포트 없음 · 전 랩 공용     ← 1회 생성, 지우지 않는다
+  ├ 랩1 노드 net0   tag 3001                      ← 랩 Terraform 이 붙인다
   ├ 랩2 노드 net0   tag 3002
-  └ 운영 서버 net1   태그 없음(트렁크)                  ← 1회 연결, 랩이 늘어도 그대로
+  └ 운영 서버 net1   태그 없음(트렁크)               ← 1회 연결, 랩이 늘어도 그대로
 
-vmbr1101 … vmbr1402   랩1 링크 브리지 13개 + VM 13대    ← 수시로 만들고 지운다
+vmbr1101 …          랩1 링크 브리지 + VM           ← 수시로 만들고 지운다
 ```
 
-**랩을 만들거나 지울 때 Proxmox 호스트도 운영 서버의 VM 설정도 건드리지 않는다.**
-랩 링크 브리지에는 운영 서버를 붙이지 않는다 — 랩 서비스망은 격리가 목적이고,
-운영 서버는 관리망으로만 노드에 닿는다.
+- 랩을 만들거나 지울 때 **Proxmox 호스트도 운영 서버 VM 설정도 건드리지 않는다.**
+- 태깅을 브리지가 하므로 게스트는 untagged 프레임만 본다 → 격리 수준은 브리지를 나눈 것과 같다.
+- 물리 NIC 이 없으니 이 L2 는 호스트 밖으로 나가지 않는다.
 
-> **격리는 그대로다.** 태깅을 브리지가 하므로 랩 노드의 게스트는 untagged 프레임만 보고
-> 다른 VLAN 을 주입할 수 없다. 브리지를 랩마다 나눈 것과 격리 수준이 같다.
-> 물리 NIC 이 없으니 이 L2 는 호스트 밖으로도 나가지 않는다.
+### 운영 서버가 Proxmox 위의 VM 일 때 (권장)
 
-### 절차 (권장 — 운영 서버가 Proxmox 위의 VM 일 때)
+| 무엇 | GUI | CLI |
+|---|---|---|
+| 관리망 브리지 생성 | `[관리자 → 설치]` 의 **[관리망 브리지 만들기]** | `make mgmt LABS=9` |
+| 이 서버를 거기 연결 | — (root 필요) | `make mgmt-net` |
+
+`make mgmt-net` 이 하는 일 — 자기 VM 을 MAC 으로 찾고, 트렁크 NIC 을 **API 로 핫플러그**(재부팅 없음),
+게스트에 VLAN 서브인터페이스 생성, 주소 확인.
 
 ```bash
-make mgmt LABS=9        # ① 관리망 브리지 (Proxmox 에)
-make mgmt-net           # ② 이 서버를 거기 연결 (1회)
+make mgmt-net-dry        # 무엇을 할지만 보여준다
+make mgmt-net VMID=9100  # 자동 탐지 실패 시 직접 지정
+sudo rm /etc/netplan/60-lab-mgmt.yaml && sudo netplan apply    # 되돌리기
 ```
 
-②가 하는 일 — 손으로 할 일이 없다:
+- **root 로 돌리지 않는다.** netplan 쓰는 부분에서만 sudo 를 쓴다 — root 로 돌면 `var/` 가 root 소유가 되어 콘솔이 자기 DB 를 못 고친다.
+- 확인: `make doctor` 의 "관리망 브리지" · "이 서버의 관리망 주소" · "경로" 가 초록인지. `vlan_aware` 가 꺼져 있으면 오류로 잡는다.
 
-1. 이 서버가 Proxmox 위의 어느 VM 인지 찾는다 (내 NIC 의 MAC ↔ VM 설정 대조)
-2. 관리망 브리지에 트렁크 NIC 을 붙인다 — **API 로, 핫플러그, 재부팅 없음**
-3. 게스트에 나타난 그 인터페이스 위에 랩별 VLAN 서브인터페이스를 만든다
-4. 주소가 실제로 붙었는지 확인한다
+### 운영 서버가 물리 서버일 때
+
+Ansible 이 SSH ProxyJump 로 Proxmox 호스트를 지나간다.
 
 ```bash
-make mgmt-net-dry       # 무엇을 할지만 보여준다 (아무것도 안 바꾼다)
-make mgmt-net VMID=9100 # 자동 탐지가 실패하면 직접 지정
+ssh-copy-id root@192.0.2.10
 ```
-
-**root 로 돌리지 않는다.** `netplan` 을 쓰는 부분에서만 `sudo` 를 쓴다 —
-root 로 돌면 `var/` 안의 파일이 root 소유가 되어 콘솔이 자기 DB 를 못 고친다.
-
-되돌리려면:
-
-```bash
-sudo rm /etc/netplan/60-lab-mgmt.yaml && sudo netplan apply
-```
-
-> 물리 서버라 Proxmox VM 이 아니면 이 명령을 쓸 수 없다. 아래 "경유" 방식을 볼 것.
-
-<details><summary>손으로 할 때 (참고)</summary>
-
-
-```bash
-make mgmt LABS=9                      # ① 관리망 브리지 1개 생성 (VLAN 1~9 준비, 1회)
-make opsvm VMID=<운영서버 VMID> LABS=9  # ② 붙일 명령·netplan 생성 → dist/ops-server.md
-```
-
-`dist/ops-server.md` 에 이런 것들이 **주소까지 채워져서** 나온다.
-
-```bash
-# Proxmox 호스트에서 (1회) — 랩 수와 무관하게 NIC 은 하나다
-qm set 9100 -net1 virtio,bridge=vmbr9       # 태그 없음 = 트렁크
-```
-
 ```yaml
-# 운영 서버 안 /etc/netplan/60-lab-mgmt.yaml (1회)
-network:
-  version: 2
-  ethernets:
-    ens19: {dhcp4: false}                   # 트렁크 자체는 주소를 갖지 않는다
-  vlans:
-    mgmt1: {id: 3001, link: ens19, addresses: [172.30.1.9/24]}
-    mgmt2: {id: 3002, link: ens19, addresses: [172.30.2.9/24]}
-    # ... 랩9까지
+# config/site.local.yml
+access: {jump_host: {proxy_via_proxmox: true, proxmox_ssh_user: root}}
 ```
 
-마지막 옥텟 `9` 는 `site.yml` 의 `access.jump_host.host_octet`, VLAN 은 `vlan_base + 랩번호` 다.
-**게이트웨이는 주지 않는다.** 이 인터페이스들은 관리망 안에서만 쓴다 —
-기본 경로가 여러 개가 되면 사무실로 나가는 트래픽이 어디로 나갈지 흔들린다.
+경유 호스트에 아무것도 설치되지 않지만(`-W`) 느리고 Proxmox 를 SSH 경로에 끌어들인다. **VM 으로 올릴 수 있으면 그쪽이 낫다.**
 
-여기까지 하면 **끝이다.** 이후 랩을 몇 번 만들고 지우든 Proxmox 호스트도 운영 서버도 건드리지 않는다.
+> 정적 경로 + `ip_forward` 로 푸는 방법은 **쓰지 않는다.** Proxmox 호스트가 라우터가 되고, 랩의 브로드캐스트·잘못된 OSPF 광고가 사무실로 나갈 경로가 열린다.
 
-```bash
-make doctor          # "관리망 브리지" · "이 서버의 관리망 주소" · "경로" 가 초록인지 본다
-                     # vlan_aware 가 꺼져 있으면 오류로 잡는다 — 켜지 않으면 전 랩 관리망이 한 L2 로 합쳐진다
-```
+### Proxmox 호스트에 주소를 줄 것인가 (선택)
 
-</details>
-
-### Proxmox 호스트에도 주소를 줄 것인가 (선택)
-
-호스트가 랩 관리망에 주소(`172.30.N.1`)를 가지면 호스트에서도 랩 노드를 확인할 수 있다.
-`/etc/network/interfaces` 에 랩당 VLAN 서브인터페이스 한 덩이:
+호스트에서도 랩 노드를 확인하고 싶을 때만. `/etc/network/interfaces` 에 랩당 한 덩이:
 
 ```
 auto vmbr9.3001
@@ -305,453 +277,77 @@ iface vmbr9.3001 inet static
     address 172.30.1.1/24
 ```
 
-> 브리지 자체는 `make mgmt` 가 만든다. 손으로 넣는 것은 **호스트 IP 뿐**이고, 그것도 선택이다.
-> 이 저장소는 Proxmox 호스트 설정을 자동으로 바꾸지 않는다.
-> 주소를 준다면 `dist/host-guard.nft` 을 함께 검토할 것 — 랩에서 하이퍼바이저로 오는
-> 신규 연결을 막는 규칙이다.
-
-### 운영 서버가 물리 서버라면 — Proxmox 호스트를 경유한다
-
-브리지에 발을 걸칠 수 없으니 Ansible 이 SSH ProxyJump 로 호스트를 지나간다.
-
-```bash
-ssh-copy-id root@192.0.2.10          # 이 서버의 공개키를 Proxmox root 에 등록
-```
-
-```yaml
-# config/site.local.yml
-access:
-  jump_host:
-    proxy_via_proxmox: true
-    proxmox_ssh_user: root
-```
-
-```bash
-make gen LAB=1
-grep ssh_common infra/ansible/inventory/lab1/group_vars/all.yml
-# → ansible_ssh_common_args: -o ProxyJump=root@192.0.2.10 ...
-```
-
-경유 호스트에는 아무것도 설치되지 않는다(`-W` 방식). 다만 느리고, Proxmox 호스트를
-SSH 경로에 끌어들인다. **VM 으로 올릴 수 있으면 그쪽이 낫다.**
-
-### 라우팅으로 푸는 방법 (권장하지 않음)
-
-운영 서버에 `172.30.0.0/16 via <Proxmox>` 정적 경로를 주고 호스트에서 `ip_forward` 를 켜는 방법.
-동작은 하지만 **Proxmox 호스트를 라우터로 만든다.** `dist/access.md` 가 명시적으로 금지하는 구성이고,
-랩의 브로드캐스트·잘못된 OSPF 광고가 사무실로 나갈 경로를 하나 여는 셈이다.
+- 브리지 자체는 `make mgmt` 가 만든다. **손으로 넣는 것은 호스트 IP 뿐**이고 그것도 선택이다.
+- 주소를 준다면 `dist/host-guard.nft` 을 함께 검토한다 (랩 → 하이퍼바이저 신규 연결 차단).
 
 ---
 
-## 4. Proxmox 쪽 준비
-
-### API 토큰 — 스크립트로 만든다
-
-**손으로 `pveum` 을 치지 말 것.** 권한을 하나 빠뜨려도 티가 안 나고, `terraform apply` 가
-브리지를 만들다 HTTP 403 으로 멈춘다. 그때 Proxmox 는 **무엇이 없는지 알려주지 않는다.**
+## 5. 코드 갱신 — 콘솔을 반드시 재시작한다
 
 ```bash
-# Proxmox 호스트에서 root 로, 한 번만
-./infra/proxmox-setup.sh
-```
-
-이 스크립트가 하는 일:
-
-1. 역할 `LabProvision` 생성(있으면 권한 목록을 최신으로 맞춤)
-2. 사용자 `terraform@pve` 생성 + `/` 에 역할 부여
-3. API 토큰 발급 — **`--privsep 0`**
-4. **토큰이 실제로 무엇을 할 수 있는지 확인**하고, 모자라면 이름을 대고 멈춤
-5. 통과하면 토큰 비밀값을 한 번 출력 (다시 볼 수 없다)
-
-```bash
-./infra/proxmox-setup.sh --show        # 아무것도 바꾸지 않고 상태만 점검
-./infra/proxmox-setup.sh --new-token   # 비밀값을 잃었을 때 다시 발급
-```
-
-토큰은 콘솔 **[관리자 → 연결 설정]** 에 넣는다. 파일에 쓰지 않는다.
-
-**`make mgmt` · `make deploy` 도 같은 토큰을 쓴다.** `tools/with-pve-env.py` 가
-`var/console.db` 에서 읽어 실행 순간에만 환경변수로 넘긴다 — 따로 export 하지 않아도 된다.
-
-#### 가장 흔한 실패: 권한 분리
-
-```
-Error: Could not create Linux Bridge ... HTTP 403 (/nodes/pve01, Sys.Modify)
-```
-
-**웹 UI 로 토큰을 만들면 "Privilege Separation" 이 기본으로 켜진다.** 그러면 사용자에게 준
-역할을 토큰이 물려받지 않아, 역할을 아무리 손봐도 계속 403 이다.
-
-```bash
-pveum user token permissions terraform@pve lab --path /nodes/pve01   # 비어 있으면 이것이다
-pveum user token modify terraform@pve lab --privsep 0                # 한 줄로 끝
-```
-
-`./infra/proxmox-setup.sh` 는 이 상태를 감지해서 꺼 준다.
-
-#### 무엇 때문에 어떤 권한이 필요한가
-
-| 권한 | 없으면 |
-|---|---|
-| `Sys.Modify` (`/nodes/<node>`) | **브리지가 안 생긴다.** VM 은 만들어져도 랜선이 없다 |
-| `VM.Clone` | 골든 템플릿을 복제하지 못한다 |
-| `VM.Config.Cloudinit` | 관리망 주소·SSH 키가 안 들어가 노드에 접속할 수 없다 |
-| `Datastore.AllocateSpace` | 디스크·cloud-init 드라이브를 만들지 못한다 |
-
-`make doctor` 와 콘솔의 배포 전 검사가 **이 목록을 Proxmox 에 직접 물어본다.**
-모자라면 `terraform apply` 전에 이름을 대고 막는다.
-
-### 골든 템플릿
-
-랩 노드는 인터넷에 못 나간다. 필요한 패키지(FRR·nftables·bind9·tcpdump…)를 템플릿에 미리 넣는다.
-
-```bash
-# Proxmox 호스트에서 root 로
-apt update && apt install -y libguestfs-tools
-./infra/template/build-golden-template.sh --storage local-lvm
-```
-
-#### libguestfs-tools 를 하이퍼바이저에 깔 수 없다면 (권장 경로)
-
-`libguestfs-tools` 는 **Debian main** 에 있다 — Proxmox 저장소에는 없다.
-하이퍼바이저에 Debian 저장소를 추가하는 것 자체가 이 프로젝트가 피하려는 일이므로,
-**이미지는 운영 서버(Ubuntu)에서 만들고 Proxmox 는 등록만** 하는 편이 낫다.
-
-```bash
-# ① 운영 서버에서 — 여기는 apt 가 자유롭다
-sudo apt install -y libguestfs-tools
-./infra/template/build-golden-template.sh --image-only --out /tmp/lab.img
-scp /tmp/lab.img root@<proxmox>:/var/lib/vz/template/lab/
-
-# ② Proxmox 호스트에서 — qm 만 있으면 된다
-./infra/template/build-golden-template.sh \
-    --from-image /var/lib/vz/template/lab/lab.img --storage local-lvm
-```
-
-호스트에 저장소도 도구도 추가하지 않는다. 스크립트가 어느 모드에 무엇이 필요한지
-확인하고, 없으면 시작 전에 멈춘다.
-
-#### `supermin exited with error status 1`
-
-`virt-customize` 는 커널로 작은 VM(어플라이언스)을 띄워 이미지를 편집한다.
-그래서 두 가지가 필요하고 **둘 다 이 한 줄짜리 오류로만 나타난다.**
-
-| 원인 | 확인 | 해결 |
-|---|---|---|
-| 커널을 못 읽는다 | `ls -l /boot/vmlinuz-*` 가 `-rw-------` | `sudo chmod 0644 /boot/vmlinuz-*` |
-| 하드웨어 가상화 없음 | `ls /dev/kvm` 이 없다 (VM 안이면 흔하다) | `export LIBGUESTFS_BACKEND_SETTINGS=force_tcg` |
-
-데비안·우분투는 `/boot/vmlinuz-*` 를 root 전용으로 깐다. 일반 계정으로 돌리면
-`supermin` 이 죽는다. **커널을 새로 설치하면 다시 0600 이 되니 그때 한 번 더 해야 한다.**
-
-스크립트가 둘 다 **다운로드 전에** 확인한다. 커널 권한은 물어보고 고쳐 주고,
-`/dev/kvm` 이 없으면 TCG 로 자동 전환한다(느리다 — 10~25분).
-
-```bash
-libguestfs-test-tool 2>&1 | tail -30    # 그래도 안 되면 이걸로 진단
-```
-
-#### 그래도 호스트에 깔겠다면
-
-`Unable to locate package libguestfs-tools` 가 나오면 **패키지 목록이 없는 것**이다.
-`apt update` 를 먼저 돌린다. 그것도 실패하면 구독이 없는 설치라 enterprise 저장소가
-401 을 뱉는 경우다:
-
-```bash
-sed -i 's/^deb/#deb/' /etc/apt/sources.list.d/pve-enterprise.list
-echo "deb http://download.proxmox.com/debian/pve $(. /etc/os-release; echo $VERSION_CODENAME) pve-no-subscription" \
-  > /etc/apt/sources.list.d/pve-no-subscription.list
-apt update && apt install -y libguestfs-tools
-```
-
-빌드 스크립트가 이 도구가 없으면 시작 전에 멈추고 위 명령을 알려준다.
-
-`config/site.yml` 의 `labs.template_vmid` (기본 9000)와 번호가 맞아야 한다.
-`make doctor` 가 이 VMID 의 존재를 확인해 준다.
-
----
-
-## 5. 첫 랩 띄우기
-
-### 웹 콘솔에서 (권장)
-
-**[관리자 → 설치]** 에서 오류가 0 인지 본다. 아직 관리망 브리지가 없으면
-그 화면의 **[관리망 브리지 만들기]** 버튼을 누른다 (최초 1회).
-
-그다음 랩 화면에서 **[랩 생성]** → **[설정 적용]** → **[검증]**.
-tfvars 와 인벤토리는 버튼이 누를 때마다 다시 만든다 — 미리 생성해 둘 것이 없다.
-
-교육생 계정은 **[관리자 → 계정 관리]** 에서 만든다. 첫 로그인은 `admin / admin` 이고
-**비밀번호 변경 전에는 아무 화면도 보이지 않는다.**
-
-### 터미널에서 같은 일을 하려면
-
-콘솔이 뜨지 않을 때나 자동화에 넣을 때 쓴다. 화면과 **같은 명령**이다.
-
-```bash
-make doctor                 # 오류 0 인지 확인. 여기서 걸리는 게 배포 중에 걸리는 것보다 싸다
-make mgmt LABS=9            # 관리망 브리지 — 최초 1회만. 이미 했다면 생략
-make deploy LAB=1           # terraform apply — 브리지 14개 + VM 13대 (tfvars 는 알아서 만든다)
-make config  LAB=1 STAGE=m1 # Ansible — M1 단계 설정만 올린다
-make verify  LAB=1 STAGE=m1
-python3 tools/console-user.py add trainee01 --lab 1   # 교육생 계정
-```
-
-`make gen` 은 **dist/ 에 문서 파일을 뽑고 싶을 때만** 쓴다 (인쇄·오프라인 배포용).
-웹 화면은 이 파일들 없이도 그대로 나온다.
-
-### 단계 진행
-
-```bash
-make config LAB=1 STAGE=m2      # VM 은 그대로. 설정 범위만 넓어진다
-```
-
----
-
-## 5.5 교육생 접속 (교육생이 올 때)
-
-교육생은 콘솔만으로는 실습을 못 한다 — 이 과정의 실습은 전부 터미널이다.
-랩 노드는 사무실에서 직접 보이지 않으므로 **운영 서버를 ProxyJump 로 거친다.**
-
-```
-교육생 PC ──ssh──▶ 운영 서버 ──ssh──▶ 랩 노드 (pc1 · r1 · web …)
-```
-
-운영 서버는 콘솔·Terraform·Ansible 이 도는 장비다. 여기에 교육생 **셸**을 주면
-모듈 해설(`answers.md`)과 캡스톤 장애 대응표를 읽을 수 있고, 다른 랩 관리망으로도 나갈 수 있다.
-그래서 점프 계정은 **셸이 없고 자기 랩 노드로만 나간다.**
-
-### 절차 — 한 번만 준비해 두면 버튼이다
-
-```bash
-./install.sh --no-apt                  # 최초 1회. 아래 "왜 이렇게 하나" 참고
-                                       # (점프 계정 적용 권한은 기본으로 설치된다)
-```
-
-그 뒤로는 **관리자가 할 일이 없다.** 교육생이 첫 로그인에서 비밀번호를 바꾸고
-공개키를 등록하면 콘솔이 점프 계정 적용과 랩 노드 반영을 **자동으로 건다.**
-(수업 시작 때 여럿이 동시에 등록해도 작업은 한 번만 돈다 — `console/autokey.py`)
-
-손으로 걸어야 할 때만 **[관리자 → 설치] → [점프 계정 적용]** 을 누른다.
-빠진 사람은 만들고, 콘솔에서 사라지거나 키를 지운 사람은 **접근을 회수한다.**
-
-교육생 쪽에서 할 일도 콘솔 안에서 끝난다 — **[접속 키]** 에서 공개키를 등록하고
-**[내 SSH 설정 내려받기]** 로 `~/.ssh/config` 조각을 직접 받는다.
-관리자가 파일을 나눠 줄 일이 없다.
-
-<details><summary>준비해 두지 않았다면 (손으로 하는 절차)</summary>
-
-```bash
-make jumpaccess                                    # → dist/jump-access.{sh,conf}
-sudo ./dist/jump-access.sh
-sudo cp dist/jump-access.conf /etc/ssh/sshd_config.d/60-lab-jump.conf
-sudo sshd -t && sudo systemctl reload ssh          # -t 로 먼저 검사할 것
-```
-</details>
-
-### 왜 콘솔에 sudo 를 통째로 주지 않는가
-
-점프 계정 적용 권한은 콘솔 계정에 sudo 를 주는 것이 맞다. 다만 **무엇에 대해** 주는지가 전부다.
-
-```
-콘솔 계정이 dist/jump-access.sh 를 쓸 수 있다
-  + sudo 로 그 파일을 실행할 수 있다
-  = 콘솔 계정이 곧 root 다            ← 순진하게 주면 이렇게 된다
-```
-
-그래서 콘솔이 부르는 것은 저장소의 스크립트가 아니라 **root 소유 전용 프로그램** 하나다.
-
-| | |
-|---|---|
-| 실행되는 코드 | `/usr/local/sbin/lab-access-apply` (root:root 0755) **하나뿐** |
-| 저장소 참조 | 없다. `tools/` 도 `dist/` 도 읽지 않는다 |
-| 주소·경로 | `/etc/my-network-lab/policy.json` (root 소유). 헬퍼가 소유·권한을 확인하고 거부한다 |
-| 콘솔에서 오는 것 | `var/console.db` 의 **데이터뿐** — 이름과 공개키를 헬퍼가 다시 검증한다 |
-| sudoers 규칙 | 인자 자리가 없다. 와일드카드 금지 |
-| 셸 | 거치지 않는다. 스크립트를 만들어 돌리지 않고 헬퍼가 직접 처리한다 |
-
-공개키 검증은 특히 중요하다. `command="..."` 같은 **옵션이 앞에 붙은 줄**이 통과하면
-셸 없는 계정에서도 우리가 정하지 않은 명령이 돈다. 헬퍼는 줄이 키 타입으로 시작할 것을
-요구하고, base64 를 풀어 **안에 적힌 타입과 줄 앞의 타입이 같은지**까지 본다.
-
-랩 구성(주소·랩 수)을 바꾸면 policy.json 을 다시 만들어야 한다.
-
-```bash
-python3 tools/gen-policy.py | sudo tee /etc/my-network-lab/policy.json >/dev/null
-```
-
-### 콘솔 접속 (M0 실습 5 가 요구한다)
-
-SSH 는 키로 들어가지만, 교육생이 **자기 관리 링크를 내리면 SSH 자체가 죽는다.**
-그때 되돌릴 유일한 길이 화면에 직접 붙는 콘솔이다. 콘솔은 키를 못 쓰므로 둘이 필요하다.
-
-```bash
-make consoleaccess                      # → dist/console-access.sh
-scp dist/console-access.sh root@<proxmox>:/tmp/
-# Proxmox 호스트에서
-/tmp/console-access.sh
-```
-
-**계정은 랩당 1개다** (교육생 1인 1계정이 아니다). 그래서 교육생이 늘어도 다시 하지
-않는다 — **랩을 늘릴 때만** 한다.
-
-왜 전체를 하나로 통일하지 않는가: 노드 `lab` 계정 비밀번호는 **전 랩 공용**이고
-교육생 본인 화면에 표시된다. 계정을 하나로 합치면 남의 랩 화면이 열리고, 거기서
-이미 아는 비밀번호로 로그인된다 — 랩 격리도 시험도 그 자리에서 무너진다.
-반대로 랩 경계 **안에서** 계정을 나누는 것은 지키는 것이 없다. 같은 랩 교육생은
-어차피 같은 VM 13대를 함께 쓴다.
-
-| 무엇 | 어디에 |
-|---|---|
-| Proxmox 로그인 계정 | `lab<N>-console@pve`. **그 랩 VM 13대의 콘솔만** 열린다 (`VM.Console`+`VM.Audit`) |
-| 그 비밀번호 | `var/console.db`. 교육생 **[접속 키] → 5. 콘솔** 에 **자기 랩 것만** 표시된다 |
-| 노드 `lab` 계정 비밀번호 | 같은 화면에 있다. 위와 **다른 값**이다 |
-
-비밀번호를 DB 에 두고 화면이 보여 주기 때문에 관리자가 사람마다 전달할 일이 없다.
-스크립트를 다시 실행해도 같은 값으로 맞춘다 — 교육생에게 다시 알릴 필요가 없다.
-
-노드 비밀번호는 Terraform 이 VM 을 만들 때 cloud-init 으로 넣는다 —
-`TF_VAR_lab_password` 로 **실행 시에만** 전달되고 tfvars 에는 들어가지 않는다.
-SSH 는 이 비밀번호로 들어갈 수 없다(노드 sshd 가 비밀번호 로그인을 받지 않는다).
-
-| 제한 | 무엇 |
-|---|---|
-| `ForceCommand` + nologin 셸 | 대화형 접속 불가 → 운영 서버의 파일을 못 읽는다 |
-| `PermitOpen` = 자기 랩 13대:22 | 다른 랩 관리망으로 못 나간다 |
-| 비밀번호 잠금 | 키로만 들어온다 |
-
-> `Match all` 로 끝나는 것을 지우지 말 것. `sshd_config.d` 는 보통 `sshd_config` 앞부분에서
-> include 되므로, 닫지 않으면 **그 뒤의 전역 설정이 전부 마지막 Match 안에 갇힌다.**
-> 생성기가 이 줄을 자동으로 넣는다.
-
-교육생이 새로 등록하면 자동으로 반영된다. **키를 바꾼 경우**에만 손이 필요하다 —
-교육생이 [지금 랩에 반영] 을, 관리자가 [점프 계정 적용] 을 누른다.
-Proxmox 콘솔 계정은 랩당 1개라 다시 할 필요가 없다.
-
----
-
-## 5.9 코드를 갱신했을 때 — 콘솔을 반드시 재시작한다
-
-```bash
-git pull            # 또는 새 tarball 을 풀고
+git pull
 sudo systemctl restart my-network-lab
 ```
 
-**재시작을 빼면 증상이 헷갈린다.** 교재·화면(Jinja 템플릿)은 요청마다 디스크에서 다시
-읽히지만 **라우트는 프로세스 시작 때 등록된다.** 그래서 새 버튼은 보이는데 누르면
-`{"detail":"Not Found"}` 가 나온다 — 화면은 새것, 코드는 옛것인 상태다.
-
-**설계(design/*.yml)도 프로세스가 뜰 때 한 번 읽는다.** 모듈이나 단계가 늘어난
-갱신이면 재시작 전까지 콘솔은 옛 목록을 들고 있다. 저장된 진행에는 있는 단계가
-목록에는 없는 상태가 되어 화면이 어긋난다. `/healthz` 의 `modules` 개수가
-`modules/` 디렉터리 수와 다르면 재시작을 안 한 것이다.
-
-```bash
-curl -s http://127.0.0.1:8080/healthz     # {"ok":true,"modules":12}
-ls -d modules/m*/ | wc -l                 # 12
-```
-
-`make console` 로 띄웠다면 그 창에서 `Ctrl+C` 후 다시 실행한다.
-
----
+- **재시작을 빼면 증상이 헷갈린다.** 교재·화면(Jinja)은 요청마다 다시 읽지만 **라우트와 설계(`design/*.yml`)는 프로세스 기동 시 한 번** 읽는다 → 새 버튼은 보이는데 누르면 `{"detail":"Not Found"}`.
+- 확인: `curl -s http://127.0.0.1:8080/healthz` 의 `modules` 수 = `ls -d modules/m*/ | wc -l`.
+- **Ansible 역할이 바뀐 갱신이면** 랩에 `[이 모듈 적용]` 을 한 번 더 눌러야 반영된다.
+- 브라우저는 강제 새로고침(Ctrl+Shift+R).
+- `make console` 로 띄웠다면 그 창에서 Ctrl+C 후 재실행.
 
 ## 6. 운영
 
-| 하는 일 | 명령 |
+| 하는 일 | 방법 |
 |---|---|
-| 상태 점검 | `make doctor` |
-| 서비스 상태 | `systemctl status my-network-lab` |
-| 로그 | `journalctl -u my-network-lab -f` |
-| 재시작 | `sudo systemctl restart my-network-lab` |
-| 랩 초기화 | `make reset LAB=1 STAGE=m4` |
-| 랩 삭제 | 콘솔 [삭제] 또는 `cd infra/terraform/envs/lab1 && terraform destroy` |
-| 계정 목록 | `make users` |
+| 상태 점검 | `[관리자 → 설치]` 또는 `make doctor` |
+| 서비스 상태 · 로그 | `systemctl status my-network-lab` · `journalctl -u my-network-lab -f` |
+| 랩 초기화 | `[이 모듈 적용]` 또는 `make reset LAB=1 STAGE=m4` |
+| 랩 삭제 | `[삭제]` 또는 `cd infra/terraform/envs/lab1 && terraform destroy` |
+| 계정 목록 | `[관리자 → 계정 관리]` 또는 `make users` |
 
-### 백업할 것
-
-**`var/` 하나다.** 계정·비밀번호 해시·진도·시험 기록·API 토큰이 전부 여기 있고,
-나머지는 `config/` 에서 언제든 다시 만들어진다.
+**백업 — `var/` 하나다.** 계정 · 비밀번호 해시 · 진도 · 시험 기록 · API 토큰이 전부 여기 있다.
 
 ```bash
-tar czf var-$(date +%F).tar.gz var/     # 0600 으로 보관할 것 — 토큰이 들어 있다
+tar czf var-$(date +%F).tar.gz var/     # 0600 으로 보관할 것
 ```
 
-tfstate(`infra/terraform/envs/lab*/`)도 잃으면 Terraform 이 기존 VM 을 모르게 된다.
-같이 챙기거나, 잃었을 때는 `terraform import` 대신 랩을 지우고 다시 만드는 편이 빠르다.
+- tfstate(`infra/terraform/envs/lab*/`)도 잃으면 Terraform 이 기존 VM 을 모른다. 잃었으면 랩을 지우고 다시 만드는 편이 빠르다.
+- 서버별 환경변수는 `var/console.env` (있으면 systemd 가 읽는다) — 사내 프록시 등. `chmod 600`.
 
-### 서버마다 다른 환경변수
+## 7. 문제 해결
 
-systemd 유닛이 `var/console.env` 를 있으면 읽는다 (없어도 된다).
+| 증상 | 원인 | 확인 · 조치 |
+|---|---|---|
+| `make doctor` TCP 연결 실패 | 방화벽 / 주소 오타 | `nc -vz <proxmox> 8006` |
+| `must provide either username and password, an API token...` | 토큰을 못 찾았다 | `[연결 설정]` 에 입력. `make doctor` 의 "CLI 자격 증명" |
+| 401 / 403 | privsep 켠 토큰에 ACL 없음 | `pveum user token modify terraform@pve lab --privsep 0` |
+| 브리지 생성만 실패 | 역할에 `Sys.Modify` 없음 | `./infra/proxmox-setup.sh` 재실행 |
+| "노드가 없다" | `node_name` 오타 | Proxmox 에서 `hostname -s` |
+| VM 은 생겼는데 Ansible 전부 UNREACHABLE | 관리망 도달 불가 | [4. 관리망](#4-관리망-연결--1회). `ip route get 172.30.1.11` |
+| 다른 랩 노드가 서로 보인다 | 브리지 `vlan_aware` OFF | `make doctor` 가 오류로 잡는다. `make mgmt` 재실행 |
+| VM 이 기동하지 않는다 (bridge not found) | 관리망 브리지 미생성 | `[관리망 브리지 만들기]` |
+| 특정 노드만 `Permission denied (publickey)` | 공개키 누락 상태로 cloud-init 실행됨 | `ssh_public_keys` 채우고 VM 재생성 |
+| 새 버튼이 `{"detail":"Not Found"}` | 콘솔을 재시작하지 않았다 | [5. 코드 갱신](#5-코드-갱신--콘솔을-반드시-재시작한다) |
+| 터미널에서 `ansible-playbook: command not found` | 정상이다 (venv 안에 있다) | `make config` 를 쓴다 |
+| 서비스가 뜨자마자 죽는다 | 포트 충돌 / 권한 | `journalctl -u my-network-lab -n 50` |
 
-```bash
-cat > var/console.env <<'EOF'
-# 사내 프록시
-HTTPS_PROXY=http://proxy.example:3128
-NO_PROXY=192.0.2.0/24,172.30.0.0/16,localhost
-# Terraform 이 Proxmox 에 SSH 해야 하는 경우에만 (보통 필요 없다)
-# PROXMOX_VE_SSH_USERNAME=root
-# PROXMOX_VE_SSH_PRIVATE_KEY=/home/lab/.ssh/id_ed25519
-EOF
-chmod 600 var/console.env && sudo systemctl restart my-network-lab
-```
+로그는 콘솔 화면(SSE 실시간)과 `journalctl` 두 곳에 남는다. Terraform · Ansible 원문이 그대로 흐른다.
 
----
-
-## 7. 폐쇄망
-
-인터넷이 없는 서버라면 세 가지를 미리 옮긴다.
+## 8. 폐쇄망
 
 ```bash
 # 인터넷 되는 PC 에서
 curl -LO https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip
 pip download -d wheels -r console/requirements.txt
 ansible-galaxy collection download -r infra/ansible/requirements.yml -p galaxy
-terraform providers mirror ./tf-mirror     # bpg/proxmox 프로바이더
-```
+terraform providers mirror ./tf-mirror
 
-```bash
 # 운영 서버에서
 TERRAFORM_ZIP=~/terraform_1.9.8_linux_amd64.zip ./install.sh --no-apt
 console/.venv/bin/pip install --no-index --find-links wheels -r console/requirements.txt
 ```
 
-프로바이더는 `~/.terraformrc` 로 미러를 가리킨다:
-
-```hcl
-provider_installation {
-  filesystem_mirror {
-    path    = "/home/lab/tf-mirror"
-    include = ["registry.terraform.io/bpg/*"]
-  }
-  direct {
-    exclude = ["registry.terraform.io/bpg/*"]
-  }
-}
-```
-
----
-
-## 8. 막혔을 때
-
-| 증상 | 원인 | 확인 |
-|---|---|---|
-| `make doctor` — TCP 연결 실패 | 방화벽 / 주소 오타 | `nc -vz <proxmox> 8006` |
-| `must provide either username and password, an API token, or a ticket` | 토큰을 못 찾았다 | 콘솔 [연결 설정] 에 넣거나 `export PROXMOX_VE_API_TOKEN=...`. `make doctor` 의 "CLI 자격 증명" 항목 |
-| 토큰이 거부됨 (401/403) | privsep 켠 토큰에 ACL 없음 | `pveum user token list terraform@pve` |
-| 브리지 생성만 실패 | 역할에 `Sys.Modify` 없음 | 4절의 `pveum role add` 다시 |
-| VM 은 생겼는데 Ansible 이 전부 UNREACHABLE | 관리망 도달 불가 | 3절. `ip route get 172.30.1.11` |
-| 다른 랩의 노드가 서로 보인다 | 브리지의 `vlan_aware` 가 꺼져 있다 | `make doctor` — 오류로 잡힌다. `make mgmt` 재실행 |
-| VM 이 기동하지 않는다 (bridge not found) | `make mgmt` 를 안 했다 | `make mgmt LABS=9` |
-| 특정 노드만 `Permission denied (publickey)` | 공개키 누락 상태로 cloud-init 이 돌았다 | `ssh_public_keys` 채우고 `terraform apply` 후 VM 재생성 |
-| 콘솔은 되는데 터미널에서 `ansible-playbook: command not found` | 시스템에 ansible 이 없다 | 정상이다. `make config` 를 쓸 것 (venv 를 자동으로 찾는다) |
-| 서비스가 뜨자마자 죽는다 | 포트 충돌 / 권한 | `journalctl -u my-network-lab -n 50` |
-| terraform 이 SSH agent 를 찾는다 | 드문 경우 | `var/console.env` 에 `PROXMOX_VE_SSH_*` 지정 (6절) |
-| 교육생이 노드에 SSH 못 함 | 교육생 공개키 누락 | `dist/ssh-config-lab1` 배포 여부 확인 |
-
-로그는 콘솔 화면(SSE 실시간)과 `journalctl` 두 곳에 남는다.
-Terraform·Ansible 원문 출력이 그대로 흐르므로, 콘솔에서 본 오류를 그대로 검색하면 된다.
-
----
+`~/.terraformrc` 로 프로바이더 미러(`registry.terraform.io/bpg/*`)를 가리킨다.
 
 ## 9. 삭제
 
@@ -761,10 +357,25 @@ sudo systemctl disable --now my-network-lab
 sudo rm /etc/systemd/system/my-network-lab.service && sudo systemctl daemon-reload
 ```
 
-관리망 브리지(`vmbr9`)는 랩 destroy 로 사라지지 않는다. 전부 없애려면 마지막에:
+- 관리망 브리지(`vmbr9`)는 랩 destroy 로 사라지지 않는다. 전부 없애려면 **운영 서버 NIC 을 먼저 떼고** `cd infra/terraform/envs/mgmt && terraform destroy`.
+- Proxmox 호스트에 손으로 넣은 것은 (줬다면) 관리망 브리지 IP 뿐이다.
 
-```bash
-cd infra/terraform/envs/mgmt && terraform destroy    # 운영 서버 NIC 을 먼저 떼고 할 것
-```
+---
 
-Proxmox 호스트에 손으로 넣은 것은 (줬다면) 관리망 브리지 IP 뿐이다(3절). 지울 때도 그것만 지우면 된다.
+## 부록 A. CLI 대안 표
+
+콘솔이 뜨지 않을 때나 자동화에 넣을 때. GUI 와 **같은 명령**이다.
+
+| GUI | CLI |
+|---|---|
+| `[관리자 → 설치]` 점검 | `make doctor` |
+| `[관리망 브리지 만들기]` | `make mgmt LABS=9` |
+| `[랩 생성]` | `make deploy LAB=1` |
+| `[이 모듈 적용]` | `make config LAB=1 STAGE=m1` |
+| `[검증]` | `make verify LAB=1 STAGE=m1` |
+| `[계정 관리]` | `python3 tools/console-user.py add trainee01 --lab 1` |
+| `[점프 계정 적용]` | `make jumpaccess` → `sudo ./dist/jump-access.sh` |
+| 교재 · 부록 파일로 뽑기 | `make gen LAB=1` (인쇄 · 오프라인 배포용. 화면은 이 파일 없이도 나온다) |
+
+`make deploy` · `make mgmt` 도 콘솔과 같은 토큰을 쓴다 — `tools/with-pve-env.py` 가 `var/console.db` 에서 읽어
+**실행 순간에만** 환경변수로 넘긴다. 따로 export 할 필요가 없다.
