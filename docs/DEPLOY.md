@@ -205,7 +205,7 @@ scp /tmp/lab.img root@<proxmox>:/var/lib/vz/template/lab/
 | `[Xshell 세션 내려받기]` | `my-network-lab` 폴더 · 세션 14개 + 설치 스크립트 (zip) | `설치.bat` 두 번 클릭 |
 
 - Xshell 에는 `ProxyJump` 가 없다. 대신 **프록시 종류 JUMPHOST** 가 같은 일을 하는데, 프록시는 세션 파일이 아니라 `Common\Proxy\<이름>.ini` 에 따로 있고 그 안의 `SESSION=` 이 **절대 경로**라 미리 만들어 둘 수 없다 → zip 의 `설치.bat` 이 그 자리에서 경로를 찾아 써 준다.
-- 교육생에게 남는 수동 작업은 **개인 키를 Xshell 에 `my-network-lab` 이라는 이름으로 등록하는 것 하나**다.
+- 개인 키도 `설치.bat` 이 찾아서 넣는다 (`%USERPROFILE%\.ssh\id_*`, 압축을 푼 폴더 안). 못 찾으면 화면에 수동 절차를 띄운다 — 조용히 넘어가지 않는다.
 - CLI 로 같은 것을 만들려면 `make xshell LAB=1` (→ `dist/my-network-lab/`).
 
 **Proxmox 콘솔 계정 (M0 실습 5 가 요구한다)**

@@ -128,7 +128,7 @@ def build(lab_id, user=None, key=KEY_NAME):
             L.mgmt_ip(lab_id, name), 22, lab_user, proxy,
             f"lab{lab_id} {name} — {n.get('desc', '')}".strip(" —"), key)))
 
-    files["install.ps1"] = _installer(lab_id, jump_ip, proxy)
+    files["install.ps1"] = _installer(lab_id, jump_ip, proxy, key)
     files["설치.bat"] = _launcher()
     files["읽어보세요.txt"] = _readme(lab_id, jump_ip, jump_user, lab_user, proxy, key)
     return files
@@ -149,7 +149,7 @@ def build(lab_id, user=None, key=KEY_NAME):
 #  **그 자리에서 경로를 알아내 쓰는 스크립트**를 넣는다. 교육생이 20명이면
 #  손으로 하는 프록시 등록도 20번이다.
 # ---------------------------------------------------------------------------
-def _installer(lab_id, jump_ip, proxy):
+def _installer(lab_id, jump_ip, proxy, key):
     ps = rf'''# my-network-lab · lab{lab_id} — Xshell 세션 설치
 # 하는 일 두 가지뿐입니다.
 #   ① 이 폴더의 세션 파일을 Xshell 세션 폴더로 복사
@@ -203,9 +203,56 @@ USERNAME=
 [IO.File]::WriteAllText((Join-Path $proxydir "{proxy}.ini"), $ini, [Text.Encoding]::Unicode)
 Write-Host "프록시 등록: {proxy}  ->  {jump_ip}:22" -ForegroundColor Green
 
+# ③ 개인 키. Xshell 은 개인 키를 SECSH\UserKeys\<이름>.pri 로 둔다 — 경로도
+#    이름도 우리가 아는 값이므로, 찾을 수 있으면 그냥 복사한다.
+#    못 찾으면 조용히 넘어가지 않고 무엇을 해야 하는지 말한다.
+$keydir  = Join-Path $base "SECSH\UserKeys"
+$keyfile = Join-Path $keydir "{key}.pri"
+New-Item -ItemType Directory -Force $keydir | Out-Null
+
+if (Test-Path $keyfile) {{
+    Write-Host "개인 키: 이미 등록돼 있습니다 ({key})" -ForegroundColor Green
+}} else {{
+    # 흔한 자리부터 본다. 마지막은 이 폴더 — 키 파일을 여기 같이 넣어 두면 잡힌다.
+    $cands = @()
+    foreach ($n in @("id_ed25519", "id_ecdsa", "id_rsa")) {{
+        $cands += (Join-Path $HOME ".ssh\$n")
+    }}
+    $cands += @(Get-ChildItem $src -File -ErrorAction SilentlyContinue |
+                Where-Object {{ $_.Name -match "\.(pri|key|pem)$" -or $_.Name -like "id_*" }} |
+                ForEach-Object {{ $_.FullName }})
+
+    $found = $null
+    foreach ($c in $cands) {{
+        if (Test-Path $c) {{
+            $head = Get-Content $c -TotalCount 1 -ErrorAction SilentlyContinue
+            # 실수로 공개 키(.pub)를 집지 않도록 개인 키인지 첫 줄로 확인한다.
+            if ($head -match "-----BEGIN") {{ $found = $c; break }}
+        }}
+    }}
+
+    if ($found) {{
+        Copy-Item $found $keyfile -Force
+        Write-Host "개인 키 등록: $found" -ForegroundColor Green
+        Write-Host "             -> {key}" -ForegroundColor Green
+    }} else {{
+        Write-Host ""
+        Write-Host "개인 키를 찾지 못했습니다. 이것만 직접 해 주세요." -ForegroundColor Yellow
+        Write-Host "  방법 1 - 개인 키 파일을 이 이름으로 복사"
+        Write-Host "           $keyfile"
+        Write-Host "  방법 2 - Xshell [도구] > [사용자 키 관리자] > [가져오기] 로 넣고,"
+        Write-Host "           [속성] 에서 이름을 {key} 로 바꾸기"
+        $have = @(Get-ChildItem $keydir -Filter *.pri -ErrorAction SilentlyContinue |
+                  ForEach-Object {{ $_.BaseName }})
+        if ($have.Count -gt 0) {{
+            Write-Host "  (지금 등록된 키: $($have -join ', '))" -ForegroundColor Yellow
+        }}
+        Write-Host "  공개 키는 웹 콘솔 [접속 키] 에도 등록돼 있어야 합니다." -ForegroundColor Yellow
+    }}
+}}
+
 Write-Host ""
 Write-Host "끝났습니다. Xshell 이 켜져 있으면 껐다 켜 주세요." -ForegroundColor Cyan
-Write-Host "남은 것은 개인 키 하나입니다 — 읽어보세요.txt 의 3번을 봐 주세요."
 '''
     return b"\xef\xbb\xbf" + ps.replace("\n", "\r\n").encode("utf-8")
 
@@ -232,7 +279,7 @@ def _readme(lab_id, jump_ip, jump_user, lab_user, proxy, key):
     t = f"""my-network-lab · lab{lab_id} Xshell 세션
 ============================================================
 
-「설치.bat」 을 두 번 누르면 끝납니다. 남는 것은 개인 키 하나뿐입니다(3번).
+「설치.bat」 을 두 번 누르면 끝납니다.
 
 랩 노드는 사무실에서 직접 보이지 않습니다. 운영 서버(점프 호스트)를 거쳐야
 합니다. Xshell 에는 OpenSSH 의 ProxyJump 가 없고, 대신 **프록시 종류
@@ -241,12 +288,14 @@ JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까�
 
 1. 설치.bat 을 두 번 누릅니다
 ------------------------------------------------------------
-   두 가지를 합니다.
+   세 가지를 합니다.
 
      · 세션 파일을 Xshell 세션 폴더로 복사
      · 점프 호스트 프록시({proxy}) 를 등록
+     · 내 개인 키를 「{key}」 라는 이름으로 등록
 
-   검은 창이 뜨고 초록 글씨 두 줄이 나오면 된 것입니다.
+   검은 창이 뜨고 **초록 글씨 세 줄**이 나오면 된 것입니다.
+   노란 글씨가 나오면 그 줄이 시키는 것만 해 주세요 (아래 3번).
    Xshell 이 켜져 있었다면 **껐다 켜 주세요.** 세션 목록은 켤 때 읽습니다.
 
    [경고가 뜨면] Windows 가 "이 앱이 PC를 손상시킬 수 있습니다" 라고 물으면
@@ -268,25 +317,30 @@ JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까�
    셸이 없는 계정이라 그게 정상입니다.
 
 
-3. 내 개인 키를 Xshell 에 등록합니다  (이름을 맞춰 주세요)
+3. 개인 키를 못 찾았다고 할 때만
 ------------------------------------------------------------
-   [도구] > [사용자 키 관리자] > [가져오기] 로 개인 키 파일을 넣습니다.
-   웹 콘솔 [접속 키] 에 등록한 그 키와 **짝이 맞는 개인 키**여야 합니다.
+   설치 스크립트가 흔한 자리를 먼저 봅니다.
 
-   가져온 뒤 [속성] 에서 이름을 이렇게 바꿉니다:
+     %USERPROFILE%\\.ssh\\id_ed25519 · id_ecdsa · id_rsa
+     그리고 이 폴더 안의 키 파일
 
-     {key}          <- 반드시 이대로
+   여기 없으면 노란 글씨로 알려 줍니다. 둘 중 하나를 해 주세요.
+
+     방법 1 - 개인 키 파일을 이 이름으로 복사한다 (제일 빠릅니다)
+
+       ...\\NetSarang Computer\\8\\SECSH\\UserKeys\\{key}.pri
+
+     방법 2 - [도구] > [사용자 키 관리자] > [가져오기] 로 넣고,
+              [속성] 에서 이름을 「{key}」 로 바꾼다
 
    세션 파일들이 키를 **이름으로** 가리킵니다. 이름이 다르면 접속할 때마다
    키를 고르라고 묻습니다 — 세션이 여러 개라 그만큼 묻습니다.
 
+   키 파일을 이 폴더에 같이 넣어 두고 설치.bat 을 다시 돌려도 됩니다.
+
+   웹 콘솔 [접속 키] 에 등록한 그 키와 **짝이 맞는 개인 키**여야 합니다.
    Xshell 에서 키를 새로 만들었다면([도구] > [사용자 키 생성 마법사]),
    그 공개 키를 웹 콘솔 [접속 키] 에 등록하고 [지금 랩에 반영] 을 누르세요.
-
-   [참고] Xshell 은 개인 키를 이 폴더에 「이름.pri」 로 둡니다.
-          가져오기 대신 파일을 직접 넣어도 됩니다.
-
-     ...\\NetSarang Computer\\8\\SECSH\\UserKeys\\{key}.pri
 
 
 접속이 안 될 때
@@ -299,6 +353,8 @@ JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까�
  · 비밀번호를 묻는다
      키 인증이 실패한 것입니다. 그 비밀번호는 존재하지 않습니다.
      3번의 키 등록을 확인하세요.
+ · 키를 고르라고 묻는다
+     키 이름이 「{key}」 가 아닙니다. [사용자 키 관리자] 에서 이름을 바꾸세요.
  · 세션 [속성] > [연결] > [프록시] 가 비어 있다
      프록시가 등록되지 않았습니다. 설치.bat 을 다시 돌리고 Xshell 을 껐다 켜세요.
  · 호스트 키 경고가 계속 거슬린다
