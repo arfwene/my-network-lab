@@ -34,11 +34,26 @@
   tasks:
     - name: 링크 재기동 (DAD 는 주소를 붙일 때 한 번만 한다)
       ansible.builtin.shell: |
+        # M6 는 **직접 만드는 단계**다. pc1 의 IPv6 주소는 교육생이 3.2 에서 손으로
+        # 붙인 것이라 netplan 에는 없다. 그대로 링크를 내렸다 올리고 netplan apply
+        # 를 하면 그 주소가 통째로 사라진다. 그러면
+        #   · 주입했을 때의 증상이 `dadfailed` 가 아니라 "주소가 아예 없다" 가 되고
+        #   · [복구] 를 눌러도 주소가 돌아오지 않아 검사가 3/9 에서 멈춘다
+        # 그래서 지금 붙어 있는 글로벌 주소를 적어 두었다가 그대로 다시 붙인다.
+        # 다시 붙이는 순간 DAD 가 한 번 더 돌아, 이 시나리오가 보여 주려는 것이
+        # 그대로 성립한다.
+        saved=$(ip -6 -o addr show dev eth1 scope global | awk '{print $4}')
+        # 기본 경로도 마찬가지다 (3.6 에서 손으로 넣는다). 링크가 내려가면 함께 사라진다.
+        gw=$(ip -6 route show default dev eth1 | awk '{print $3}' | head -1)
         ip link set eth1 down
         sleep 2
         ip link set eth1 up
         sleep 3
         netplan apply || true
+        sleep 2
+        for a in $saved; do ip -6 addr add "$a" dev eth1 2>/dev/null || true; done
+        sleep 3
+        if [ -n "$gw" ]; then ip -6 route replace default via "$gw" dev eth1 2>/dev/null || true; fi
       changed_when: true
 
     - name: 안내
