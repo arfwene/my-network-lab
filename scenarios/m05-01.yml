@@ -3,12 +3,12 @@
 #   증상  : **없다.** 통신은 완전히 정상이다. MASTER 가 살아 있기 때문이다.
 #           담당자는 "이중화 점검"만 지시하고 시작한다.
 #   한줄  : 증상 없음 — 이중화만 깨져 있음
-#   목표  : r3 가 두 VLAN 모두에서 BACKUP 이다
-#   정답  : r3 의 사용자망 트렁크가 내려가 있다. show vrrp 에 아무것도 없거나
+#   목표  : r5 가 두 VLAN 모두에서 BACKUP 이다
+#   정답  : r5 의 사용자망 트렁크가 내려가 있다. show vrrp 에 아무것도 없거나
 #           Initialize 상태다. r1 을 내려 보기 전에는 아무도 모른다.
 #   노림수: "지금 잘 되니 괜찮다"는 판단의 위험. 이중화는 확인해야 존재한다.
 - name: "scenario m05-01 :: 백업 게이트웨이가 죽어 있다"
-  hosts: r3
+  hosts: r5
   become: true
   gather_facts: false
   vars:
@@ -27,6 +27,6 @@
     - name: 안내
       ansible.builtin.debug:
         msg: >-
-          {{ 'r3 의 사용자망 트렁크를 내렸다. 통신은 정상이므로 교육생에게는 "이중화 점검을 하라"고만 지시할 것.'
+          {{ 'r5 의 사용자망 트렁크를 내렸다. 통신은 정상이므로 교육생에게는 "이중화 점검을 하라"고만 지시할 것.'
              if scenario_action | default('break') == 'break'
-             else 'r3 트렁크 복구 완료. show vrrp 로 Backup 두 개를 확인할 것.' }}
+             else 'r5 트렁크 복구 완료. show vrrp 로 Backup 두 개를 확인할 것.' }}

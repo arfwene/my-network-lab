@@ -113,7 +113,7 @@ access:
 # -----------------------------------------------------------------------------
 labs:
   id_range: [1, 9]                  # 브리지 이름이 vmbr9999 를 넘지 않도록 최대 9
-  default_count: 6                  # 호스트 RAM 64GB 기준 권장 (랩당 약 9GB)
+  default_count: 6                  # 호스트 RAM 64GB 기준 권장 (랩당 약 9.7GB)
   # VMID = vmid_start + lab_id * vmid_base + 노드번호   (lab1 = 900101 ~ 900113)
   #  ▸ vmid_start 를 100~999 밖에 두는 이유:
   #    Proxmox 는 새 VM 에 100 번부터 번호를 준다. 랩이 그 대역을 쓰면

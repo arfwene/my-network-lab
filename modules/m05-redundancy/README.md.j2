@@ -46,15 +46,19 @@ M4 에서 길을 둘로 만들었다. `r1 ↔ r2` 가 끊겨도 `r3` 를 돌아 
 {{ topology }}
 ```
 
-M4 까지와 달라진 것은 하나입니다. `r3` 가 `sw1` 에도 트렁크로 꽂혔습니다.
-지금까지 `r3` 는 코어의 백업 경로만 맡았는데, 이제 Site-A 의 두 번째 게이트웨이도 겸합니다.
-케이블은 이미 꽂혀 있습니다. 없는 것은 그 위의 설정뿐입니다.
+M4 까지와 달라진 것은 하나입니다. **`r5` 라는 장비가 새로 들어왔습니다.**
+`sw1` 에 트렁크로 꽂혀 있고, 위쪽은 `r1` 과 똑같이 코어 둘(`r2` · `r3`)에 붙어 있습니다.
+케이블은 이미 꽂혀 있고 위쪽 절반은 서 있습니다. 없는 것은 **사용자망 쪽 설정**뿐입니다.
+
+코어 라우터가 게이트웨이를 겸하지 않는 것에 유의하세요. `r3` 는 계속 백업 **경로**만
+맡습니다. 게이트웨이는 게이트웨이끼리(`r1` · `r5`) 짝을 짓습니다 — 역할을 섞으면
+장애가 났을 때 무엇 때문인지 가려내기 어려워집니다.
 
 ### 1.2 초기 구성 — 게이트웨이가 한 대뿐입니다
 
 ```labdiagram
 kind: mini
-cols: [[pc1, pc2], sw1, [r1, r3]]
+cols: [[pc1, pc2], sw1, [r1, r5]]
 links:
   - { a: pc1, b: sw1, label: "VLAN {{ vlans[10].id }}",
       ends: ["{{ end('pc1', 'sw1') }}", "{{ end('sw1', 'pc1') }}"] }
@@ -62,17 +66,17 @@ links:
       ends: ["{{ end('pc2', 'sw1') }}", "{{ end('sw1', 'pc2') }}"] }
   - { a: sw1, b: r1, label: 트렁크, tone: warn,
       ends: ["{{ end('sw1', 'r1') }}", "{{ end('r1', 'sw1') }}"] }
-  - { a: sw1, b: r3, label: 트렁크, tone: dash,
-      ends: ["{{ end('sw1', 'r3') }}", "{{ end('r3', 'sw1') }}"] }
+  - { a: sw1, b: r5, label: 트렁크, tone: dash,
+      ends: ["{{ end('sw1', 'r5') }}", "{{ end('r5', 'sw1') }}"] }
 marks:
   pc1: ["GW {{ gw.vlan10 }}"]
   pc2: ["GW {{ gw.vlan20 }}"]
   sw1: ["트렁크 둘"]
   r1: ["eth1.{{ vlans[10].id }} {{ gw.vlan10 }}", "eth1.{{ vlans[20].id }} {{ gw.vlan20 }}"]
-  r3: ["사용자망 주소 없음"]
+  r5: ["사용자망 주소 없음"]
 notes:
   - 게이트웨이 주소는 r1 한 대에만 있습니다
-  - r3 는 케이블만 꽂혀 있고 사용자망에서는 아무 일도 하지 않습니다
+  - r5 는 케이블만 꽂혀 있고 사용자망에서는 아무 일도 하지 않습니다
   - r1 이 꺼지면 두 PC 는 자기 대역 밖으로 한 발도 못 나갑니다
 ```
 
@@ -83,7 +87,7 @@ M2 에서 우리가 그렇게 만들었습니다. 그때는 라우터가 한 대
 
 ```labdiagram
 kind: mini
-cols: [[pc1, pc2], sw1, [r1, r3]]
+cols: [[pc1, pc2], sw1, [r1, r5]]
 links:
   - { a: pc1, b: sw1, label: "VLAN {{ vlans[10].id }}",
       ends: ["{{ end('pc1', 'sw1') }}", "{{ end('sw1', 'pc1') }}"] }
@@ -91,27 +95,27 @@ links:
       ends: ["{{ end('pc2', 'sw1') }}", "{{ end('sw1', 'pc2') }}"] }
   - { a: sw1, b: r1, label: 트렁크, tone: warn,
       ends: ["{{ end('sw1', 'r1') }}", "{{ end('r1', 'sw1') }}"] }
-  - { a: sw1, b: r3, label: 트렁크, tone: warn,
-      ends: ["{{ end('sw1', 'r3') }}", "{{ end('r3', 'sw1') }}"] }
+  - { a: sw1, b: r5, label: 트렁크, tone: warn,
+      ends: ["{{ end('sw1', 'r5') }}", "{{ end('r5', 'sw1') }}"] }
 marks:
   pc1: ["GW {{ gw.vlan10 }}", "(그대로)"]
   pc2: ["GW {{ gw.vlan20 }}", "(그대로)"]
   sw1: ["트렁크 둘"]
   r1: ["{{ vrrp.vlan10.routers.r1.ipv4 }} · 우선순위 {{ vrrp.vlan10.routers.r1.priority }}", "MASTER"]
-  r3: ["{{ vrrp.vlan10.routers.r3.ipv4 }} · 우선순위 {{ vrrp.vlan10.routers.r3.priority }}", "BACKUP"]
+  r5: ["{{ vrrp.vlan10.routers.r5.ipv4 }} · 우선순위 {{ vrrp.vlan10.routers.r5.priority }}", "BACKUP"]
 notes:
   - 게이트웨이 주소 {{ gw.vlan10 }} 는 이제 **가상 IP** 입니다. 두 대가 함께 듭니다
   - 평소에는 우선순위가 높은 r1 이 들고 있습니다
-  - r1 이 죽으면 r3 가 그 주소를 **가상 MAC 까지 그대로** 넘겨받습니다
+  - r1 이 죽으면 r5 가 그 주소를 **가상 MAC 까지 그대로** 넘겨받습니다
 ```
 
 | 무엇이 | 초기 구성 | 목표 구성 |
 |---|---|---|
 | `{{ gw.vlan10 }}` 의 성격 | `r1` 의 실주소 | **가상 IP** — 두 대가 함께 듭니다 |
 | `r1` 의 실주소 | `{{ gw.vlan10 }}` | `{{ vrrp.vlan10.routers.r1.ipv4 }}` |
-| `r3` 의 사용자망 주소 | 없음 | `{{ vrrp.vlan10.routers.r3.ipv4 }}` |
+| `r5` 의 사용자망 주소 | 없음 | `{{ vrrp.vlan10.routers.r5.ipv4 }}` |
 | 게이트웨이의 MAC | `r1` 의 진짜 MAC | **가상 MAC** `{{ vrrp.vlan10.virtual_mac }}` |
-| `r1` 이 죽으면 | 전부 멈춥니다 | 몇 초 뒤 `r3` 가 이어받습니다 |
+| `r1` 이 죽으면 | 전부 멈춥니다 | 몇 초 뒤 `r5` 가 이어받습니다 |
 | PC 의 설정 | `{{ gw.vlan10 }}` | `{{ gw.vlan10 }}` — **안 바뀝니다** |
 
 마지막 줄이 이 모듈의 전부입니다. **단말은 아무것도 몰라야 합니다.**
@@ -121,9 +125,9 @@ notes:
 | # | 할 일 | 어디서 | 왜 필요한가 |
 |---|---|---|---|
 | ① | 게이트웨이 주소를 실주소에서 내립니다 | `r1` | 그 주소를 가상 IP 로 쓰려면 아무도 실주소로 갖고 있으면 안 됩니다 |
-| ② | 서브인터페이스를 만들고 자기 주소를 준 뒤 **OSPF 에 넣습니다** | `r3` | 그 대역에서 말을 할 수 있고, `r1` 이 죽어도 대역이 남습니다 |
-| ③ | 가상 MAC 을 단 인터페이스를 만듭니다 | `r1` `r3` | VRRP 의 실체가 이것입니다. 넘어갈 때 MAC 까지 함께 넘어갑니다 |
-| ④ | VRRP 를 켜고 우선순위를 정합니다 | `r1` `r3` | 누가 평소에 들고 있을지, 언제 넘길지를 정합니다 |
+| ② | 서브인터페이스를 만들고 자기 주소를 준 뒤 **OSPF 에 넣습니다** | `r5` | 그 대역에서 말을 할 수 있고, `r1` 이 죽어도 대역이 남습니다 |
+| ③ | 가상 MAC 을 단 인터페이스를 만듭니다 | `r1` `r5` | VRRP 의 실체가 이것입니다. 넘어갈 때 MAC 까지 함께 넘어갑니다 |
+| ④ | VRRP 를 켜고 우선순위를 정합니다 | `r1` `r5` | 누가 평소에 들고 있을지, 언제 넘길지를 정합니다 |
 
 ①을 하는 순간 통신이 끊기고, ④를 끝내야 다시 통합니다.
 **M2 와 같은 모양입니다** — 끊긴 채로 있는 그 시간이 이 모듈의 핵심 장면입니다.
@@ -136,9 +140,9 @@ notes:
 | VRID | {{ vrrp.vlan10.vrid }} | {{ vrrp.vlan20.vrid }} |
 | 가상 MAC | `{{ vrrp.vlan10.virtual_mac }}` | `{{ vrrp.vlan20.virtual_mac }}` |
 | `r1` 의 실주소 · 우선순위 | `{{ vrrp.vlan10.routers.r1.ipv4 }}` · {{ vrrp.vlan10.routers.r1.priority }} | `{{ vrrp.vlan20.routers.r1.ipv4 }}` · {{ vrrp.vlan20.routers.r1.priority }} |
-| `r3` 의 실주소 · 우선순위 | `{{ vrrp.vlan10.routers.r3.ipv4 }}` · {{ vrrp.vlan10.routers.r3.priority }} | `{{ vrrp.vlan20.routers.r3.ipv4 }}` · {{ vrrp.vlan20.routers.r3.priority }} |
+| `r5` 의 실주소 · 우선순위 | `{{ vrrp.vlan10.routers.r5.ipv4 }}` · {{ vrrp.vlan10.routers.r5.priority }} | `{{ vrrp.vlan20.routers.r5.ipv4 }}` · {{ vrrp.vlan20.routers.r5.priority }} |
 | `r1` 의 포트 | `eth1.{{ vlans[10].id }}` | `eth1.{{ vlans[20].id }}` |
-| `r3` 의 포트 | `{{ port.r3.sw1 }}.{{ vlans[10].id }}` | `{{ port.r3.sw1 }}.{{ vlans[20].id }}` |
+| `r5` 의 포트 | `{{ port.r5.sw1 }}.{{ vlans[10].id }}` | `{{ port.r5.sw1 }}.{{ vlans[20].id }}` |
 
 가상 MAC 은 지어낸 값이 아닙니다. **VRRP 가 정한 규칙**으로 만들어집니다 (2.3).
 
@@ -176,15 +180,15 @@ PC 는 게이트웨이가 죽었는지 알 방법이 없습니다. 그냥 계속
 
 ```labdiagram
 kind: seq
-actors: [pc1, "가상 IP {{ gw.vlan10 }}", r1, r3]
+actors: [pc1, "가상 IP {{ gw.vlan10 }}", r1, r5]
 steps:
   - { from: pc1, to: "가상 IP {{ gw.vlan10 }}", label: "평소 — 이 주소로 보낸다" }
   - { from: r1, to: "가상 IP {{ gw.vlan10 }}", label: "지금은 r1 이 든다" }
-  - { from: r1, to: r3, label: "나 살아 있다 (1초마다)", tone: warn }
-  - { from: r3, to: "가상 IP {{ gw.vlan10 }}", label: "r1 이 조용하다 — 이제 내가 든다", tone: warn }
+  - { from: r1, to: r5, label: "나 살아 있다 (1초마다)", tone: warn }
+  - { from: r5, to: "가상 IP {{ gw.vlan10 }}", label: "r1 이 조용하다 — 이제 내가 든다", tone: warn }
   - { from: pc1, to: "가상 IP {{ gw.vlan10 }}", label: "장애 후 — 같은 주소로 보낸다" }
 notes:
-  - 넘어가는 것은 **주소**입니다. r3 가 r1 에게 무엇을 물려받는 것이 아닙니다
+  - 넘어가는 것은 **주소**입니다. r5 가 r1 에게 무엇을 물려받는 것이 아닙니다
   - pc1 은 무엇이 바뀌었는지 모릅니다. 같은 주소로 계속 보낼 뿐입니다
 ```
 
@@ -243,8 +247,8 @@ MAC 까지 함께 넘어가면 PC 는 아무것도 안 바꿔도 됩니다.
 | 100 | 기본값 |
 | 1 | 가장 낮음 |
 
-이 랩은 `r1` 에 {{ vrrp.vlan10.routers.r1.priority }}, `r3` 에 {{ vrrp.vlan10.routers.r3.priority }} 를 줍니다.
-평소에는 `r1` 이 듭니다. `r1` 이 조용해지면 `r3` 가 이어받습니다.
+이 랩은 `r1` 에 {{ vrrp.vlan10.routers.r1.priority }}, `r5` 에 {{ vrrp.vlan10.routers.r5.priority }} 를 줍니다.
+평소에는 `r1` 이 듭니다. `r1` 이 조용해지면 `r5` 가 이어받습니다.
 
 MASTER 는 1초마다 광고(Advertisement)를 보냅니다.
 목적지는 멀티캐스트 `224.0.0.18`, IP 프로토콜 번호는 112 입니다.
@@ -267,8 +271,8 @@ Master Down Interval = 광고 간격 × 3 + Skew Time
 ```
 
 기다리는 쪽은 BACKUP 이므로 **BACKUP 의 우선순위**로 계산합니다.
-`r3`(우선순위 {{ vrrp.vlan10.routers.r3.priority }})이면 Skew 는
-(256−{{ vrrp.vlan10.routers.r3.priority }})/256 ≈ 0.61초,
+`r5`(우선순위 {{ vrrp.vlan10.routers.r5.priority }})이면 Skew 는
+(256−{{ vrrp.vlan10.routers.r5.priority }})/256 ≈ 0.61초,
 Master Down Interval 은 1초 × 3 + 0.61 = **약 3.6초** 입니다.
 `show vrrp` 가 `3600 ms` 로 보여 주는 값이 이것입니다.
 
@@ -284,7 +288,7 @@ Master Down Interval 은 1초 × 3 + 0.61 = **약 3.6초** 입니다.
 
 | | preempt 켬 (기본) | preempt 끔 |
 |---|---|---|
-| `r1` 이 살아나면 | 도로 MASTER 가 됩니다 | `r3` 가 계속 듭니다 |
+| `r1` 이 살아나면 | 도로 MASTER 가 됩니다 | `r5` 가 계속 듭니다 |
 | 장점 | 평소 경로가 늘 같아 진단이 쉽습니다 | 순단이 한 번뿐입니다 |
 | 단점 | 넘어갈 때 · 돌아올 때 **두 번** 흔들립니다 | 지금 누가 드는지 매번 봐야 합니다 |
 
@@ -322,7 +326,7 @@ VRRP 는 **첫 홉만** 담당합니다. 그 뒤의 경로는 여전히 OSPF 가
 
 ## 3. 직접 만든다 — 한 단계씩, 그때마다 그림이 바뀐다
 
-터미널 넷을 띄워 두면 편합니다: `pc1`, `r1`, `r3`, 그리고 `pc1` 의 두 번째 창.
+터미널 넷을 띄워 두면 편합니다: `pc1`, `r1`, `r5`, 그리고 `pc1` 의 두 번째 창.
 
 ### 3.1 시작 상태를 눈으로 확인합니다
 
@@ -347,14 +351,14 @@ r1# show ip route connected
 
 `{{ cidr.vlan10 }}` 이 `eth1.{{ vlans[10].id }}` 에 직접 연결로 보이고, 그 주소가 `{{ gw.vlan10 }}` 입니다.
 
-`r3` 도 봅니다.
+`r5` 도 봅니다.
 
 ```
-# r3 - vtysh
-r3# show interface brief
+# r5 - vtysh
+r5# show interface brief
 ```
 
-`{{ port.r3.sw1 }}` 는 올라와 있는데 주소가 없습니다. 서브인터페이스도 없습니다.
+`{{ port.r5.sw1 }}` 는 올라와 있는데 주소가 없습니다. 서브인터페이스도 없습니다.
 **케이블만 꽂혀 있는 상태**입니다.
 
 스위치 쪽은 이미 준비돼 있습니다.
@@ -368,12 +372,12 @@ bridge vlan show
 {{ port.sw1.r1 }}              {{ vlans[10].id }}
                   {{ vlans[20].id }}
                   {{ vlans[999].id }} PVID Egress Untagged
-{{ port.sw1.r3 }}              {{ vlans[10].id }}
+{{ port.sw1.r5 }}              {{ vlans[10].id }}
                   {{ vlans[20].id }}
                   {{ vlans[999].id }} PVID Egress Untagged
 ```
 
-트렁크가 둘입니다. `{{ port.sw1.r3 }}` 쪽은 M2 에서 한 것과 똑같은 설정이고,
+트렁크가 둘입니다. `{{ port.sw1.r5 }}` 쪽은 M2 에서 한 것과 똑같은 설정이고,
 이번 모듈에서는 랩이 미리 해 두었습니다. **이번에 만들 것은 라우터 쪽입니다.**
 
 ### 3.2 1단계 — `r1` 의 주소를 내립니다 (할 일 ①)
@@ -447,43 +451,43 @@ M2 의 3.2 에서 본 것과 같은 화면입니다. 이유는 다릅니다 —
 
 ```labdiagram
 kind: mini
-cols: [[pc1, pc2], sw1, [r1, r3]]
+cols: [[pc1, pc2], sw1, [r1, r5]]
 links:
   - { a: pc1, b: sw1, label: "VLAN {{ vlans[10].id }}" }
   - { a: pc2, b: sw1, label: "VLAN {{ vlans[20].id }}" }
   - { a: sw1, b: r1, label: 트렁크, tone: dash }
-  - { a: sw1, b: r3, label: 트렁크, tone: dash }
+  - { a: sw1, b: r5, label: 트렁크, tone: dash }
 marks:
   pc1: ["GW {{ gw.vlan10 }}"]
   pc2: ["GW {{ gw.vlan20 }}"]
   r1: ["{{ vrrp.vlan10.routers.r1.ipv4 }}", "게이트웨이 아님"]
-  r3: ["주소 없음"]
+  r5: ["주소 없음"]
 notes:
   - 게이트웨이 주소를 가진 장비가 하나도 없습니다
   - 여기서부터 3.5 까지 통신은 끊겨 있습니다
 ```
 
-### 3.3 2단계 — `r3` 에 서브인터페이스를 만듭니다 (할 일 ②)
+### 3.3 2단계 — `r5` 에 서브인터페이스를 만듭니다 (할 일 ②)
 
-`r3` 도 이 대역에서 말을 할 수 있어야 합니다. M2 에서 `r1` 에 한 것과 같은 일입니다.
+`r5` 도 이 대역에서 말을 할 수 있어야 합니다. M2 에서 `r1` 에 한 것과 같은 일입니다.
 
-**할 일** — `{{ port.r3.sw1 }}` 위에 서브인터페이스 둘을 만들고 자기 주소를 줍니다.
+**할 일** — `{{ port.r5.sw1 }}` 위에 서브인터페이스 둘을 만들고 자기 주소를 줍니다.
 
 ```bash
-# r3 - linux — 서브인터페이스는 리눅스 쪽에서 만듭니다 (M2 3.5 와 같습니다)
-sudo ip link add link {{ port.r3.sw1 }} name {{ port.r3.sw1 }}.{{ vlans[10].id }} type vlan id {{ vlans[10].id }}
-sudo ip addr add {{ vrrp.vlan10.routers.r3.ipv4 }}/{{ cidr.vlan10.split('/')[1] }} dev {{ port.r3.sw1 }}.{{ vlans[10].id }}
-sudo ip link set {{ port.r3.sw1 }}.{{ vlans[10].id }} up
+# r5 - linux — 서브인터페이스는 리눅스 쪽에서 만듭니다 (M2 3.5 와 같습니다)
+sudo ip link add link {{ port.r5.sw1 }} name {{ port.r5.sw1 }}.{{ vlans[10].id }} type vlan id {{ vlans[10].id }}
+sudo ip addr add {{ vrrp.vlan10.routers.r5.ipv4 }}/{{ cidr.vlan10.split('/')[1] }} dev {{ port.r5.sw1 }}.{{ vlans[10].id }}
+sudo ip link set {{ port.r5.sw1 }}.{{ vlans[10].id }} up
 
-sudo ip link add link {{ port.r3.sw1 }} name {{ port.r3.sw1 }}.{{ vlans[20].id }} type vlan id {{ vlans[20].id }}
-sudo ip addr add {{ vrrp.vlan20.routers.r3.ipv4 }}/{{ cidr.vlan20.split('/')[1] }} dev {{ port.r3.sw1 }}.{{ vlans[20].id }}
-sudo ip link set {{ port.r3.sw1 }}.{{ vlans[20].id }} up
+sudo ip link add link {{ port.r5.sw1 }} name {{ port.r5.sw1 }}.{{ vlans[20].id }} type vlan id {{ vlans[20].id }}
+sudo ip addr add {{ vrrp.vlan20.routers.r5.ipv4 }}/{{ cidr.vlan20.split('/')[1] }} dev {{ port.r5.sw1 }}.{{ vlans[20].id }}
+sudo ip link set {{ port.r5.sw1 }}.{{ vlans[20].id }} up
 ```
 
 확인 — 두 라우터가 서로 보이는지 봅니다.
 
 ```bash
-# r3 - linux
+# r5 - linux
 ping -c 2 {{ vrrp.vlan10.routers.r1.ipv4 }}
 ```
 
@@ -495,22 +499,22 @@ ping -c 2 {{ vrrp.vlan10.routers.r1.ipv4 }}
 
 지금 `{{ cidr.vlan10 }}` 을 OSPF 에 광고하는 것은 `r1` 의 `eth1.{{ vlans[10].id }}`
 하나뿐입니다 (M4 3.2 에서 passive 로 넣었습니다). `r1` 이 죽으면 그 광고가 사라지고,
-**대역이 라우팅 도메인에서 통째로 없어집니다.** `r3` 가 게이트웨이 자리를 넘겨받아도
+**대역이 라우팅 도메인에서 통째로 없어집니다.** `r5` 가 게이트웨이 자리를 넘겨받아도
 `web` 의 응답이 돌아올 길이 없습니다 — 가는 길만 살고 오는 길이 죽습니다 (M3 3.3).
 
-`r3` 도 같은 대역을 광고하게 해 둡니다. 사용자망이므로 passive 입니다 (M4 2.7).
+`r5` 도 같은 대역을 광고하게 해 둡니다. 사용자망이므로 passive 입니다 (M4 2.7).
 
 ```
-# r3 - vtysh
-r3# configure terminal
-r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[10].id }}
-r3(config-if)# ip ospf area {{ routing.ospf.area }}
-r3(config-if)# ip ospf passive
-r3(config-if)# exit
-r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[20].id }}
-r3(config-if)# ip ospf area {{ routing.ospf.area }}
-r3(config-if)# ip ospf passive
-r3(config-if)# end
+# r5 - vtysh
+r5# configure terminal
+r5(config)# interface {{ port.r5.sw1 }}.{{ vlans[10].id }}
+r5(config-if)# ip ospf area {{ routing.ospf.area }}
+r5(config-if)# ip ospf passive
+r5(config-if)# exit
+r5(config)# interface {{ port.r5.sw1 }}.{{ vlans[20].id }}
+r5(config-if)# ip ospf area {{ routing.ospf.area }}
+r5(config-if)# ip ospf passive
+r5(config-if)# end
 ```
 
 **확인** — 반대편에서 이 대역이 두 길로 보이는지 봅니다.
@@ -520,7 +524,7 @@ r3(config-if)# end
 r4# show ip route {{ cidr.vlan10 }}
 ```
 
-`r1` 을 지나는 길과 `r3` 를 지나는 길이 함께 있어야 합니다. cost 가 달라 평소에는
+`r1` 을 지나는 길과 `r5` 를 지나는 길이 함께 있어야 합니다. cost 가 달라 평소에는
 `r1` 쪽이 쓰이지만, **`r1` 이 사라져도 대역 자체는 남습니다.** 4.2 에서 한 대를
 내려 볼 때 통신이 돌아오는 것이 이 두 줄 덕분입니다.
 
@@ -534,16 +538,16 @@ ping -c 2 -W 2 {{ ip.web }}
 
 ```labdiagram
 kind: mini
-cols: [[pc1, pc2], sw1, [r1, r3]]
+cols: [[pc1, pc2], sw1, [r1, r5]]
 links:
   - { a: pc1, b: sw1, label: "VLAN {{ vlans[10].id }}" }
   - { a: pc2, b: sw1, label: "VLAN {{ vlans[20].id }}" }
   - { a: sw1, b: r1, label: 트렁크, tone: dash }
-  - { a: sw1, b: r3, label: 트렁크, tone: dash }
+  - { a: sw1, b: r5, label: 트렁크, tone: dash }
 marks:
   pc1: ["GW {{ gw.vlan10 }}"]
   r1: ["{{ vrrp.vlan10.routers.r1.ipv4 }}"]
-  r3: ["{{ vrrp.vlan10.routers.r3.ipv4 }}"]
+  r5: ["{{ vrrp.vlan10.routers.r5.ipv4 }}"]
 notes:
   - 두 라우터가 같은 대역에 섰습니다. 서로 통합니다
   - 그런데 PC 가 찾는 주소는 아직 아무도 안 들고 있습니다
@@ -566,10 +570,10 @@ sudo ip link set {{ port.r1.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }} up
 ```
 
 ```bash
-# r3 - linux — 이름의 부모만 다르고 나머지는 똑같습니다
-sudo ip link add {{ port.r3.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }} link {{ port.r3.sw1 }}.{{ vlans[10].id }} address {{ vrrp.vlan10.virtual_mac }} type macvlan mode bridge
-sudo ip addr add {{ vrrp.vlan10.virtual_ip }}/{{ cidr.vlan10.split('/')[1] }} dev {{ port.r3.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}
-sudo ip link set {{ port.r3.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }} up
+# r5 - linux — 이름의 부모만 다르고 나머지는 똑같습니다
+sudo ip link add {{ port.r5.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }} link {{ port.r5.sw1 }}.{{ vlans[10].id }} address {{ vrrp.vlan10.virtual_mac }} type macvlan mode bridge
+sudo ip addr add {{ vrrp.vlan10.virtual_ip }}/{{ cidr.vlan10.split('/')[1] }} dev {{ port.r5.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}
+sudo ip link set {{ port.r5.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }} up
 ```
 
 VLAN {{ vlans[20].id }} 도 같은 방식으로 만듭니다. 이름·VRID·가상 MAC·주소만 바뀝니다.
@@ -581,7 +585,7 @@ sudo ip addr add {{ vrrp.vlan20.virtual_ip }}/{{ cidr.vlan20.split('/')[1] }} de
 sudo ip link set eth1.{{ vlans[20].id }}-{{ vrrp.vlan20.vrid }} up
 ```
 
-`r3` 도 부모만 `{{ port.r3.sw1 }}.{{ vlans[20].id }}` 로 바꿔 같은 것을 만듭니다.
+`r5` 도 부모만 `{{ port.r5.sw1 }}.{{ vlans[20].id }}` 로 바꿔 같은 것을 만듭니다.
 
 이름 끝의 숫자는 **VRID** 입니다. 부모 포트 번호가 아닙니다 —
 `eth1.{{ vlans[20].id }}-{{ vrrp.vlan10.vrid }}` 처럼 만들면 FRR 이 짝을 못 찾습니다.
@@ -593,7 +597,7 @@ sudo ip link set eth1.{{ vlans[20].id }}-{{ vrrp.vlan20.vrid }} up
 | 이름 `...-{{ vrrp.vlan10.vrid }}` | FRR 이 이 이름과 MAC 을 보고 VRID {{ vrrp.vlan10.vrid }} 짝을 찾습니다 |
 
 **지금 두 대가 같은 주소를 들고 있습니다.** 일부러 그렇게 두었습니다.
-`{{ vrrp.vlan10.virtual_ip }}` 가 `r1` 에도 `r3` 에도 붙어 있으니, 둘 다 ARP 에 답합니다.
+`{{ vrrp.vlan10.virtual_ip }}` 가 `r1` 에도 `r5` 에도 붙어 있으니, 둘 다 ARP 에 답합니다.
 주소 충돌입니다. 통신이 되기도 하고 안 되기도 하는 가장 나쁜 상태입니다.
 
 ```bash
@@ -622,16 +626,16 @@ r1(config-if)# end
 ```
 
 ```
-# r3 - vtysh
-r3# configure terminal
-r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[10].id }}
-r3(config-if)# vrrp {{ vrrp.vlan10.vrid }} ip {{ vrrp.vlan10.virtual_ip }}
-r3(config-if)# vrrp {{ vrrp.vlan10.vrid }} priority {{ vrrp.vlan10.routers.r3.priority }}
-r3(config-if)# exit
-r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[20].id }}
-r3(config-if)# vrrp {{ vrrp.vlan20.vrid }} ip {{ vrrp.vlan20.virtual_ip }}
-r3(config-if)# vrrp {{ vrrp.vlan20.vrid }} priority {{ vrrp.vlan20.routers.r3.priority }}
-r3(config-if)# end
+# r5 - vtysh
+r5# configure terminal
+r5(config)# interface {{ port.r5.sw1 }}.{{ vlans[10].id }}
+r5(config-if)# vrrp {{ vrrp.vlan10.vrid }} ip {{ vrrp.vlan10.virtual_ip }}
+r5(config-if)# vrrp {{ vrrp.vlan10.vrid }} priority {{ vrrp.vlan10.routers.r5.priority }}
+r5(config-if)# exit
+r5(config)# interface {{ port.r5.sw1 }}.{{ vlans[20].id }}
+r5(config-if)# vrrp {{ vrrp.vlan20.vrid }} ip {{ vrrp.vlan20.virtual_ip }}
+r5(config-if)# vrrp {{ vrrp.vlan20.vrid }} priority {{ vrrp.vlan20.routers.r5.priority }}
+r5(config-if)# end
 ```
 
 **확인**
@@ -656,7 +660,7 @@ r1# show vrrp
  ..................................      {{ vrrp.vlan10.virtual_ip }}
 ```
 
-`r3` 에서 같은 명령을 치면 `Status (v4)` 가 `Backup` 입니다.
+`r5` 에서 같은 명령을 치면 `Status (v4)` 가 `Backup` 입니다.
 
 **그리고 충돌이 정리됐습니다.**
 
@@ -670,12 +674,12 @@ ip -br addr show {{ port.r1.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}
 ```
 
 ```bash
-# r3 - linux
-ip -br addr show {{ port.r3.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}
+# r5 - linux
+ip -br addr show {{ port.r5.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}
 ```
 
 ```
-{{ port.r3.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}@{{ port.r3.sw1 }}.{{ vlans[10].id }} DOWN  {{ vrrp.vlan10.virtual_ip }}/{{ cidr.vlan10.split('/')[1] }}
+{{ port.r5.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}@{{ port.r5.sw1 }}.{{ vlans[10].id }} DOWN  {{ vrrp.vlan10.virtual_ip }}/{{ cidr.vlan10.split('/')[1] }}
 ```
 
 **주소는 양쪽 다 붙어 있는데 BACKUP 쪽은 인터페이스가 내려가 있습니다.**
@@ -697,17 +701,17 @@ ip neigh show {{ gw.vlan10 }}
 
 ```labdiagram
 kind: mini
-cols: [[pc1, pc2], sw1, [r1, r3]]
+cols: [[pc1, pc2], sw1, [r1, r5]]
 links:
   - { a: pc1, b: sw1, label: "VLAN {{ vlans[10].id }}" }
   - { a: pc2, b: sw1, label: "VLAN {{ vlans[20].id }}" }
   - { a: sw1, b: r1, label: 트렁크, tone: warn }
-  - { a: sw1, b: r3, label: 트렁크 }
+  - { a: sw1, b: r5, label: 트렁크 }
 marks:
   pc1: ["GW {{ gw.vlan10 }}"]
   pc2: ["GW {{ gw.vlan20 }}"]
   r1: ["{{ vrrp.vlan10.routers.r1.ipv4 }} · 우선순위 {{ vrrp.vlan10.routers.r1.priority }}", "MASTER — VIP 를 든다"]
-  r3: ["{{ vrrp.vlan10.routers.r3.ipv4 }} · 우선순위 {{ vrrp.vlan10.routers.r3.priority }}", "BACKUP — 내려가 있다"]
+  r5: ["{{ vrrp.vlan10.routers.r5.ipv4 }} · 우선순위 {{ vrrp.vlan10.routers.r5.priority }}", "BACKUP — 내려가 있다"]
 notes:
   - 목표 구성에 도달했습니다
   - PC 는 3.1 과 똑같은 주소를 씁니다. 바뀐 것을 하나도 모릅니다
@@ -717,9 +721,9 @@ notes:
 
 | 확인할 것 | 명령 | 어디서 | 정상이라면 |
 |---|---|---|---|
-| 누가 MASTER 인가 | `show vrrp` | `r1` `r3` | `r1` 이 Master, `r3` 가 Backup |
+| 누가 MASTER 인가 | `show vrrp` | `r1` `r5` | `r1` 이 Master, `r5` 가 Backup |
 | 가상 IP 를 들고 있나 | `ip -br addr show <가상 인터페이스>` | `r1` | UP · `{{ vrrp.vlan10.virtual_ip }}` |
-| BACKUP 은 내려가 있나 | 〃 | `r3` | DOWN |
+| BACKUP 은 내려가 있나 | 〃 | `r5` | DOWN |
 | 실주소가 옮겨졌나 | `show ip route connected` | `r1` | `{{ vrrp.vlan10.routers.r1.ipv4 }}` |
 | 단말이 보는 MAC | `ip neigh show {{ gw.vlan10 }}` | `pc1` | `{{ vrrp.vlan10.virtual_mac }}` |
 | 통신 | `ping {{ ip.web }}` | `pc1` `pc2` | 응답 있음 |
@@ -765,7 +769,7 @@ sudo ip link set eth1.{{ vlans[10].id }} down
 몇 초 멈췄다가 다시 응답이 옵니다.
 
 ```bash
-# r3 - linux — 누가 들고 있나
+# r5 - linux — 누가 들고 있나
 vtysh -c "show vrrp" | grep -E "Virtual Router ID|Status"
 ```
 
@@ -989,7 +993,7 @@ sudo tcpdump -ni eth1 -e 'proto 112 or arp'
 `r1` 의 포트를 내렸다 올리는 동안 화면을 봅니다.
 
 ```
-{{ vrrp.vlan10.virtual_mac }} > 01:00:5e:00:00:12 ... {{ vrrp.vlan10.routers.r3.ipv4 }} > 224.0.0.18: VRRPv3, Advertisement, vrid {{ vrrp.vlan10.vrid }}, prio {{ vrrp.vlan10.routers.r3.priority }}
+{{ vrrp.vlan10.virtual_mac }} > 01:00:5e:00:00:12 ... {{ vrrp.vlan10.routers.r5.ipv4 }} > 224.0.0.18: VRRPv3, Advertisement, vrid {{ vrrp.vlan10.vrid }}, prio {{ vrrp.vlan10.routers.r5.priority }}
 {{ vrrp.vlan10.virtual_mac }} > 01:00:5e:00:00:12 ... {{ vrrp.vlan10.routers.r1.ipv4 }} > 224.0.0.18: VRRPv3, Advertisement, vrid {{ vrrp.vlan10.vrid }}, prio {{ vrrp.vlan10.routers.r1.priority }}
 {{ vrrp.vlan10.virtual_mac }} > ff:ff:ff:ff:ff:ff, ethertype ARP: Request who-has {{ ip.pc1 }} tell {{ vrrp.vlan10.virtual_ip }}
 ```
@@ -997,7 +1001,7 @@ sudo tcpdump -ni eth1 -e 'proto 112 or arp'
 세 가지를 확인해 주세요.
 
 1. 광고의 **출발지 MAC 은 언제나 가상 MAC** 입니다. 스위치는 이것만 보고 포트를 다시 배웁니다
-2. 출발지 IP 가 `{{ vrrp.vlan10.routers.r3.ipv4 }}` 에서 `{{ vrrp.vlan10.routers.r1.ipv4 }}` 로 바뀌는 순간이 자리가 넘어간 순간입니다
+2. 출발지 IP 가 `{{ vrrp.vlan10.routers.r5.ipv4 }}` 에서 `{{ vrrp.vlan10.routers.r1.ipv4 }}` 로 바뀌는 순간이 자리가 넘어간 순간입니다
 3. 새 MASTER 가 가상 IP 를 출발지로 ARP 를 한 번 던집니다. "내가 여기 있다" 를 알리는 것입니다
 
 그동안 `pc1` 의 ARP 캐시는 한 번도 안 바뀝니다.
@@ -1062,7 +1066,7 @@ vtysh -c "show vrrp" | grep "Status"
 
 여전히 `Master` 입니다. **VRRP 는 위쪽을 보지 않습니다.**
 
-적어 둘 것 — `r3` 는 위쪽 길이 멀쩡한데도 자리를 못 받습니다.
+적어 둘 것 — `r5` 는 위쪽 길이 멀쩡한데도 자리를 못 받습니다.
 실장비라면 무엇을 걸어서 이 상황을 막겠습니까? (2.7)
 
 되돌립니다.
@@ -1076,14 +1080,14 @@ sudo ip link set eth3 up
 ### 6.5 우선순위를 바꿔 자리를 옮긴다
 
 ```
-# r3 - vtysh
-r3# configure terminal
-r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[10].id }}
-r3(config-if)# vrrp {{ vrrp.vlan10.vrid }} priority 200
-r3(config-if)# end
+# r5 - vtysh
+r5# configure terminal
+r5(config)# interface {{ port.r5.sw1 }}.{{ vlans[10].id }}
+r5(config-if)# vrrp {{ vrrp.vlan10.vrid }} priority 200
+r5(config-if)# end
 ```
 
-`r3` 가 MASTER 가 됩니다. preempt 가 켜져 있으니 기다릴 것도 없습니다.
+`r5` 가 MASTER 가 됩니다. preempt 가 켜져 있으니 기다릴 것도 없습니다.
 
 ```bash
 # pc1 — 첫 홉이 바뀌었나?
@@ -1096,11 +1100,11 @@ traceroute -n {{ ip.web }}
 되돌립니다.
 
 ```
-# r3 - vtysh
-r3# configure terminal
-r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[10].id }}
-r3(config-if)# vrrp {{ vrrp.vlan10.vrid }} priority {{ vrrp.vlan10.routers.r3.priority }}
-r3(config-if)# end
+# r5 - vtysh
+r5# configure terminal
+r5(config)# interface {{ port.r5.sw1 }}.{{ vlans[10].id }}
+r5(config-if)# vrrp {{ vrrp.vlan10.vrid }} priority {{ vrrp.vlan10.routers.r5.priority }}
+r5(config-if)# end
 ```
 
 ---

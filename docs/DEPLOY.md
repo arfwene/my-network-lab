@@ -20,7 +20,7 @@
 │  · terraform │ ── SSH   22 ──▶   │            랩N = VLAN 300N     │
 │  · ansible   │      (랩 노드)     │ vmbr1101…  랩 서비스망 (격리)    │
 │  · 웹 콘솔    │                   │                              │
-└──────────────┘                   │ VM 13대 × 랩 수                │
+└──────────────┘                   │ VM 14대 × 랩 수                │
       ▲                            └──────────────────────────────┘
       └── 교육생 브라우저 :8080
 ```
@@ -42,7 +42,7 @@
 | Python | 3.10+ |
 | 운영 서버 자원 | 2 vCPU · 2 GB RAM · 5 GB 디스크 |
 | 운영 서버 계정 | **root 아님.** sudo 되는 일반 계정 |
-| Proxmox | VE 8.x · 랩당 RAM 약 9 GB (64 GB → 6랩 권장) |
+| Proxmox | VE 8.x · 랩당 RAM 약 9.7 GB (64 GB → 6랩 권장) |
 | 인터넷 | 설치 시에만 필요. 없으면 [8. 폐쇄망](#8-폐쇄망) |
 
 Terraform · Ansible 을 손으로 깔지 않는다. `install.sh` 가 Terraform 을 `/usr/local/bin` 에,
@@ -188,7 +188,7 @@ scp /tmp/lab.img root@<proxmox>:/var/lib/vz/template/lab/
 교육생 PC ──ssh──▶ 운영 서버(점프 계정) ──ssh──▶ 랩 노드 (pc1 · r1 · web …)
 ```
 
-점프 계정은 **셸이 없고 자기 랩 노드로만 나간다** (`ForceCommand` + nologin, `PermitOpen` = 자기 랩 13대:22).
+점프 계정은 **셸이 없고 자기 랩 노드로만 나간다** (`ForceCommand` + nologin, `PermitOpen` = 자기 랩 14대:22).
 운영 서버 셸을 주면 강사용 해설(`answers.md`)과 캡스톤 대응표를 읽을 수 있기 때문이다.
 
 **관리자가 할 일**
@@ -219,7 +219,7 @@ scp dist/console-access.sh root@<proxmox>:/tmp/ && ssh root@<proxmox> /tmp/conso
 ```
 
 - **랩당 1계정**이다 (1인 1계정 아님). 교육생이 늘어도 다시 하지 않고, **랩을 늘릴 때만** 한다.
-- 계정 `lab<N>-console@pve` 는 **그 랩 VM 13대의 콘솔만** 열린다.
+- 계정 `lab<N>-console@pve` 는 **그 랩 VM 14대의 콘솔만** 열린다.
 - 비밀번호는 `var/console.db` 에 있고 교육생 `[접속 키] → 5. 콘솔` 에 자기 랩 것만 표시된다.
 
 ---

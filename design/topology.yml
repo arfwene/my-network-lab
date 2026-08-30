@@ -59,12 +59,14 @@ bridges:
   - {id: "101", alias: pc1-sw1,   zone: site-a, stage: m1, desc: "pc1 ↔ sw1  (access VLAN10)"}
   - {id: "102", alias: pc2-sw1,   zone: site-a, stage: m1, desc: "pc2 ↔ sw1  (access VLAN20)"}
   - {id: "103", alias: sw1-r1,    zone: site-a, stage: m2, desc: "sw1 ↔ r1   (802.1Q trunk)"}
-  - {id: "104", alias: sw1-r3,    zone: site-a, stage: m5, desc: "sw1 ↔ r3   (802.1Q trunk) — VRRP 백업 게이트웨이"}
+  - {id: "105", alias: sw1-r5,    zone: site-a, stage: m5, desc: "sw1 ↔ r5   (802.1Q trunk) — VRRP 백업 게이트웨이"}
 
   - {id: "201", alias: r1-r2,     zone: core,   stage: m3, desc: "r1 ↔ r2    (주 경로)"}
   - {id: "202", alias: r1-r3,     zone: core,   stage: m4, desc: "r1 ↔ r3    (백업 경로)"}
   - {id: "203", alias: r2-r4,     zone: core,   stage: m3, desc: "r2 ↔ r4    (주 경로)"}
   - {id: "204", alias: r3-r4,     zone: core,   stage: m4, desc: "r3 ↔ r4    (백업 경로)"}
+  - {id: "205", alias: r5-r2,     zone: core,   stage: m5, desc: "r5 ↔ r2    (백업 게이트웨이의 주 경로)"}
+  - {id: "206", alias: r5-r3,     zone: core,   stage: m5, desc: "r5 ↔ r3    (백업 게이트웨이의 백업 경로)"}
 
   - {id: "301", alias: r4-sw2,    zone: site-b, stage: m3, desc: "r4 ↔ sw2   (access VLAN40)"}
   - {id: "302", alias: sw2-web,   zone: site-b, stage: m3, desc: "sw2 ↔ web"}
@@ -121,7 +123,7 @@ nodes:
       - {name: eth1, bridge: "101", peer: pc1, mac: "52:54:00:21:00:01", vlan: 10,       mode: access}
       - {name: eth2, bridge: "102", peer: pc2, mac: "52:54:00:21:00:02", vlan: 20,       mode: access}
       - {name: eth3, bridge: "103", peer: r1,  mac: "52:54:00:21:00:03", vlan: [10, 20], mode: trunk, native: 999, stage: m2}
-      - {name: eth4, bridge: "104", peer: r3,  mac: "52:54:00:21:00:04", vlan: [10, 20], mode: trunk, native: 999, stage: m5}
+      - {name: eth4, bridge: "105", peer: r5,  mac: "52:54:00:21:00:04", vlan: [10, 20], mode: trunk, native: 999, stage: m5}
 
   - name: r1
     id: 0x31
@@ -138,6 +140,27 @@ nodes:
       - {name: eth3,    bridge: "202", peer: r3, mac: "52:54:00:31:00:03", stage: m4, desc: "백업 경로"}
       - {name: lo0,     type: loopback, desc: "OSPF router-id"}
 
+  # M5 에서 투입되는 **두 번째 게이트웨이**. r1 과 나란히 서서 VRRP 로 가상 IP 를
+  # 나눠 든다. 코어를 겸하지 않는다 — 게이트웨이는 게이트웨이, 코어는 코어다.
+  #   랩은 이 장비를 **빈 채로** 올린다(stage: m5 = M5 의 설정은 교재 3장이 만든다).
+  #   교육생이 주소 → OSPF → VRRP 순서로 세우는 것이 M5 의 실습이다.
+  #   위쪽은 r1 과 똑같이 코어 둘에 다 붙는다. 한쪽만 붙이면 "게이트웨이는
+  #   살아 있는데 그 너머가 없는" 상태가 새로 생긴다 (M5 6.2 가 그것을 다룬다).
+  - name: r5
+    id: 0x36
+    role: router
+    zone: site-a
+    stage: m5
+    memory: 768
+    desc: "지사 백업 게이트웨이 (VRRP BACKUP)"
+    interfaces:
+      - {name: eth1,    bridge: "105", peer: sw1, mac: "52:54:00:36:00:01", mode: trunk, native: 999}
+      - {name: eth1.10, parent: eth1, vlan: 10, desc: "VLAN10 백업 게이트웨이"}
+      - {name: eth1.20, parent: eth1, vlan: 20, desc: "VLAN20 백업 게이트웨이"}
+      - {name: eth2,    bridge: "205", peer: r2, mac: "52:54:00:36:00:02", desc: "주 경로"}
+      - {name: eth3,    bridge: "206", peer: r3, mac: "52:54:00:36:00:03", desc: "백업 경로"}
+      - {name: lo0,     type: loopback, desc: "OSPF router-id"}
+
   # ---------------- Core : 백본 ----------------
   - name: r2
     id: 0x32
@@ -149,6 +172,7 @@ nodes:
     interfaces:
       - {name: eth1, bridge: "201", peer: r1, mac: "52:54:00:32:00:01"}
       - {name: eth2, bridge: "203", peer: r4, mac: "52:54:00:32:00:02"}
+      - {name: eth3, bridge: "205", peer: r5, mac: "52:54:00:32:00:03", stage: m5, desc: "백업 게이트웨이 수용"}
       - {name: lo0,  type: loopback}
 
   - name: r3
@@ -157,13 +181,11 @@ nodes:
     zone: core
     stage: m4
     memory: 768
-    desc: "코어 라우터 (백업 경로) — OSPF cost 높음. M5 에서 Site-A 의 백업 게이트웨이도 겸한다"
+    desc: "코어 라우터 (백업 경로) — OSPF cost 높음"
     interfaces:
       - {name: eth1, bridge: "202", peer: r1, mac: "52:54:00:33:00:01"}
       - {name: eth2, bridge: "204", peer: r4, mac: "52:54:00:33:00:02"}
-      - {name: eth3,    bridge: "104", peer: sw1, mac: "52:54:00:33:00:03", mode: trunk, native: 999, stage: m5, desc: "Site-A 백업 게이트웨이 (VRRP)"}
-      - {name: eth3.10, parent: eth3, vlan: 10, stage: m5, desc: "VLAN10 백업 게이트웨이"}
-      - {name: eth3.20, parent: eth3, vlan: 20, stage: m5, desc: "VLAN20 백업 게이트웨이"}
+      - {name: eth3, bridge: "206", peer: r5, mac: "52:54:00:33:00:03", stage: m5, desc: "백업 게이트웨이 수용"}
       - {name: lo0,  type: loopback}
 
   # ---------------- Site-B : 데이터센터 ----------------

@@ -15,7 +15,7 @@ usage:  python3 tools/gen-jumpaccess.py [--lab N] [--out dist]
 
   그래서 이 계정은 **셸이 없고, 자기 랩 노드 22번으로만 나갈 수 있다.**
     · shell = nologin + ForceCommand   → 대화형 접속 불가
-    · PermitOpen = 자기 랩 13대:22     → 남의 랩으로 못 나간다
+    · PermitOpen = 자기 랩 노드:22     → 남의 랩으로 못 나간다
     · -W 방식(ProxyJump)은 세션을 열지 않으므로 셸이 없어도 동작한다
 
   공개키는 교육생이 콘솔 [접속 키] 에 등록한 그 키를 그대로 쓴다 — 관리자가 옮겨 적지 않는다.

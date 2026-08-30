@@ -10,7 +10,7 @@ quiz:
       choices:
         - "OSPF 가 수렴하는 데 시간이 걸려 그동안만 끊기는 것입니다"
         - "pc1 의 게이트웨이 주소가 r1 에만 있어 첫 홉이 사라집니다"
-        - "r3 의 cost 가 높아 백업 경로가 선택되지 않기 때문입니다"
+        - "r5 의 cost 가 높아 백업 경로가 선택되지 않기 때문입니다"
         - "pc1 이 r1 의 MAC 을 캐시에 갖고 있어 잠시 못 나가는 것입니다"
       answer: [1]
       explain: |
@@ -48,8 +48,8 @@ quiz:
     - id: q4
       type: single
       text: |
-        광고 간격이 1초, `r3` 의 우선순위가 {{ vrrp.vlan10.routers.r3.priority }} 입니다.
-        `r3` 가 "MASTER 가 죽었다" 고 판단하기까지 기다리는 시간에 가장 가까운 것은?
+        광고 간격이 1초, `r5` 의 우선순위가 {{ vrrp.vlan10.routers.r5.priority }} 입니다.
+        `r5` 가 "MASTER 가 죽었다" 고 판단하기까지 기다리는 시간에 가장 가까운 것은?
       choices:
         - "1초 — 광고가 한 번만 빠져도 죽은 것으로 보고 곧바로 넘겨받습니다"
         - "10초 — OSPF 의 Hello 와 같은 값을 그대로 가져다 씁니다"
@@ -58,7 +58,7 @@ quiz:
       answer: [3]
       explain: |
         `Master Down Interval = 광고 간격 × 3 + Skew`, `Skew = (256 − 우선순위) / 256` 초입니다.
-        우선순위 {{ vrrp.vlan10.routers.r3.priority }} 면 Skew 는 약 0.6초, 합계는 약 3.6초입니다.
+        우선순위 {{ vrrp.vlan10.routers.r5.priority }} 면 Skew 는 약 0.6초, 합계는 약 3.6초입니다.
         Skew 에 우선순위를 넣은 이유는 BACKUP 이 여럿일 때 **높은 쪽이 먼저 나서게** 하려는 것입니다 (2.5).
 
     - id: q5
@@ -111,7 +111,7 @@ quiz:
     - id: q8
       type: single
       text: |
-        `r3` 의 우선순위를 200 으로 올렸더니 곧바로 MASTER 가 됐습니다.
+        `r5` 의 우선순위를 200 으로 올렸더니 곧바로 MASTER 가 됐습니다.
         같은 일을 했는데 자리가 안 바뀌는 현장도 있습니다. 그 차이는?
       choices:
         - "그 현장은 VRRP 가 아니라 HSRP 를 쓰고 있습니다"
@@ -152,7 +152,7 @@ quiz:
       answer: [2]
       explain: |
         VRRP 는 **대기(active-standby)** 구성입니다. BACKUP 은 가상 IP 를 든 인터페이스를 내려 둡니다.
-        VLAN {{ vlans[10].id }} 의 MASTER 를 `r1`, VLAN {{ vlans[20].id }} 의 MASTER 를 `r3` 로 엇갈리게 두면 두 대가 다 일합니다.
+        VLAN {{ vlans[10].id }} 의 MASTER 를 `r1`, VLAN {{ vlans[20].id }} 의 MASTER 를 `r5` 로 엇갈리게 두면 두 대가 다 일합니다.
         다만 한 대가 죽으면 남은 대가 두 배를 받으므로 **용량을 그렇게 잡아 두어야** 합니다 (9).
 
 checks:
@@ -173,34 +173,34 @@ checks:
 
     - id: backup-has-address
       kind: config
-      title: "r3 에 사용자망 서브인터페이스와 자기 주소가 있는가"
-      host: r3
+      title: "r5 에 사용자망 서브인터페이스와 자기 주소가 있는가"
+      host: r5
       run: "ip -br addr show"
       expect_all:
-        - "{{ vrrp.vlan10.routers.r3.ipv4 }}/"
-        - "{{ vrrp.vlan20.routers.r3.ipv4 }}/"
+        - "{{ vrrp.vlan10.routers.r5.ipv4 }}/"
+        - "{{ vrrp.vlan20.routers.r5.ipv4 }}/"
       hint: |
-        3.3 을 건너뛰었을 수 있습니다. r3 도 그 대역에서 말을 할 수 있어야 합니다.
-        sudo ip link add link {{ port.r3.sw1 }} name {{ port.r3.sw1 }}.{{ vlans[10].id }} type vlan id {{ vlans[10].id }}
+        3.3 을 건너뛰었을 수 있습니다. r5 도 그 대역에서 말을 할 수 있어야 합니다.
+        sudo ip link add link {{ port.r5.sw1 }} name {{ port.r5.sw1 }}.{{ vlans[10].id }} type vlan id {{ vlans[10].id }}
 
     - id: backup-advertises-user-nets
       kind: config
-      title: "r3 도 사용자망을 OSPF 로 광고하는가 ★"
-      host: r3
+      title: "r5 도 사용자망을 OSPF 로 광고하는가 ★"
+      host: r5
       # 이게 없으면 VRRP 는 넘어가는데 통신은 안 돌아온다.
       #   사용자망을 광고하는 것이 r1 하나뿐이면, r1 이 죽는 순간 그 대역이
       #   라우팅 도메인에서 사라진다 — 가는 길만 살고 오는 길이 죽는다.
       #   교재 3.3 을 다 따라 하고도 여기가 비어 있으면 6.1 의 페일오버가
       #   "끝까지 안 돌아오는" 것으로 나타난다. 검사가 그것을 먼저 잡는다.
       run: |
-        vtysh -c 'show ip ospf interface {{ port.r3.sw1 }}.{{ vlans[10].id }}' | grep -c 'Area'
-        vtysh -c 'show ip ospf interface {{ port.r3.sw1 }}.{{ vlans[20].id }}' | grep -c 'Area'
+        vtysh -c 'show ip ospf interface {{ port.r5.sw1 }}.{{ vlans[10].id }}' | grep -c 'Area'
+        vtysh -c 'show ip ospf interface {{ port.r5.sw1 }}.{{ vlans[20].id }}' | grep -c 'Area'
       expect_none: ["0"]
       hint: |
-        3.3 의 마지막 단계입니다. r3 의 두 서브인터페이스를 area 에 넣고 passive 로 둡니다.
-        r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[10].id }}
-        r3(config-if)# ip ospf area {{ routing.ospf.area }}
-        r3(config-if)# ip ospf passive
+        3.3 의 마지막 단계입니다. r5 의 두 서브인터페이스를 area 에 넣고 passive 로 둡니다.
+        r5(config)# interface {{ port.r5.sw1 }}.{{ vlans[10].id }}
+        r5(config-if)# ip ospf area {{ routing.ospf.area }}
+        r5(config-if)# ip ospf passive
 
     - id: vmac-device
       kind: config
@@ -220,13 +220,13 @@ checks:
       expect: "2"
       hint: |
         vtysh -c 'show vrrp' 로 상태를 봅니다.
-        6.5 에서 올린 r3 의 우선순위를 되돌리지 않았을 수 있습니다.
+        6.5 에서 올린 r5 의 우선순위를 되돌리지 않았을 수 있습니다.
         Advertisements Rx 가 0 이면 두 라우터 사이의 L2 를 먼저 보세요 (5.1).
 
-    - id: backup-r3
+    - id: backup-r5
       kind: state
-      title: "r3 가 두 VLAN 모두에서 BACKUP 인가"
-      host: r3
+      title: "r5 가 두 VLAN 모두에서 BACKUP 인가"
+      host: r5
       run: "vtysh -c 'show vrrp' | grep -c 'Status (v4) *Backup'"
       expect: "2"
       hint: "둘 다 MASTER 라고 하면 서로의 광고가 안 닿는 것입니다 (5.1)."

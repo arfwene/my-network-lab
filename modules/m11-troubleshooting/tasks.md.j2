@@ -130,11 +130,10 @@ ping -c1 -W1 {{ ip6.web }} >/dev/null 2>&1 && echo "v6 OK" || echo "v6 FAIL"
 **① 토폴로지** — 글자로 그립니다. VLAN 과 사이트 경계를 표시해 주세요. 이 정도면 충분하다:
 
 ```
-[pc1 VLAN{{ vlans[10].id }}] --+
-                 +-- sw1 ==트렁크== r1 ==주경로== r2 ==+
-[pc2 VLAN{{ vlans[20].id }}] --+                  |            +== r4 -- sw2 -- web/dns/ftp
-                                    +==백업== r3 ==+           |
-                                                              edge -- inet (외부)
+[pc1 VLAN{{ vlans[10].id }}] --+     +== r1 ==주경로== r2 ==+
+                 +-- sw1 ==+                      +== r4 -- sw2 -- web/dns/ftp
+[pc2 VLAN{{ vlans[20].id }}] --+     +== r5 ==백업==== r3 ==+      |
+                          (VRRP 짝)                       edge -- inet (외부)
 ```
 
 **② 주소 대장** — 노드 / 인터페이스 / IPv4 / IPv6 / 용도.

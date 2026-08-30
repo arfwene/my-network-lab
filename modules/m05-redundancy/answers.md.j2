@@ -41,7 +41,7 @@
 - **왜 비대칭인가** — "죽었다" 는 증거가 없어서 내리는 판단이라 기다릴 수밖에 없다.
   살아난 쪽은 곧바로 광고를 보내므로 기다릴 것이 없다.
 - **ARP 캐시** — 전후로 `{{ vrrp.vlan10.virtual_mac }}` 그대로다. 한 번도 안 바뀐다.
-- **넘어간 순간** — 광고의 **출발지 IP** 가 `{{ vrrp.vlan10.routers.r1.ipv4 }}` ↔ `{{ vrrp.vlan10.routers.r3.ipv4 }}` 로 바뀌는 줄.
+- **넘어간 순간** — 광고의 **출발지 IP** 가 `{{ vrrp.vlan10.routers.r1.ipv4 }}` ↔ `{{ vrrp.vlan10.routers.r5.ipv4 }}` 로 바뀌는 줄.
   출발지 MAC 은 양쪽 다 가상 MAC 이라 그것으로는 구분되지 않는다 — 자주 틀리는 자리다.
 
 > 값이 크게 다르면 `-i` 를 안 붙였을 가능성이 높다. 기본 간격은 1초라 분해능이 없다.
@@ -50,10 +50,10 @@
 
 ## 과제 3. MASTER 를 엇갈리게 — 정답
 
-| VLAN | r1 | r3 | MASTER |
+| VLAN | r1 | r5 | MASTER |
 |---|---|---|---|
-| {{ vlans[10].id }} | {{ vrrp.vlan10.routers.r1.priority }} | {{ vrrp.vlan10.routers.r3.priority }} | r1 |
-| {{ vlans[20].id }} | {{ vrrp.vlan20.routers.r3.priority }} | {{ vrrp.vlan20.routers.r1.priority }} | r3 |
+| {{ vlans[10].id }} | {{ vrrp.vlan10.routers.r1.priority }} | {{ vrrp.vlan10.routers.r5.priority }} | r1 |
+| {{ vlans[20].id }} | {{ vrrp.vlan20.routers.r5.priority }} | {{ vrrp.vlan20.routers.r1.priority }} | r5 |
 
 VLAN {{ vlans[20].id }} 쪽만 두 값을 서로 바꾸면 된다. **우선순위 두 줄이 전부다.**
 
@@ -86,7 +86,7 @@ VLAN {{ vlans[20].id }} 쪽만 두 값을 서로 바꾸면 된다. **우선순�
 **q1** 첫 홉이 하나면 그 하나가 SPOF. 경로 이중화와는 별개의 층이다.
 **q2** MAC 이 안 넘어가면 단말의 ARP 캐시가 만료될 때까지 죽은 쪽으로 보낸다.
 **q3** `{{ vrrp.vlan20.virtual_mac }}`. VRID {{ vrrp.vlan20.vrid }} → 16진수 `{{ '%02x' % vrrp.vlan20.vrid }}`.
-**q4** 약 3.6초 (우선순위 {{ vrrp.vlan10.routers.r3.priority }} 기준).
+**q4** 약 3.6초 (우선순위 {{ vrrp.vlan10.routers.r5.priority }} 기준).
 **q5** 죽음은 기다려서 판단하고, 부활은 통보받는다.
 **q6** MASTER 의 위쪽 경로. VRRP 는 그것을 보지 않는다.
 **q7** 광고가 안 닿는 것 — L2 를 본다. `Advertisements Rx` 가 0.
@@ -100,13 +100,13 @@ VLAN {{ vlans[20].id }} 쪽만 두 값을 서로 바꾸면 된다. **우선순�
 
 | 시나리오 | 무엇을 넣나 | 어디서 드러나나 |
 |---|---|---|
-| m05-01 | r3 의 사용자망 포트를 내린다 | 평소에는 아무 증상이 없다. r1 을 내려야 드러난다 |
+| m05-01 | r5 의 사용자망 포트를 내린다 | 평소에는 아무 증상이 없다. r1 을 내려야 드러난다 |
 | m05-02 | r1 의 위쪽 링크를 내린다 | 게이트웨이는 되고 그 너머가 안 된다 (5.3) |
 | m05-03 | sw1 의 트렁크에서 VLAN 을 뺀다 | 둘 다 MASTER 가 된다 (5.1) |
 
 **m05-01 이 이 모듈에서 가장 가치 있는 시나리오다.** 증상이 없다.
 "이중화가 죽어 있는 것을 아무도 모른다" 는 상황이 실무에서 가장 흔한 사고의 앞 단계다.
-검사(`backup-r3`)가 그것을 잡아낸다는 것을 함께 짚어 줄 것.
+검사(`backup-r5`)가 그것을 잡아낸다는 것을 함께 짚어 줄 것.
 
 ---
 

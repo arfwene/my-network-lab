@@ -81,7 +81,7 @@ M11 은 검사를 **복사하지 않고 참조로 가져온다** (`assessment.ym
 
 | id | 왜 필요한가 |
 |---|---|
-| `r2-links` `r3-links` `r4-links` `edge-links` | 이 노드들에는 링크 검사가 하나도 없었다 |
+| `r2-links` `r3-links` `r4-links` `r5-links` `edge-links` | 이 노드들에는 링크 검사가 하나도 없었다 |
 | `sw2-ports` | `sw2` 를 보는 검사가 하나도 없었다 |
 | `dns-reachable` | `dns` 노드 자체를 보는 검사가 없었다 (M9 은 pc1 쪽에서만 본다) |
 | `r1-primary-mtu` | `m04-02`(주 경로 MTU) 를 **직접** 짚어 준다 |
@@ -111,9 +111,9 @@ M11 은 검사를 **복사하지 않고 참조로 가져온다** (`assessment.ym
 | `m04-02` | `traceroute` 가 백업 경유 | r1 `eth2` MTU 1400 | `r1-primary-mtu` · `m04.ospf-neighbors-r1` · `m03.path-as-designed` |
 | `m04-03` | r4 인접이 하나 줄고 경로가 백업으로 | r2 `eth2` 에만 인증 | `m04.ospf-neighbors-r4` · `m03.path-as-designed` |
 | `m04-04` | 백업 인접 미형성. 통신은 정상 | r3 `eth2` Hello 5초 | `m04.ospf-neighbors-r4` |
-| `m05-01` | **증상 없음.** 통신 정상 | r3 의 사용자망 트렁크가 down | `m05.backup-r3` · `m05.vmac-device` · `r3-links` |
+| `m05-01` | **증상 없음.** 통신 정상 | r5 의 사용자망 트렁크가 down | `m05.backup-r5` · `m05.vmac-device` · `r5-links` |
 | `m05-02` | 게이트웨이는 되는데 그 너머가 안 됨 | r1 의 위쪽 링크 둘이 down | `m05.uplinks-restored` · `m04.ospf-neighbors-r1` · `m03.cross-site-ping` |
-| `m05-03` | 통신이 되다 말다 함. 둘 다 Master | sw1 의 r3 쪽 트렁크에서 VLAN 제거 | `m05.backup-r3` · `m05.vip-up-on-master` |
+| `m05-03` | 통신이 되다 말다 함. 둘 다 Master | sw1 의 r5 쪽 트렁크에서 VLAN 제거 | `m05.backup-r5` · `m05.vip-up-on-master` |
 | `m06-01` | IPv4 정상, IPv6 만 밖으로 못 감 | pc1 IPv6 기본 경로 삭제 | `m06.pc1-v6-default` · `m06.v6-cross-site` |
 | `m06-02` | IPv6 서버망만 못 감 | r4 `eth3` OSPFv3 area 누락 | `m06.r1-ospf6-routes` · `m06.v6-cross-site` |
 | `m06-03` | 주소는 있는데 `dadfailed` | r1 이 같은 IPv6 주소 보유 | `m06.v6-cross-site` · `m06.dual-stack` |
@@ -146,7 +146,7 @@ M11 은 검사를 **복사하지 않고 참조로 가져온다** (`assessment.ym
 
 - **`m05-01` 도 통신 검사가 전혀 잡지 못한다.** `m04-01` 과 같은 부류이고, 더 조용하다.
   게이트웨이가 살아 있으니 교육생 화면에서는 아무 일도 일어나지 않는다.
-  `m05.backup-r3`(r3 가 두 VLAN 모두에서 BACKUP 인가) 하나가 잡는다.
+  `m05.backup-r5`(r5 가 두 VLAN 모두에서 BACKUP 인가) 하나가 잡는다.
   **`m11` 이 `m05` 검사를 가져오지 않으면 이 회차는 아무도 못 잡는다** — include 목록을 지킬 것.
 
 **pool 에서 뺀 것**

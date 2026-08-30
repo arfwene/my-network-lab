@@ -90,7 +90,7 @@ segments:
       vrid: 10                   # 가상 MAC 00:00:5e:00:01:0a 의 마지막 바이트
       routers:
         r1: {offset: 252, priority: 150}
-        r3: {offset: 253, priority: 100}
+        r5: {offset: 253, priority: 100}
 
   vlan20:
     zone: site-a
@@ -110,7 +110,7 @@ segments:
       vrid: 20                   # 가상 MAC 00:00:5e:00:01:14
       routers:
         r1: {offset: 252, priority: 150}
-        r3: {offset: 253, priority: 100}
+        r5: {offset: 253, priority: 100}
 
   vlan40:
     zone: site-b
@@ -171,6 +171,27 @@ p2p:
     desc: "백업 경로"
     ipv6_subnet_id: "3004"
     ipv6_suffix: {r3: "3", r4: "4"}
+  # 백업 게이트웨이도 위쪽을 둘 다 본다. r1 과 같은 모양이라 배울 것이 늘지 않는다.
+  r5-r2:
+    zone: core-p2p
+    prefix: 30
+    index: 5
+    bridge: "205"
+    offsets: {r5: 1, r2: 2}
+    ospf_cost: 10
+    desc: "백업 게이트웨이의 주 경로"
+    ipv6_subnet_id: "5002"
+    ipv6_suffix: {r5: "6", r2: "2"}
+  r5-r3:
+    zone: core-p2p
+    prefix: 30
+    index: 6
+    bridge: "206"
+    offsets: {r5: 1, r3: 2}
+    ospf_cost: 100
+    desc: "백업 게이트웨이의 백업 경로 (cost 높게)"
+    ipv6_subnet_id: "5003"
+    ipv6_suffix: {r5: "6", r3: "3"}
   r4-edge:
     zone: core-p2p
     prefix: 30
@@ -191,6 +212,7 @@ loopback:
     r2:   {offset: 2, ipv6_suffix: "2"}
     r3:   {offset: 3, ipv6_suffix: "3"}
     r4:   {offset: 4, ipv6_suffix: "4"}
+    r5:   {offset: 6, ipv6_suffix: "6"}
     edge: {offset: 5, ipv6_suffix: "5"}
 
 # =============================================================================
@@ -243,6 +265,9 @@ management:
     r2:  32
     r3:  33
     r4:  34
+    # edge 가 35 를 먼저 쓰고 있어 r5 는 36 이다. 숫자를 옮기면 이미 나간 랩의
+    # 관리망 주소가 통째로 바뀌므로 뒤에 붙인다.
+    r5:  36
     edge: 35
     web: 41
     ftp: 42
