@@ -358,7 +358,7 @@ IPv4 인접이 `Full` 이어도 IPv6 인접은 안 서 있을 수 있습니다. 
 라우터 설정은 M3 · M4 와 똑같이 `sudo vtysh` 로 들어가서 합니다.
 
 ```bash
-# r1 의 셸에서
+# r1 - linux
 sudo vtysh
 ```
 
@@ -413,6 +413,7 @@ ip -6 route show
 기본 경로가 없습니다. 링크로컬 말고는 갈 곳이 없다는 뜻입니다.
 
 ```
+# r1 - vtysh
 r1# show ipv6 route
 ```
 
@@ -424,6 +425,7 @@ r1# show ipv6 route
 먼저 한 대역만 살려 봅니다. VLAN {{ vlans[10].id }} 의 게이트웨이와 `pc1` 입니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface eth1.{{ vlans[10].id }}
 r1(config-if)# ipv6 address {{ gw6.vlan10 }}/64
@@ -466,6 +468,7 @@ sudo ip -6 addr add {{ ip6c.pc2 }} dev eth1
 ```
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface eth1.{{ vlans[20].id }}
 r1(config-if)# ipv6 address {{ gw6.vlan20 }}/64
@@ -478,6 +481,7 @@ sudo ip -6 addr add {{ ip6c.web }} dev eth1
 ```
 
 ```
+# r4 - vtysh
 r4# configure terminal
 r4(config)# interface {{ port.r4.sw2 }}
 r4(config-if)# ipv6 address {{ gw6.vlan40 }}/64
@@ -521,6 +525,7 @@ notes:
 네 라우터의 p2p 인터페이스와 루프백에 주소를 붙입니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface {{ port.r1.r2 }}
 r1(config-if)# ipv6 address {{ p2p6['r1-r2'].addresses.r1 }}/64
@@ -534,6 +539,7 @@ r1(config-if)# end
 ```
 
 ```
+# r2 - vtysh
 r2# configure terminal
 r2(config)# interface {{ port.r2.r1 }}
 r2(config-if)# ipv6 address {{ p2p6['r1-r2'].addresses.r2 }}/64
@@ -547,6 +553,7 @@ r2(config-if)# end
 ```
 
 ```
+# r3 - vtysh
 r3# configure terminal
 r3(config)# interface {{ port.r3.r1 }}
 r3(config-if)# ipv6 address {{ p2p6['r1-r3'].addresses.r3 }}/64
@@ -560,6 +567,7 @@ r3(config-if)# end
 ```
 
 ```
+# r4 - vtysh
 r4# configure terminal
 r4(config)# interface {{ port.r4.r2 }}
 r4(config-if)# ipv6 address {{ p2p6['r2-r4'].addresses.r4 }}/64
@@ -575,10 +583,12 @@ r4(config-if)# end
 **확인** — 이웃끼리 직접 통하는지 봅니다.
 
 ```
+# r1 - vtysh
 r1# ping {{ p2p6['r1-r2'].addresses.r2 }}
 ```
 
 ```
+# r1 - vtysh
 r1# show ipv6 route
 ```
 
@@ -591,6 +601,7 @@ r1# show ipv6 route
 설정하는 자리만 비슷합니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# router ospf6
 r1(config-ospf6)# ospf6 router-id {{ loopback.r1 }}
@@ -636,6 +647,7 @@ IPv4 에 걸었던 그것이고 이유도 같습니다 — 상대가 하나뿐�
 **확인** — 인접이 두 벌이 됩니다.
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 r1# show ipv6 ospf6 neighbor
 ```
@@ -644,6 +656,7 @@ r1# show ipv6 ospf6 neighbor
 IPv4 인접이 살아 있어도 IPv6 인접은 따로 확인해야 합니다.
 
 ```
+# r1 - vtysh
 r1# show ipv6 route ospf6
 ```
 
@@ -787,6 +800,7 @@ ip -6 route show default
 가장 흔한 dual-stack 장애입니다. IPv4 가 멀쩡해서 아무도 눈치채지 못합니다.
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 r1# show ipv6 ospf6 neighbor
 ```
@@ -842,6 +856,7 @@ curl: (3) URL rejected: Bad hostname
 다른 길로 갑니다. 방화벽이 경로에 있으면 이것만으로 세션이 깨집니다.
 
 ```
+# r1 - vtysh
 r1# show ipv6 ospf6 interface {{ port.r1.r2 }}
 ```
 
@@ -1014,6 +1029,7 @@ ip -6 route show       # IPv6
 ```
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 r1# show ipv6 ospf6 neighbor
 ```
@@ -1028,6 +1044,7 @@ Neighbor ID 가 IPv4 주소입니다. OSPFv3 의 router-id 는 여전히 32비�
 그리고 인접은 link-local 주소로 맺어져 있습니다 — `show ipv6 ospf6 neighbor detail` 로 확인할 수 있습니다.
 
 ```
+# r1 - vtysh
 r1# show ipv6 route ospf6
 ```
 
@@ -1057,6 +1074,7 @@ sudo tcpdump -i eth1 -n 'icmp6 and ip6[40] == 134'      # 134 = Router Advertise
 **터미널 r1** — RA 를 켭니다. (FRR 은 기본적으로 RA 를 억제합니다)
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface eth1.{{ vlans[10].id }}
 r1(config-if)# no ipv6 nd suppress-ra
@@ -1108,6 +1126,7 @@ ip -6 addr show dev eth1 scope global      # 주소가 하나만 남아야 한�
 ```
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface eth1.{{ vlans[10].id }}
 r1(config-if)# ipv6 nd suppress-ra
@@ -1121,6 +1140,7 @@ r1(config-if)# end
 dual-stack 이 정말 두 벌인지를 확인하는 가장 확실한 방법입니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface {{ port.r1.r2 }}
 r1(config-if)# ipv6 ospf6 cost 200
@@ -1156,6 +1176,7 @@ IPv4 쪽 설정은 하나도 건드리지 않았습니다. 완전히 독립된 �
 #### 정리 (반드시 할 것)
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface {{ port.r1.r2 }}
 r1(config-if)# no ipv6 ospf6 cost
@@ -1166,7 +1187,7 @@ r1# show running-config
 `ipv6 ospf6 cost` 줄이 한 곳도 없어야 합니다.
 
 ```bash
-# r1 의 셸에서 — 세어 보고 싶으면
+# r1 - linux — 세어 보고 싶으면
 sudo vtysh -c 'show running-config' | grep -c 'ipv6 ospf6 cost'
 ```
 

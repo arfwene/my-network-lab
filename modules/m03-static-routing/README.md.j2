@@ -209,6 +209,7 @@ ip route {{ zone['site-b'].split('/')[0] }} {{ netmask(zone['site-b']) }} Serial
 이 랩의 라우터는 **FRRouting** 을 씁니다. `vtysh` 안에서는 Cisco IOS 명령이 거의 그대로 통합니다.
 
 ```
+# r1 - vtysh
 r1# show ip route
 ```
 
@@ -241,6 +242,7 @@ next-hop 을 해석하지 못하면(그 대역이 내게 없으면) 경로는 �
 특정 목적지 하나만 물어볼 수도 있습니다.
 
 ```
+# r1 - vtysh
 r1# show ip route {{ ip.web }}
 ```
 
@@ -399,7 +401,7 @@ TTL=3 → …
 실장비 콘솔에 붙은 것과 같습니다. Cisco IOS 명령이 거의 그대로 통합니다.
 
 ```bash
-# r1 의 셸에서
+# r1 - linux
 sudo vtysh
 ```
 
@@ -424,6 +426,7 @@ r1#
 뒤에 무엇을 쓸 수 있는지 모를 때는 `?` 를 쳐 보세요. Tab 으로 완성도 됩니다.
 
 ```
+# r1 - vtysh
 r1(config)# ip route ?
   A.B.C.D/M  IP destination prefix (e.g. 10.0.0.0/8)
 ```
@@ -441,6 +444,7 @@ r1(config)# ip route ?
 ### 3.1 시작 상태를 눈으로 확인합니다
 
 ```
+# r1 - vtysh
 r1# show ip route
 ```
 
@@ -481,6 +485,7 @@ From {{ gw.vlan10 }} icmp_seq=1 Destination Net Unreachable
 **할 일** — `{{ zone['site-b'] }}` 로 가려면 `{{ p2p['r1-r2'].addresses.r2 }}` 에게 넘기라고 적습니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}
 r1(config)# end
@@ -489,6 +494,7 @@ r1(config)# end
 **확인**
 
 ```
+# r1 - vtysh
 r1# show ip route static
 ```
 
@@ -526,7 +532,7 @@ PING {{ ip.web }} ({{ ip.web }}) 56(84) bytes of data.
 정말 `r2` 까지 갔는지는 그 구간을 떠서 확인합니다.
 
 ```bash
-# r1 의 셸에서
+# r1 - linux
 sudo tcpdump -i eth2 -n icmp
 ```
 
@@ -538,6 +544,7 @@ IP {{ ip.pc1 }} > {{ ip.web }}: ICMP echo request, seq 2
 나가기만 하고 돌아오는 것이 없습니다. **`r1` 은 자기 일을 했습니다.**
 
 ```
+# r2 - vtysh
 r2# show ip route
 ```
 
@@ -567,6 +574,7 @@ notes:
 `r2` 는 가운데 있으므로 **두 줄**이 필요합니다. 한쪽은 가는 길, 한쪽은 돌아오는 길입니다.
 
 ```
+# r2 - vtysh
 r2# configure terminal
 r2(config)# ip route {{ zone['site-b'] }} {{ p2p['r2-r4'].addresses.r4 }}
 r2(config)# ip route {{ zone['site-a'] }} {{ p2p['r1-r2'].addresses.r1 }}
@@ -576,6 +584,7 @@ r2(config)# end
 **확인**
 
 ```
+# r2 - vtysh
 r2# show ip route static
 ```
 
@@ -627,6 +636,7 @@ IP {{ gw.vlan40 }} > {{ ip.web }}: ICMP net {{ ip.pc1 }} unreachable, length 92
 버린 쪽에서 확인합니다.
 
 ```
+# r4 - vtysh
 r4# show ip route {{ ip.pc1 }}
 ```
 
@@ -640,6 +650,7 @@ r4#
 `r4` 가 무엇을 아는지 통째로 봅니다.
 
 ```
+# r4 - vtysh
 r4# show ip route
 ```
 
@@ -673,6 +684,7 @@ notes:
 ### 3.4 3단계 — `r4` 에 돌아오는 길을 적습니다 (할 일 ③)
 
 ```
+# r4 - vtysh
 r4# configure terminal
 r4(config)# ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}
 r4(config)# end
@@ -834,6 +846,7 @@ S   {{ zone['site-b'] }} [1/0] via 10.10.99.1 inactive
 가장 긴 prefix 가 이기므로 요약 경로가 아무리 멀쩡해도 그 한 대만 다른 길로 갑니다.
 
 ```
+# r1 - vtysh
 r1# show ip route {{ ip.web }}
 ```
 
@@ -885,6 +898,7 @@ next-hop 이 붙어 있는 인터페이스가 죽으면 비활성이 되지만, 
 
 ### 6.1 세 라우터의 테이블을 나란히 본다
 ```
+# r1 - vtysh
 r1# show ip route static
 ```
 
@@ -893,6 +907,7 @@ S>* {{ zone['site-b'] }} [1/0] via {{ p2p['r1-r2'].addresses.r2 }}, eth2, weight
 ```
 
 ```
+# r2 - vtysh
 r2# show ip route static
 ```
 
@@ -902,6 +917,7 @@ S>* {{ zone['site-b'] }} [1/0] via {{ p2p['r2-r4'].addresses.r4 }}, eth2, weight
 ```
 
 ```
+# r4 - vtysh
 r4# show ip route static
 ```
 
@@ -918,7 +934,7 @@ S>* {{ zone['site-a'] }} [1/0] via {{ p2p['r2-r4'].addresses.r2 }}, eth1, weight
 셸에서 걸러 보고 싶으면 `-c` 가 편합니다. 라우터 안에서는 파이프를 쓸 수 없기 때문입니다.
 
 ```bash
-# r1 의 셸에서
+# r1 - linux
 sudo vtysh -c 'show ip route' | grep -E '^(C|S)'
 ```
 
@@ -936,6 +952,7 @@ ping -c 2 {{ ip.web }}
 이제 r1 에 web 한 대만 겨냥한 `/32` 경로를 넣습니다. 목적지는 blackhole(버림)입니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# ip route {{ ip.web }}/32 blackhole
 r1(config)# end
@@ -965,6 +982,7 @@ r1 의 `show ip route static` 을 보면 두 줄이 나란히 있고, `/32` 쪽�
 #### 정리 (반드시 할 것)
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# no ip route {{ ip.web }}/32 blackhole
 r1(config)# end
@@ -1013,6 +1031,7 @@ sudo tcpdump -i eth1 -n icmp
 **터미널 r4** — 리턴 경로를 지웁니다.
 
 ```
+# r4 - vtysh
 r4# configure terminal
 r4(config)# no ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}
 r4(config)# end
@@ -1052,6 +1071,7 @@ pc1 쪽에서는 이 세 줄 중 아무것도 안 보입니다. 그저 무응답
 그래서 **목적지에서 캡처하는 것**이 결정적입니다. M8 의 "캡처 지점 선정"이 왜 실력의 본질인지가 여기서 처음 드러납니다.
 
 ```
+# r4 - vtysh
 r4# show ip route {{ ip.pc1 }}
 ```
 
@@ -1064,6 +1084,7 @@ r4#
 #### 복구
 
 ```
+# r4 - vtysh
 r4# configure terminal
 r4(config)# ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}
 r4(config)# end
@@ -1105,7 +1126,7 @@ traceroute 가 하는 일이 정확히 이것입니다. 특별한 프로토콜�
 r2 의 ICMP 응답 속도 제한을 극단적으로 높입니다. (ICMP 를 막는 정책과 사실상 같은 효과)
 
 ```bash
-# r2
+# r2 - linux
 sudo sysctl -w net.ipv4.icmp_ratelimit=100000
 ```
 
@@ -1134,7 +1155,7 @@ r2 는 패킷을 정상적으로 전달하고 있습니다. 다만 "나 여기 �
 #### 정리 (반드시 할 것)
 
 ```bash
-# r2
+# r2 - linux
 sudo sysctl -w net.ipv4.icmp_ratelimit=1000
 ```
 
@@ -1144,6 +1165,7 @@ sudo sysctl -w net.ipv4.icmp_ratelimit=1000
 r1 에 **같은 목적지**를 향한 두 번째 경로를 넣되, AD 를 200 으로 줍니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# ip route {{ zone['site-b'] }} blackhole 200
 r1(config)# end
@@ -1171,6 +1193,7 @@ Routing entry for {{ zone['site-b'] }}
 이제 주 경로를 지웁니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# no ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}
 r1(config)# end
@@ -1192,6 +1215,7 @@ AD 가 높은 경로는 "지고 있을 뿐 사라진 것이 아닙니다."
 #### 정리 (반드시 할 것)
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# no ip route {{ zone['site-b'] }} blackhole 200
 r1(config)# ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}

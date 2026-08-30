@@ -44,7 +44,7 @@ sudo nft list ruleset | grep -cE 'snat|dnat'
 경계 장비 **양쪽**에 동시에 캡처를 걸고 SNAT 와 DNAT 를 각각 증명합니다.
 
 ```bash
-# edge 에서 저장
+# edge - linux — 저장
 sudo tcpdump -i eth1 -nn -w /tmp/m10-inside.pcap  'not port 22'
 sudo tcpdump -i eth2 -nn -w /tmp/m10-outside.pcap 'not port 22'
 ```

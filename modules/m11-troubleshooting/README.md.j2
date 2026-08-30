@@ -184,7 +184,7 @@ A 에서 안 된다.
 나가는 인터페이스에는 없다면, 그 장비가 버린 것입니다 (M8 의 그 실습).
 
 ```bash
-# r4 에서 동시에 두 개
+# r4 - linux — 동시에 두 개
 sudo tcpdump -i eth2 -n 'host {{ ip.pc1 }} and tcp port 80' &   # 들어오는 쪽
 sudo tcpdump -i eth3 -n 'host {{ ip.pc1 }} and tcp port 80'     # 나가는 쪽
 ```
@@ -316,6 +316,7 @@ traceroute -n -w1 -q1 {{ ip.web }}
 - 백업 경로(`{{ p2p['r1-r3'].addresses.r3 }}`)가 보이면 이미 무언가 잘못된 것입니다.
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 r1# show ip route ospf
 ```
@@ -380,7 +381,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://{{ ip.web }}/
 일부러 하나 바꿔 보고 되돌립니다.
 
 ```bash
-# r1 의 셸에서 — 바꾸기 전 상태를 파일로 남긴다
+# r1 - linux — 바꾸기 전 상태를 파일로 남긴다
 sudo vtysh -c 'show running-config' > /tmp/r1-before.conf
 ```
 
@@ -388,6 +389,7 @@ sudo vtysh -c 'show running-config' > /tmp/r1-before.conf
 바꾸는 것은 라우터 안에서 합니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface {{ port.r1.r3 }}
 r1(config-if)# ip ospf cost 5
@@ -402,6 +404,7 @@ traceroute -n -w1 -q1 {{ ip.web }}
 되돌립니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface {{ port.r1.r3 }}
 r1(config-if)# ip ospf cost {{ p2p['r1-r3'].ospf_cost }}
@@ -409,7 +412,7 @@ r1(config-if)# end
 ```
 
 ```bash
-# r1 의 셸에서 — 바꾸기 전과 같아졌는지 기계에게 묻는다
+# r1 - linux — 바꾸기 전과 같아졌는지 기계에게 묻는다
 sudo vtysh -c 'show running-config' | diff /tmp/r1-before.conf - && echo "원상 복구됨"
 ```
 

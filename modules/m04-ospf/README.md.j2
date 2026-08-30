@@ -288,6 +288,7 @@ OSPF 는 링크를 두 부류로 봅니다.
 **OSPF 는 기본적으로 broadcast 로 봅니다.** 그래서 손으로 알려 줍니다.
 
 ```
+# r1 - vtysh
 r1(config-if)# ip ospf network point-to-point
 ```
 
@@ -337,6 +338,7 @@ Please, use "ip ospf passive" on an interface instead.
 그래서 지금은 **인터페이스 절 안에서** 적습니다. area · cost 와 같은 자리입니다.
 
 ```
+# r1 - vtysh
 r1(config)# interface eth1.10
 r1(config-if)# ip ospf area {{ routing.ospf.area }}
 r1(config-if)# ip ospf passive
@@ -427,7 +429,7 @@ AS(Autonomous System)는 하나의 정책으로 운영되는 네트워크 덩어
 Cisco IOS 명령이 거의 그대로 통합니다.
 
 ```bash
-# r1 의 셸에서
+# r1 - linux
 sudo vtysh
 ```
 
@@ -454,6 +456,7 @@ r1#
 뒤에 무엇을 쓸 수 있는지 모를 때는 `?` 를 쳐 보세요. Tab 으로 완성도 됩니다.
 
 ```
+# r1 - vtysh
 r1(config-if)# ip ospf ?
   area           Enable OSPF on this interface with area
   authentication Enable authentication on this interface
@@ -477,6 +480,7 @@ r1(config-if)# ip ospf ?
 만들기 전에 지금 무엇이 있는지 봅니다. 나중에 "무엇이 달라졌나" 를 말하려면 시작점을 봐야 합니다.
 
 ```
+# r1 - vtysh
 r1# show ip route
 ```
 
@@ -499,6 +503,7 @@ C>* {{ p2p['r1-r3'].cidr }} is directly connected, eth3
 | `>*` | 실제로 이 줄로 패킷을 내보내고 있습니다 |
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 ```
 
@@ -513,6 +518,7 @@ r1# show ip ospf neighbor
 `r3` 도 봅니다.
 
 ```
+# r3 - vtysh
 r3# show ip route
 ```
 
@@ -539,6 +545,7 @@ FRR 은 "이 인터페이스는 area 0 이다" 를 인터페이스 쪽에 적는
 어느 포트가 OSPF 에 들어갔는지 `show running-config` 에서 한눈에 보이기 때문입니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# router ospf
 r1(config-router)# ospf router-id {{ loopback.r1 }}
@@ -570,6 +577,7 @@ r1(config-if)# end
 **확인**
 
 ```
+# r1 - vtysh
 r1# show ip ospf interface eth2
 ```
 
@@ -584,6 +592,7 @@ eth2 is up
 `Area` · `Cost` · `Router ID` 셋이 방금 적은 값과 같은지 보세요.
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 ```
 
@@ -617,6 +626,7 @@ notes:
 `r2` 는 포트가 둘뿐이라 `r1` 보다 짧습니다. passive 로 둘 것은 `lo0` 하나입니다.
 
 ```
+# r2 - vtysh
 r2# configure terminal
 r2(config)# router ospf
 r2(config-router)# ospf router-id {{ loopback.r2 }}
@@ -640,6 +650,7 @@ r2(config-if)# end
 **확인** — 몇 초 기다린 뒤 `r1` 에서 봅니다.
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 ```
 
@@ -658,6 +669,7 @@ Neighbor ID     Pri State     Up Time    Dead Time  Address           Interface
 `Full` 이 아니면 여기서 멈추고 원인을 찾으세요. 뒤 단계를 쌓아 봐야 원인만 늘어납니다.
 
 ```
+# r1 - vtysh
 r1# show ip route ospf
 ```
 
@@ -705,6 +717,7 @@ notes:
 포트 구성은 `r2` 와 같고 cost 만 `{{ p2p['r1-r3'].ospf_cost }}` 으로 큽니다.
 
 ```
+# r3 - vtysh
 r3# configure terminal
 r3(config)# router ospf
 r3(config-router)# ospf router-id {{ loopback.r3 }}
@@ -728,6 +741,7 @@ r3(config-if)# end
 **확인**
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 ```
 
@@ -760,6 +774,7 @@ notes:
 대역은 광고하되 Hello 는 보내지 않습니다.
 
 ```
+# r4 - vtysh
 r4# configure terminal
 r4(config)# router ospf
 r4(config-router)# ospf router-id {{ loopback.r4 }}
@@ -787,6 +802,7 @@ r4(config-if)# end
 **확인** — 네 대 모두에서 이웃이 둘씩 보여야 합니다.
 
 ```
+# r4 - vtysh
 r4# show ip ospf neighbor
 ```
 
@@ -797,6 +813,7 @@ Neighbor ID     Pri State     Up Time    Dead Time  Address           Interface
 ```
 
 ```
+# r1 - vtysh
 r1# show ip route ospf
 ```
 
@@ -841,6 +858,7 @@ notes:
 ### 3.6 네 대의 설정을 나란히 확인한다
 
 ```
+# r1 - vtysh
 r1# show running-config
 ```
 
@@ -862,6 +880,7 @@ r1# show running-config
 이미 OSPF 를 타고 있습니다.
 
 ```
+# r1 - vtysh
 r1# show ip route {{ ip.web }}
 ```
 
@@ -887,12 +906,14 @@ Routing entry for {{ cidr.vlan40 }}
 정적 경로는 `r1` · `r2` · `r4` 세 대에 있습니다. 지우는 명령은 넣을 때 쓴 줄 앞에 `no` 를 붙이는 것입니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# no ip route {{ zone['site-b'] }} {{ p2p['r1-r2'].addresses.r2 }}
 r1(config)# end
 ```
 
 ```
+# r2 - vtysh
 r2# configure terminal
 r2(config)# no ip route {{ zone['site-a'] }} {{ p2p['r1-r2'].addresses.r1 }}
 r2(config)# no ip route {{ zone['site-b'] }} {{ p2p['r2-r4'].addresses.r4 }}
@@ -900,6 +921,7 @@ r2(config)# end
 ```
 
 ```
+# r4 - vtysh
 r4# configure terminal
 r4(config)# no ip route {{ zone['site-a'] }} {{ p2p['r2-r4'].addresses.r2 }}
 r4(config)# end
@@ -908,6 +930,7 @@ r4(config)# end
 **확인** — 세 대 모두에서 비어 있어야 합니다.
 
 ```
+# r1 - vtysh
 r1# show ip route static
 ```
 
@@ -980,6 +1003,7 @@ traceroute -n -w1 -q1 {{ ip.web }}
 통신이 되든 안 되든 이 셋은 한 번씩 보고 넘어갑니다. 평상시 모습을 봐 둬야 이상을 알아봅니다.
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 r1# show ip ospf interface eth2
 r1# show ip ospf database
@@ -1025,6 +1049,7 @@ r1# show ip ospf database
 **왜** — Hello 를 보내고 있지만 상대가 답하지 않습니다. 답할 수 없는 이유는 여럿입니다.
 
 ```
+# r1 - vtysh
 r1# show ip ospf interface eth2
 r2# show ip ospf interface eth1
 ```
@@ -1075,6 +1100,7 @@ Packet[DD]: Neighbor {{ loopback.r3 }} MTU 1500 is larger than [eth3:{{ p2p['r1-
 광고합니다. 인접은 다른 포트에서 서 있으므로 `Full` 로 보입니다.
 
 ```
+# r4 - vtysh
 r4# show ip ospf interface
 ```
 
@@ -1094,6 +1120,7 @@ r4# show ip ospf interface
 요청은 도착하고 응답이 못 돌아옵니다. M3 에서 정적 경로를 양방향으로 넣어야 했던 이유와 같습니다.
 
 ```
+# r4 - vtysh
 r4# show ip route {{ ip.pc1 }}
 ```
 
@@ -1103,7 +1130,7 @@ OSPF 는 양쪽이 다 켜져 있으면 이 문제가 저절로 사라집니다.
 증상을 정확히 보려면 중간 라우터에서 패킷을 직접 봅니다.
 
 ```bash
-# r4 의 셸에서
+# r4 - linux
 sudo tcpdump -ni eth1 icmp
 ```
 
@@ -1117,6 +1144,7 @@ sudo tcpdump -ni eth1 icmp
 또는 양쪽 cost 를 반대로 넣었습니다.
 
 ```
+# r1 - vtysh
 r1# show ip ospf interface eth2
 r1# show ip ospf interface eth3
 ```
@@ -1135,6 +1163,7 @@ r1# show ip ospf interface eth3
 router-id 를 안 정해서 장비가 아무 주소나 골랐고, 그 주소가 겹친 경우도 같은 증상입니다.
 
 ```
+# r1 - vtysh
 r1# show ip ospf
 ```
 
@@ -1144,6 +1173,7 @@ r1# show ip ospf
 바꾼 뒤에는 OSPF 프로세스를 다시 시작해야 반영됩니다.
 
 ```
+# r1 - vtysh
 r1# clear ip ospf process
 ```
 
@@ -1174,6 +1204,7 @@ sudo tcpdump -ni eth1 proto ospf
 죽은 길로 계속 내보냅니다. 이것이 3.7 에서 정적을 걷어낸 이유입니다.
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 ```
 
@@ -1239,6 +1270,7 @@ traceroute -n {{ ip.web }}
 2번 홉이 `r3` 로 바뀌었습니다. 라우터에서도 확인합니다.
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 r1# show ip route ospf
 ```
@@ -1252,7 +1284,7 @@ Dead timer {{ routing.ospf.timers.dead }}초를 기다리지 않습니다. 내 �
 **정리**
 
 ```bash
-# r1
+# r1 - linux
 sudo ip link set eth2 up
 ```
 
@@ -1265,6 +1297,7 @@ sudo ip link set eth2 up
 장애 없이, 설정만으로 트래픽을 백업 경로로 옮깁니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface eth2
 r1(config-if)# ip ospf cost 200
@@ -1307,6 +1340,7 @@ cost 는 나가는 방향에만 적용됩니다. 양쪽을 함께 바꿔야 대�
 **정리**
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface eth2
 r1(config-if)# ip ospf cost {{ p2p['r1-r2'].ospf_cost }}
@@ -1325,14 +1359,14 @@ ping -i 0.2 {{ ip.web }}
 ```
 
 ```bash
-# r2
+# r2 - linux
 sudo ip link set eth1 down
 ```
 
 **① r1 의 링크는 여전히 UP 입니다**
 
 ```bash
-# r1 의 셸에서
+# r1 - linux
 ip -br link show eth2
 ```
 
@@ -1345,6 +1379,7 @@ eth2   UP   52:54:00:31:00:02 <BROADCAST,MULTICAST,UP,LOWER_UP>
 **② 인접은 아직 살아 있습니다**
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 ```
 
@@ -1353,6 +1388,7 @@ r1# show ip ospf neighbor
 **③ 그런데 경로는 이미 바뀌어 있습니다**
 
 ```
+# r1 - vtysh
 r1# show ip route ospf
 ```
 
@@ -1364,6 +1400,7 @@ r1# show ip route ospf
 **④ {{ routing.ospf.timers.dead }}초 뒤**
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 ```
 
@@ -1377,7 +1414,7 @@ r1# show ip ospf neighbor
 **정리**
 
 ```bash
-# r2
+# r2 - linux
 sudo ip link set eth1 up
 ```
 
@@ -1387,11 +1424,12 @@ sudo ip link set eth1 up
 인접을 다시 세웁니다.
 
 ```bash
-# r1 의 셸에서 — 백업 링크만 좁힌다
+# r1 - linux — 백업 링크만 좁힌다
 sudo ip link set eth3 mtu 1400
 ```
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface eth3
 r1(config-if)# shutdown
@@ -1402,6 +1440,7 @@ r1(config-if)# end
 잠시 뒤 확인합니다.
 
 ```
+# r1 - vtysh
 r1# show ip ospf neighbor
 ```
 
@@ -1414,7 +1453,7 @@ Neighbor ID     Pri State     Up Time    Dead Time  Address           Interface
 `ExStart` 에서 멈췄습니다. 로그가 이유를 그대로 말해 줍니다.
 
 ```bash
-# r1
+# r1 - linux
 sudo journalctl -u frr --since '2 min ago' | grep -i mtu
 ```
 
@@ -1428,11 +1467,12 @@ Packet[DD]: Neighbor {{ loopback.r3 }} MTU 1500 is larger than [eth3:{{ p2p['r1-
 **정리**
 
 ```bash
-# r1 의 셸에서
+# r1 - linux
 sudo ip link set eth3 mtu 1500
 ```
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface eth3
 r1(config-if)# shutdown

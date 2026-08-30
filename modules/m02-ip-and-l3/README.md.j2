@@ -490,7 +490,7 @@ ping -c 2 {{ ip_at('pc2', 'm1') }}
 기본 경로(`default`)는 한 줄도 없습니다. 갈 곳이 이 대역뿐이라 필요가 없었습니다.
 
 ```bash
-# r1
+# r1 - linux
 ip -br addr show
 ```
 
@@ -713,7 +713,7 @@ Cisco 장비도 이름만 다르고 하는 일은 같습니다. 스위치에서 
 **할 일** — `{{ port.r1.sw1 }}` 위에 `eth1.{{ vlans[10].id }}` 와 `eth1.{{ vlans[20].id }}` 를 만들고 게이트웨이 주소를 줍니다.
 
 ```bash
-# r1
+# r1 - linux
 sudo ip link add link {{ port.r1.sw1 }} name eth1.{{ vlans[10].id }} type vlan id {{ vlans[10].id }}
 sudo ip addr add {{ gw.vlan10 }}/{{ cidr.vlan10.split('/')[1] }} dev eth1.{{ vlans[10].id }}
 sudo ip link set eth1.{{ vlans[10].id }} up
@@ -729,7 +729,7 @@ sudo ip link set eth1.{{ vlans[20].id }} up
 **확인**
 
 ```bash
-# r1
+# r1 - linux
 ip -br addr show
 ip route show
 ```
@@ -743,7 +743,7 @@ ip route show
 그리고 라우터는 이 둘을 서로 전달할 수 있습니다.
 
 ```bash
-# r1 — 전달 기능이 켜져 있는지 본다
+# r1 - linux — 전달 기능이 켜져 있는지 본다
 sysctl net.ipv4.ip_forward
 ```
 
@@ -755,7 +755,7 @@ net.ipv4.ip_forward = 1
 리눅스를 라우터로 쓸 때 가장 자주 빠뜨리는 한 줄입니다. 이 랩은 켜 둔 상태로 시작합니다.
 
 ```bash
-# r1 — 양쪽 PC 가 보이는지
+# r1 - linux — 양쪽 PC 가 보이는지
 ping -c 2 {{ ip.pc1 }}
 ping -c 2 {{ ip.pc2 }}
 ```
@@ -951,7 +951,7 @@ bridge vlan show dev {{ port.sw1.r1 }}
 ```
 
 ```bash
-# r1
+# r1 - linux
 ip -br link show type vlan
 ```
 
@@ -1011,7 +1011,7 @@ Error: Nexthop has invalid gateway.
 중간에서 보면 분명해집니다.
 
 ```bash
-# r1
+# r1 - linux
 sudo tcpdump -ni eth1.{{ vlans[20].id }} icmp
 ```
 
@@ -1265,7 +1265,7 @@ ping: local error: message too long, mtu=1500
 #### ② 경로 중간이 좁을 때 (진짜 실무 상황)
 
 ```bash
-# r1 — pc2 쪽으로 나가는 인터페이스만 좁힌다
+# r1 - linux — pc2 쪽으로 나가는 인터페이스만 좁힌다
 sudo ip link set eth1.20 mtu 1400
 ```
 
@@ -1309,7 +1309,7 @@ ping -c 1 -M dont -s 1472 {{ ip.pc2 }}
 말로만 듣지 말고 만들어 봅니다. r1 이 **자기가 보내려던 통지를** 못 보내게 막습니다.
 
 ```bash
-# r1 — MTU 는 아직 1400 인 상태에서, frag-needed 통지만 차단한다
+# r1 - linux — MTU 는 아직 1400 인 상태에서, frag-needed 통지만 차단한다
 sudo nft add table ip blackhole
 sudo nft add chain ip blackhole output '{ type filter hook output priority 0; }'
 sudo nft add rule ip blackhole output icmp type destination-unreachable drop
@@ -1364,7 +1364,7 @@ sudo tcpdump -i eth1 -nn "tcp port 9000" -c 10
 그때 쓰는 것이 MSS clamp 입니다 — 지나가는 SYN 의 MSS 값을 경로 MTU 에 맞춰 라우터가 대신 깎아 줍니다.
 
 ```bash
-# r1 — SYN 이 지나갈 때 MSS 를 이 경로의 MTU 로 맞춘다
+# r1 - linux — SYN 이 지나갈 때 MSS 를 이 경로의 MTU 로 맞춘다
 sudo nft add table ip mangle
 sudo nft add chain ip mangle forward '{ type filter hook forward priority -150; }'
 sudo nft add rule ip mangle forward tcp flags syn tcp option maxseg size set rt mtu
@@ -1412,7 +1412,7 @@ VPN·터널 구간의 라우터에 MSS clamp 가 걸려 있는 것을 보게 될
 #### 정리 (반드시 할 것)
 
 ```bash
-# r1 — 넣은 것을 순서대로 되돌린다
+# r1 - linux — 넣은 것을 순서대로 되돌린다
 sudo nft delete table ip mangle
 sudo nft delete table ip blackhole
 sudo ip link set eth1.20 mtu 1500

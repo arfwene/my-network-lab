@@ -341,6 +341,7 @@ ip neigh show {{ gw.vlan10 }}
 `{{ mac.r1 }}` 은 **`r1` 의 진짜 MAC** 입니다. 지금 게이트웨이는 `r1` 그 자체입니다.
 
 ```
+# r1 - vtysh
 r1# show ip route connected
 ```
 
@@ -349,6 +350,7 @@ r1# show ip route connected
 `r3` 도 봅니다.
 
 ```
+# r3 - vtysh
 r3# show interface brief
 ```
 
@@ -390,7 +392,7 @@ FRR 은 자기가 넣은 주소만 지웁니다 — `no ip address` 를 쳐도 �
 그래서 여기는 리눅스 쪽에서 합니다. 3.3 · 3.4 도 같은 이유로 셸에서 합니다.
 
 ```bash
-# r1 의 셸에서
+# r1 - linux
 sudo ip addr del {{ gw.vlan10 }}/{{ cidr.vlan10.split('/')[1] }} dev eth1.{{ vlans[10].id }}
 sudo ip addr add {{ vrrp.vlan10.routers.r1.ipv4 }}/{{ cidr.vlan10.split('/')[1] }} dev eth1.{{ vlans[10].id }}
 
@@ -468,7 +470,7 @@ notes:
 **할 일** — `{{ port.r3.sw1 }}` 위에 서브인터페이스 둘을 만들고 자기 주소를 줍니다.
 
 ```bash
-# r3 — 서브인터페이스는 리눅스 쪽에서 만듭니다 (M2 3.5 와 같습니다)
+# r3 - linux — 서브인터페이스는 리눅스 쪽에서 만듭니다 (M2 3.5 와 같습니다)
 sudo ip link add link {{ port.r3.sw1 }} name {{ port.r3.sw1 }}.{{ vlans[10].id }} type vlan id {{ vlans[10].id }}
 sudo ip addr add {{ vrrp.vlan10.routers.r3.ipv4 }}/{{ cidr.vlan10.split('/')[1] }} dev {{ port.r3.sw1 }}.{{ vlans[10].id }}
 sudo ip link set {{ port.r3.sw1 }}.{{ vlans[10].id }} up
@@ -481,7 +483,7 @@ sudo ip link set {{ port.r3.sw1 }}.{{ vlans[20].id }} up
 확인 — 두 라우터가 서로 보이는지 봅니다.
 
 ```bash
-# r3
+# r3 - linux
 ping -c 2 {{ vrrp.vlan10.routers.r1.ipv4 }}
 ```
 
@@ -499,6 +501,7 @@ ping -c 2 {{ vrrp.vlan10.routers.r1.ipv4 }}
 `r3` 도 같은 대역을 광고하게 해 둡니다. 사용자망이므로 passive 입니다 (M4 2.7).
 
 ```
+# r3 - vtysh
 r3# configure terminal
 r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[10].id }}
 r3(config-if)# ip ospf area {{ routing.ospf.area }}
@@ -513,6 +516,7 @@ r3(config-if)# end
 **확인** — 반대편에서 이 대역이 두 길로 보이는지 봅니다.
 
 ```
+# r4 - vtysh
 r4# show ip route {{ cidr.vlan10 }}
 ```
 
@@ -555,14 +559,14 @@ notes:
 **할 일** — 두 라우터 각각에, VLAN 마다 하나씩 만듭니다.
 
 ```bash
-# r1
+# r1 - linux
 sudo ip link add {{ port.r1.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }} link {{ port.r1.sw1 }}.{{ vlans[10].id }} address {{ vrrp.vlan10.virtual_mac }} type macvlan mode bridge
 sudo ip addr add {{ vrrp.vlan10.virtual_ip }}/{{ cidr.vlan10.split('/')[1] }} dev {{ port.r1.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}
 sudo ip link set {{ port.r1.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }} up
 ```
 
 ```bash
-# r3 — 이름의 부모만 다르고 나머지는 똑같습니다
+# r3 - linux — 이름의 부모만 다르고 나머지는 똑같습니다
 sudo ip link add {{ port.r3.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }} link {{ port.r3.sw1 }}.{{ vlans[10].id }} address {{ vrrp.vlan10.virtual_mac }} type macvlan mode bridge
 sudo ip addr add {{ vrrp.vlan10.virtual_ip }}/{{ cidr.vlan10.split('/')[1] }} dev {{ port.r3.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}
 sudo ip link set {{ port.r3.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }} up
@@ -571,7 +575,7 @@ sudo ip link set {{ port.r3.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }} up
 VLAN {{ vlans[20].id }} 도 같은 방식으로 만듭니다. 이름·VRID·가상 MAC·주소만 바뀝니다.
 
 ```bash
-# r1
+# r1 - linux
 sudo ip link add eth1.{{ vlans[20].id }}-{{ vrrp.vlan20.vrid }} link eth1.{{ vlans[20].id }} address {{ vrrp.vlan20.virtual_mac }} type macvlan mode bridge
 sudo ip addr add {{ vrrp.vlan20.virtual_ip }}/{{ cidr.vlan20.split('/')[1] }} dev eth1.{{ vlans[20].id }}-{{ vrrp.vlan20.vrid }}
 sudo ip link set eth1.{{ vlans[20].id }}-{{ vrrp.vlan20.vrid }} up
@@ -605,6 +609,7 @@ ping -c 1 -W 2 {{ gw.vlan10 }} >/dev/null; ip neigh show {{ gw.vlan10 }}
 **할 일** — 두 라우터에 VRID · 가상 IP · 우선순위를 적습니다.
 
 ```
+# r1 - vtysh
 r1# configure terminal
 r1(config)# interface eth1.{{ vlans[10].id }}
 r1(config-if)# vrrp {{ vrrp.vlan10.vrid }} ip {{ vrrp.vlan10.virtual_ip }}
@@ -617,6 +622,7 @@ r1(config-if)# end
 ```
 
 ```
+# r3 - vtysh
 r3# configure terminal
 r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[10].id }}
 r3(config-if)# vrrp {{ vrrp.vlan10.vrid }} ip {{ vrrp.vlan10.virtual_ip }}
@@ -631,6 +637,7 @@ r3(config-if)# end
 **확인**
 
 ```
+# r1 - vtysh
 r1# show vrrp
 ```
 
@@ -654,7 +661,7 @@ r1# show vrrp
 **그리고 충돌이 정리됐습니다.**
 
 ```bash
-# r1
+# r1 - linux
 ip -br addr show {{ port.r1.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}
 ```
 
@@ -663,7 +670,7 @@ ip -br addr show {{ port.r1.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}
 ```
 
 ```bash
-# r3
+# r3 - linux
 ip -br addr show {{ port.r3.sw1 }}.{{ vlans[10].id }}-{{ vrrp.vlan10.vrid }}
 ```
 
@@ -758,7 +765,7 @@ sudo ip link set eth1.{{ vlans[10].id }} down
 몇 초 멈췄다가 다시 응답이 옵니다.
 
 ```bash
-# r3 — 누가 들고 있나
+# r3 - linux — 누가 들고 있나
 vtysh -c "show vrrp" | grep -E "Virtual Router ID|Status"
 ```
 
@@ -786,7 +793,7 @@ ip neigh show {{ gw.vlan10 }}
 되돌립니다.
 
 ```bash
-# r1
+# r1 - linux
 sudo ip link set eth1.{{ vlans[10].id }} up
 ```
 
@@ -869,6 +876,7 @@ ping {{ ip.web }}          # 안 된다
 이 조합이 나오면 바로 이 경우입니다. 게이트웨이까지는 가고 그 너머가 없습니다.
 
 ```
+# r1 - vtysh
 r1# show ip route {{ ip.web }}
 ```
 
@@ -921,7 +929,7 @@ ping -i 0.2 -c 100 {{ ip.web }}
 5초쯤 뒤에 `r1` 의 사용자망 포트를 내리고, 끝까지 두었다가 통계를 봅니다.
 
 ```bash
-# r1 (터미널 2)
+# r1 - linux (터미널 2)
 sudo ip link set eth1.{{ vlans[10].id }} down
 ```
 
@@ -945,7 +953,7 @@ ping -i 0.2 -c 100 {{ ip.web }}
 ```
 
 ```bash
-# r1 — 5초쯤 뒤에
+# r1 - linux — 5초쯤 뒤에
 sudo ip link set eth1.{{ vlans[10].id }} up
 ```
 
@@ -1004,7 +1012,7 @@ ip neigh show {{ gw.vlan10 }}
 5.2 의 상황을 손으로 만듭니다.
 
 ```bash
-# r1 — 어느 포트로 들어온 ARP 든 답하게 되돌립니다
+# r1 - linux — 어느 포트로 들어온 ARP 든 답하게 되돌립니다
 sudo sysctl -w net.ipv4.conf.all.arp_ignore=0
 sudo sysctl -w net.ipv4.conf.eth1/{{ vlans[10].id }}.arp_ignore=0
 ```
@@ -1021,7 +1029,7 @@ ping -c 1 -W 2 {{ gw.vlan10 }} >/dev/null; ip neigh show {{ gw.vlan10 }}
 되돌립니다.
 
 ```bash
-# r1
+# r1 - linux
 sudo sysctl -w net.ipv4.conf.all.arp_ignore=1
 sudo sysctl -w net.ipv4.conf.eth1/{{ vlans[10].id }}.arp_ignore=1
 ```
@@ -1036,7 +1044,7 @@ sudo ip neigh flush dev eth1
 2.7 에서 말한 함정을 직접 만듭니다.
 
 ```bash
-# r1 — 위쪽 두 링크를 다 내립니다. 사용자망 쪽은 그대로 둡니다
+# r1 - linux — 위쪽 두 링크를 다 내립니다. 사용자망 쪽은 그대로 둡니다
 sudo ip link set eth2 down
 sudo ip link set eth3 down
 ```
@@ -1048,7 +1056,7 @@ ping -c 2 -W 2 {{ ip.web }}    # 안 됩니다
 ```
 
 ```bash
-# r1
+# r1 - linux
 vtysh -c "show vrrp" | grep "Status"
 ```
 
@@ -1060,7 +1068,7 @@ vtysh -c "show vrrp" | grep "Status"
 되돌립니다.
 
 ```bash
-# r1
+# r1 - linux
 sudo ip link set eth2 up
 sudo ip link set eth3 up
 ```
@@ -1068,6 +1076,7 @@ sudo ip link set eth3 up
 ### 6.5 우선순위를 바꿔 자리를 옮긴다
 
 ```
+# r3 - vtysh
 r3# configure terminal
 r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[10].id }}
 r3(config-if)# vrrp {{ vrrp.vlan10.vrid }} priority 200
@@ -1087,6 +1096,7 @@ traceroute -n {{ ip.web }}
 되돌립니다.
 
 ```
+# r3 - vtysh
 r3# configure terminal
 r3(config)# interface {{ port.r3.sw1 }}.{{ vlans[10].id }}
 r3(config-if)# vrrp {{ vrrp.vlan10.vrid }} priority {{ vrrp.vlan10.routers.r3.priority }}

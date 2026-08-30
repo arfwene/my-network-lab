@@ -7,10 +7,10 @@
 ### 과제 1. 한 대씩 켜면서 지도가 자라는 것을 기록한다 ★
 [교재] 3장은 라우터를 **한 대씩** 켭니다. 켤 때마다 `r1` 에서 같은 두 명령을 칩니다.
 
-```bash
-# r1 — 각 단계 끝에 한 번씩 (sudo vtysh 로 들어가서)
-show ip ospf neighbor
-show ip route ospf
+```
+# r1 - vtysh — 각 단계 끝에 한 번씩
+r1# show ip ospf neighbor
+r1# show ip route ospf
 ```
 
 | 단계 | 무엇을 켰나 | 인접 줄 수 | State 칸 표기 | `O` 로 배운 대역 | `pc1` → `web` |

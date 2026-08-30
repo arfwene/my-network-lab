@@ -449,7 +449,7 @@ sudo tcpdump -i eth1 -nn 'host {{ ip.pc1 }} and tcp port 80'
 #### ③ 이등분 — 가운데(r2)
 
 ```bash
-# r2
+# r2 - linux
 sudo tcpdump -i eth1 -nn 'host {{ ip.pc1 }} and tcp port 80'      # r1 쪽
 sudo tcpdump -i eth2 -nn 'host {{ ip.pc1 }} and tcp port 80'      # r4 쪽
 ```
@@ -459,7 +459,7 @@ sudo tcpdump -i eth2 -nn 'host {{ ip.pc1 }} and tcp port 80'      # r4 쪽
 #### ④ r4
 
 ```bash
-# r4
+# r4 - linux
 sudo tcpdump -i eth1 -nn 'host {{ ip.pc1 }} and tcp port 80'      # r2 쪽 (들어오는 곳)
 sudo tcpdump -i eth3 -nn 'host {{ ip.pc1 }} and tcp port 80'      # 서버망 쪽 (나가는 곳)
 ```
@@ -467,7 +467,7 @@ sudo tcpdump -i eth3 -nn 'host {{ ip.pc1 }} and tcp port 80'      # 서버망 �
 들어오는데 나가지 않습니다. → r4 에서 버려지고 있습니다.
 
 ```bash
-# r4 — 확인
+# r4 - linux — 확인
 sudo nft list ruleset
 ```
 
