@@ -243,12 +243,19 @@ checks:
   # 가져온 검사만으로는 손이 닿지 않는 자리를 메운다.
   # 어느 노드도 **검사 하나 없이 남겨두지 않는다** — 죽은 줄 모르는 장비가 생기면 안 된다.
   items:
+    # 아래 링크 검사(r2 · r3 · r4 · edge)는 이름이 `-<vrid>` 로 끝나는 VRRP 가상
+    # 인터페이스(`eth3.10-10`)를 모두 뺀다. VRRP 가상 인터페이스는 BACKUP 쪽에서
+    # **내려가 있는 것이 정상**이다 — vrrpd 가 MASTER 인 쪽에서만 올린다 (M5 3.5).
+    # 이걸 안 빼면 아무 장애도 없는 랩이 캡스톤에서 실패한다. 실제로 정상 m11 랩이
+    # r3 때문에 70/72 로 떨어졌다.
+    # 지금 VRRP 가 붙는 것은 r1 · r3 뿐이라 나머지 셋은 당장은 달라지지 않지만,
+    # 나중에 이중화를 넓히면 같은 자리에서 또 걸린다. 넷을 같은 모양으로 둔다.
     - id: r2-links
       title: r2 의 링크가 모두 살아 있는가
       kind: state
       host: r2
       run: |
-        for i in $(ls /sys/class/net | grep -E '^eth'); do
+        for i in $(ls /sys/class/net | grep -E '^eth' | grep -vE '\-[0-9]+$'); do
           s=$(cat /sys/class/net/$i/operstate)
           [ "$s" = up ] || echo "$i=$s"
         done
@@ -261,10 +268,6 @@ checks:
       title: r3 의 링크가 모두 살아 있는가 (백업 경로 라우터)
       kind: state
       host: r3
-      # VRRP 가상 인터페이스(`eth3.10-10` 처럼 `-<vrid>` 로 끝나는 것)는 뺀다.
-      #   r3 는 BACKUP 이라 **내려가 있는 것이 정상**이다 — vrrpd 가 MASTER 인
-      #   쪽에서만 올린다 (M5 3.5). 이걸 안 빼면 아무 장애도 없는 랩이
-      #   캡스톤에서 실패한다. 실제로 정상 m11 랩이 70/72 로 떨어졌다.
       run: |
         for i in $(ls /sys/class/net | grep -E '^eth' | grep -vE '\-[0-9]+$'); do
           s=$(cat /sys/class/net/$i/operstate)
@@ -280,7 +283,7 @@ checks:
       kind: state
       host: r4
       run: |
-        for i in $(ls /sys/class/net | grep -E '^eth'); do
+        for i in $(ls /sys/class/net | grep -E '^eth' | grep -vE '\-[0-9]+$'); do
           s=$(cat /sys/class/net/$i/operstate)
           [ "$s" = up ] || echo "$i=$s"
         done
@@ -309,7 +312,7 @@ checks:
       kind: state
       host: edge
       run: |
-        for i in $(ls /sys/class/net | grep -E '^eth'); do
+        for i in $(ls /sys/class/net | grep -E '^eth' | grep -vE '\-[0-9]+$'); do
           s=$(cat /sys/class/net/$i/operstate)
           [ "$s" = up ] || echo "$i=$s"
         done
