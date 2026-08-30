@@ -150,10 +150,12 @@ def build(lab_id, user=None, key=KEY_NAME):
 #  손으로 하는 프록시 등록도 20번이다.
 # ---------------------------------------------------------------------------
 def _installer(lab_id, jump_ip, proxy, key):
-    ps = rf'''# my-network-lab · lab{lab_id} — Xshell 세션 설치
-# 하는 일 두 가지뿐입니다.
+    ps = rf'''param([string]$KeyName = "")
+# my-network-lab · lab{lab_id} — Xshell 세션 설치
+# 하는 일 세 가지입니다.
 #   ① 이 폴더의 세션 파일을 Xshell 세션 폴더로 복사
 #   ② 점프 호스트 프록시({proxy}) 를 만들어 준다
+#   ③ 이미 등록돼 있는 개인 키에 세션을 맞춘다
 $ErrorActionPreference = "Stop"
 
 # 「문서」는 OneDrive 로 옮겨가 있을 수 있다. 레지스트리에 적힌 실제 위치를 묻는다.
@@ -203,52 +205,51 @@ USERNAME=
 [IO.File]::WriteAllText((Join-Path $proxydir "{proxy}.ini"), $ini, [Text.Encoding]::Unicode)
 Write-Host "프록시 등록: {proxy}  ->  {jump_ip}:22" -ForegroundColor Green
 
-# ③ 개인 키. Xshell 은 개인 키를 SECSH\UserKeys\<이름>.pri 로 둔다 — 경로도
-#    이름도 우리가 아는 값이므로, 찾을 수 있으면 그냥 복사한다.
-#    못 찾으면 조용히 넘어가지 않고 무엇을 해야 하는지 말한다.
-$keydir  = Join-Path $base "SECSH\UserKeys"
-$keyfile = Join-Path $keydir "{key}.pri"
-New-Item -ItemType Directory -Force $keydir | Out-Null
+# ③ 개인 키.
+#    **파일을 복사해 넣을 수는 없다.** Xshell 은 가져오기 할 때 키를 자기 형식으로
+#    바꿔 저장한다 — UserKeys\<이름>.pri 는 `---- BEGIN NSSSH PRIVATE KEY ----`
+#    로 시작하는 NetSarang 형식이지 OpenSSH 키가 아니다. OpenSSH 키를 그 이름으로
+#    복사해 두면 접속할 때가 되어서야 알 수 없는 오류로 실패한다.
+#
+#    그래서 반대로 간다 — **이미 등록된 키의 이름에 세션을 맞춘다.** 키를 하나만
+#    쓰고 있으면(대부분 그렇다) 손댈 것이 없어진다.
+$keydir = Join-Path $base "SECSH\UserKeys"
+$have = @(Get-ChildItem $keydir -Filter *.pri -ErrorAction SilentlyContinue |
+          ForEach-Object {{ $_.BaseName }})
 
-if (Test-Path $keyfile) {{
+function Set-SessionKey($name) {{
+    # .xsh 는 UTF-16 LE + BOM 이다. 다른 인코딩으로 다시 쓰면 세션이 사라진다.
+    foreach ($f in (Get-ChildItem $sessions -Filter *.xsh)) {{
+        $t = [IO.File]::ReadAllText($f.FullName, [Text.Encoding]::Unicode)
+        $t = [regex]::Replace($t, "(?m)^UserKey=[^\r\n]*", "UserKey=$name")
+        [IO.File]::WriteAllText($f.FullName, $t, [Text.Encoding]::Unicode)
+    }}
+}}
+
+if ($KeyName) {{
+    Set-SessionKey $KeyName
+    Write-Host "개인 키: 세션이 「$KeyName」 를 쓰도록 맞췄습니다" -ForegroundColor Green
+}} elseif ($have -contains "{key}") {{
     Write-Host "개인 키: 이미 등록돼 있습니다 ({key})" -ForegroundColor Green
+}} elseif ($have.Count -eq 1) {{
+    Set-SessionKey $have[0]
+    Write-Host "개인 키: 세션이 「$($have[0])」 를 쓰도록 맞췄습니다" -ForegroundColor Green
 }} else {{
-    # 흔한 자리부터 본다. 마지막은 이 폴더 — 키 파일을 여기 같이 넣어 두면 잡힌다.
-    $cands = @()
-    foreach ($n in @("id_ed25519", "id_ecdsa", "id_rsa")) {{
-        $cands += (Join-Path $HOME ".ssh\$n")
-    }}
-    $cands += @(Get-ChildItem $src -File -ErrorAction SilentlyContinue |
-                Where-Object {{ $_.Name -match "\.(pri|key|pem)$" -or $_.Name -like "id_*" }} |
-                ForEach-Object {{ $_.FullName }})
-
-    $found = $null
-    foreach ($c in $cands) {{
-        if (Test-Path $c) {{
-            $head = Get-Content $c -TotalCount 1 -ErrorAction SilentlyContinue
-            # 실수로 공개 키(.pub)를 집지 않도록 개인 키인지 첫 줄로 확인한다.
-            if ($head -match "-----BEGIN") {{ $found = $c; break }}
-        }}
-    }}
-
-    if ($found) {{
-        Copy-Item $found $keyfile -Force
-        Write-Host "개인 키 등록: $found" -ForegroundColor Green
-        Write-Host "             -> {key}" -ForegroundColor Green
+    Write-Host ""
+    if ($have.Count -eq 0) {{
+        Write-Host "Xshell 에 등록된 개인 키가 없습니다. 이것만 직접 해 주세요." -ForegroundColor Yellow
+        Write-Host "  [도구] > [사용자 키 관리자] > [가져오기] 로 개인 키 파일을 넣고,"
+        Write-Host "  설치.bat 을 다시 돌리면 세션이 그 키를 쓰도록 맞춰 줍니다."
+        Write-Host "  키가 아예 없다면 [도구] > [사용자 키 생성 마법사] 로 만든 뒤,"
+        Write-Host "  공개 키를 웹 콘솔 [접속 키] 에 등록하고 [지금 랩에 반영] 을 누르세요."
     }} else {{
-        Write-Host ""
-        Write-Host "개인 키를 찾지 못했습니다. 이것만 직접 해 주세요." -ForegroundColor Yellow
-        Write-Host "  방법 1 - 개인 키 파일을 이 이름으로 복사"
-        Write-Host "           $keyfile"
-        Write-Host "  방법 2 - Xshell [도구] > [사용자 키 관리자] > [가져오기] 로 넣고,"
-        Write-Host "           [속성] 에서 이름을 {key} 로 바꾸기"
-        $have = @(Get-ChildItem $keydir -Filter *.pri -ErrorAction SilentlyContinue |
-                  ForEach-Object {{ $_.BaseName }})
-        if ($have.Count -gt 0) {{
-            Write-Host "  (지금 등록된 키: $($have -join ', '))" -ForegroundColor Yellow
-        }}
-        Write-Host "  공개 키는 웹 콘솔 [접속 키] 에도 등록돼 있어야 합니다." -ForegroundColor Yellow
+        Write-Host "등록된 키가 여럿이라 무엇을 쓸지 정하지 못했습니다." -ForegroundColor Yellow
+        Write-Host "  ($($have -join ', '))"
+        Write-Host "  쓸 키를 정해 이렇게 다시 돌려 주세요:"
+        Write-Host "    설치.bat -KeyName <키이름>"
     }}
+    Write-Host "  (키 파일을 복사해 넣는 것으로는 안 됩니다 — Xshell 은 가져올 때" -ForegroundColor Yellow
+    Write-Host "   자기 형식으로 바꿔 저장합니다)" -ForegroundColor Yellow
 }}
 
 Write-Host ""
@@ -269,7 +270,7 @@ def _launcher():
     bat = ("@echo off\r\n"
            "chcp 65001 > nul\r\n"
            "powershell -NoProfile -ExecutionPolicy Bypass "
-           "-File \"%~dp0install.ps1\"\r\n"
+           "-File \"%~dp0install.ps1\" %*\r\n"
            "pause\r\n")
     return bat.encode("ascii")
 
@@ -292,7 +293,7 @@ JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까�
 
      · 세션 파일을 Xshell 세션 폴더로 복사
      · 점프 호스트 프록시({proxy}) 를 등록
-     · 내 개인 키를 「{key}」 라는 이름으로 등록
+     · 이미 Xshell 에 등록된 개인 키에 세션을 맞춤
 
    검은 창이 뜨고 **초록 글씨 세 줄**이 나오면 된 것입니다.
    노란 글씨가 나오면 그 줄이 시키는 것만 해 주세요 (아래 3번).
@@ -317,30 +318,31 @@ JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까�
    셸이 없는 계정이라 그게 정상입니다.
 
 
-3. 개인 키를 못 찾았다고 할 때만
+3. 개인 키 — 노란 글씨가 나왔을 때만
 ------------------------------------------------------------
-   설치 스크립트가 흔한 자리를 먼저 봅니다.
+   세션 파일은 개인 키를 **이름으로** 가리킵니다. 설치 스크립트는 Xshell 에
+   이미 등록된 키를 보고, 하나뿐이면 그 이름에 세션을 맞춰 줍니다.
+   그래서 보통은 할 일이 없습니다.
 
-     %USERPROFILE%\\.ssh\\id_ed25519 · id_ecdsa · id_rsa
-     그리고 이 폴더 안의 키 파일
+   [등록된 키가 없다고 할 때]
+     [도구] > [사용자 키 관리자] > [가져오기] 로 개인 키 파일을 넣고,
+     설치.bat 을 다시 돌리세요.
 
-   여기 없으면 노란 글씨로 알려 줍니다. 둘 중 하나를 해 주세요.
+     키가 아예 없다면 [도구] > [사용자 키 생성 마법사] 로 만든 뒤,
+     공개 키를 웹 콘솔 [접속 키] 에 등록하고 [지금 랩에 반영] 을 누르세요.
 
-     방법 1 - 개인 키 파일을 이 이름으로 복사한다 (제일 빠릅니다)
+   [키가 여럿이라 못 고르겠다고 할 때]
+     쓸 키를 정해 이렇게 다시 돌립니다.
 
-       ...\\NetSarang Computer\\8\\SECSH\\UserKeys\\{key}.pri
+       설치.bat -KeyName <키이름>
 
-     방법 2 - [도구] > [사용자 키 관리자] > [가져오기] 로 넣고,
-              [속성] 에서 이름을 「{key}」 로 바꾼다
-
-   세션 파일들이 키를 **이름으로** 가리킵니다. 이름이 다르면 접속할 때마다
-   키를 고르라고 묻습니다 — 세션이 여러 개라 그만큼 묻습니다.
-
-   키 파일을 이 폴더에 같이 넣어 두고 설치.bat 을 다시 돌려도 됩니다.
+   [주의] 키 파일을 UserKeys 폴더에 **복사해 넣는 것으로는 안 됩니다.**
+          Xshell 은 가져오기 할 때 키를 자기 형식으로 바꿔 저장합니다 —
+          그 폴더의 .pri 는 `---- BEGIN NSSSH PRIVATE KEY ----` 로 시작하는
+          NetSarang 형식이지 OpenSSH 키가 아닙니다. 복사해 두면 접속할 때가
+          되어서야 실패합니다.
 
    웹 콘솔 [접속 키] 에 등록한 그 키와 **짝이 맞는 개인 키**여야 합니다.
-   Xshell 에서 키를 새로 만들었다면([도구] > [사용자 키 생성 마법사]),
-   그 공개 키를 웹 콘솔 [접속 키] 에 등록하고 [지금 랩에 반영] 을 누르세요.
 
 
 접속이 안 될 때
@@ -354,7 +356,8 @@ JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까�
      키 인증이 실패한 것입니다. 그 비밀번호는 존재하지 않습니다.
      3번의 키 등록을 확인하세요.
  · 키를 고르라고 묻는다
-     키 이름이 「{key}」 가 아닙니다. [사용자 키 관리자] 에서 이름을 바꾸세요.
+     세션이 가리키는 키 이름이 실제와 다릅니다.
+     설치.bat -KeyName <쓸 키 이름> 으로 다시 돌리세요.
  · 세션 [속성] > [연결] > [프록시] 가 비어 있다
      프록시가 등록되지 않았습니다. 설치.bat 을 다시 돌리고 Xshell 을 껐다 켜세요.
  · 호스트 키 경고가 계속 거슬린다
