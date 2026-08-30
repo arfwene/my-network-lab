@@ -371,11 +371,18 @@ sudo rm /etc/systemd/system/my-network-lab.service && sudo systemctl daemon-relo
 | `[관리자 → 설치]` 점검 | `make doctor` |
 | `[관리망 브리지 만들기]` | `make mgmt LABS=9` |
 | `[랩 생성]` | `make deploy LAB=1` |
-| `[이 모듈 적용]` | `make config LAB=1 STAGE=m1` |
-| `[검증]` | `make verify LAB=1 STAGE=m1` |
+| `[이 모듈 적용]` | `make reset LAB=1 STAGE=m3` |
+| `[검증]` 탭 | `python3 tools/run-checks.py --lab 1 --module m03` |
+| `[연결 확인]` | `make verify LAB=1 STAGE=m3` |
+| `[주입]` / `[복구]` | `make break SCENARIO=m03-01` / `make fix SCENARIO=m03-01` |
 | `[계정 관리]` | `python3 tools/console-user.py add trainee01 --lab 1` |
 | `[점프 계정 적용]` | `make jumpaccess` → `sudo ./dist/jump-access.sh` |
 | 교재 · 부록 파일로 뽑기 | `make gen LAB=1` (인쇄 · 오프라인 배포용. 화면은 이 파일 없이도 나온다) |
+
+> **`make reset` 은 콘솔의 `[이 모듈 적용]` 과 한 곳에서 다르다.** 교육생이 직접 만드는 단계
+> (`config/site.yml` 의 `console.build_stages`) 에서 콘솔은 **한 단계 앞의 설정**만 올려 교재 3장이
+> 채울 자리를 비워 둔다. CLI 로 같은 상태를 만들려면 인벤토리부터 그렇게 만든다:
+> `python3 tools/gen-inventory.py --lab 1 --stage m3 --config-stage m2` 후 `make reset STAGE=m3`.
 
 `make deploy` · `make mgmt` 도 콘솔과 같은 토큰을 쓴다 — `tools/with-pve-env.py` 가 `var/console.db` 에서 읽어
 **실행 순간에만** 환경변수로 넘긴다. 따로 export 할 필요가 없다.

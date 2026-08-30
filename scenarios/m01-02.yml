@@ -10,11 +10,23 @@
   become: true
   gather_facts: false
   tasks:
-    - name: 브리지 멤버십 변경
-      ansible.builtin.command: >-
-        ip link set eth2
-        {{ 'nomaster' if scenario_action | default('break') == 'break' else 'master br0' }}
+    - name: 포트를 브리지에서 뺀다
+      ansible.builtin.command: "ip link set eth2 nomaster"
       changed_when: true
+      when: scenario_action | default('break') == 'break'
+
+    # 되돌릴 때 `ip link set eth2 master br0` 만으로는 부족하다.
+    #   포트를 브리지에서 빼면 그 포트의 **VLAN 할당이 함께 사라진다.** 다시
+    #   꽂아도 돌아오지 않는다 — `bridge vlan show` 에 eth2 줄이 아예 없어진다.
+    #   VLAN 이 없는 단계(M1)에서는 티가 안 나지만, M2 부터는 pc2 가 그대로
+    #   고립된 채로 남는다. 중간 점검 ① 은 M3 단계에서 이 시나리오를 내므로
+    #   [복구] 를 눌러도 랩이 20/20 으로 돌아오지 않았다.
+    #   lab-switch 는 포트와 VLAN 을 이 단계의 설계대로 통째로 다시 만든다.
+    #   교재와 검사 힌트가 알려주는 복구 명령도 이것이다.
+    - name: 스위칭 설정을 다시 올린다 (포트 + VLAN)
+      ansible.builtin.command: "systemctl restart lab-switch"
+      changed_when: true
+      when: scenario_action | default('break') != 'break'
 
     - name: 안내
       ansible.builtin.debug:
@@ -22,3 +34,17 @@
           {{ 'sw1 의 eth2 를 브리지에서 뺐다. 링크는 UP 이라 L1 만 보면 정상으로 보인다.'
              if scenario_action | default('break') == 'break'
              else 'sw1 eth2 브리지 복구 완료.' }}
+
+# 브리지를 다시 만들면 MAC 주소 테이블이 비워진다. 학습은 통신이 일어나야
+# 생기므로, 비운 채로 두면 「sw1 이 pc1 과 pc2 의 MAC 을 학습했는가」 검사가
+# 방금 제대로 고친 랩에서도 한 번 빨갛게 뜬다. 통신을 한 번 흘려 채워 둔다.
+- name: "scenario m01-02 :: MAC 주소 테이블을 다시 채운다"
+  hosts: pc1
+  become: true
+  gather_facts: false
+  tasks:
+    - name: pc2 로 한 번 통신한다
+      ansible.builtin.command: "ping -c 2 -W 2 {{ hostvars['pc2'].lab_interfaces | selectattr('ipv4', 'defined') | map(attribute='ipv4') | map('regex_replace', '/.*', '') | first }}"
+      changed_when: false
+      failed_when: false
+      when: scenario_action | default('break') != 'break'
