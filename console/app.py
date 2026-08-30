@@ -519,7 +519,8 @@ async def onboard_deploy(request: Request):
 
 @app.get("/sshkey", response_class=HTMLResponse)
 async def sshkey_form(request: Request, onboard: int = 0, later: int = 0,
-                      applied: int = 0, changed: int = 0, removed: int = 0):
+                      applied: int = 0, changed: int = 0, removed: int = 0,
+                      applying: int = 0):
     user = current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=303)
@@ -539,6 +540,9 @@ async def sshkey_form(request: Request, onboard: int = 0, later: int = 0,
                "예전 키로는 곧 들어갈 수 없게 됩니다.")
     elif removed:
         msg = "키를 지웠습니다. 점프 계정과 랩 노드에서 자동으로 회수합니다."
+    elif applying:
+        msg = ("랩 노드에 키를 반영하고 있습니다 — 몇 초면 끝납니다. "
+               "진행 상황은 랩 화면의 실행 로그에 나옵니다.")
     return tpl.TemplateResponse(request, "sshkey.html",
                                 _sshkey_ctx(request, user, saved=msg,
                                             onboard=bool(onboard)))
@@ -660,8 +664,10 @@ async def sshkey_apply(request: Request):
         msg = getattr(e, "message", None) or str(e)
         return tpl.TemplateResponse(request, "sshkey.html",
                                     _sshkey_ctx(request, user, errors=[msg]), status_code=409)
-    # 진행 상황은 메인 화면의 실행 로그에서 본다 — 로그 창을 두 곳에 두지 않는다.
-    return RedirectResponse("/", status_code=303)
+    # **이 화면에 남는다.** 예전에는 메인 화면으로 보냈는데, 이 화면은 누른 뒤에
+    # 할 일이 더 있는 자리다 — SSH 설정이나 Xshell 세션을 내려받아야 한다.
+    # 눌렀다고 딴 데로 보내면 그 자리를 다시 찾아와야 한다.
+    return RedirectResponse("/sshkey?applying=1", status_code=303)
 
 
 @app.get("/logout")
