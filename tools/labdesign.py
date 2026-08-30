@@ -441,6 +441,13 @@ def _apply_vrrp(node_name, if_name, r, stage):
     if not me:
         return r
     r = dict(r)
+    # 이 노드가 **설계상** VRRP 라우터라는 표시. 단계와 무관하게 붙인다.
+    #   ARP 응답을 포트 단위로 좁히는 sysctl(arp_ignore·arp_announce)은 교육생이
+    #   만드는 것이 아니라 랩이 깔아 주는 바탕이다. 그런데 그 설정을 vrrp 키가
+    #   붙었는지로 판단하면, M5 의 [이 모듈 적용] 이 올리는 config_stage=m4 에서는
+    #   키가 없어 적용되지 않는다. 그러면 교육생이 3장을 다 만들어도 부모 포트가
+    #   자기 MAC 으로 ARP 에 답해, 3.5 의 확인(가상 MAC)이 끝내 나오지 않는다.
+    r["vrrp_router"] = True
     if stage_le(v["stage"], stage):
         r["ipv4"] = f'{me["ipv4"]}/{_plen(IPAM["ipv4"]["segments"][seg_name]["cidr"])}'
         r["vrrp"] = {"vrid": v["vrid"], "priority": me["priority"],

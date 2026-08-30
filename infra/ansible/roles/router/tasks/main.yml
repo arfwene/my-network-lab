@@ -18,6 +18,18 @@
     owner: frr
     group: frrvty
 
+# 이 노드에 ARP 좁히기가 필요한가.
+#   `vrrp` 키가 아니라 `vrrp_router` 표시로 판단한다. 앞엣것은 config_stage 가
+#   그 단계에 닿아야 생기는데, M5 의 [이 모듈 적용] 은 한 단계 앞(m4)을 올린다.
+#   그러면 교육생이 3장을 다 만들어도 이 sysctl 이 없어, 부모 포트가 자기 MAC 으로
+#   ARP 에 답하고 단말 캐시에 가상 MAC 이 끝내 안 잡힌다 (3.5 의 확인이 그것이다).
+#   6.3 이 이 값을 껐다 켜는 실습이라는 것도 "원래 켜져 있다" 가 전제다.
+- name: 이 라우터가 VRRP 를 지게 돼 있는가
+  ansible.builtin.set_fact:
+    vrrp_arp_needed: >-
+      {{ (lab_interfaces | selectattr('vrrp_router', 'defined') | list | length > 0)
+         and (stages.index(lab_stage) >= stages.index('m5')) }}
+
 # VRRP (M5) — vrrpd 는 **가상 MAC 을 단 macvlan** 을 보고 붙는다.
 #   가상 IP 를 인터페이스에 직접 붙이지 않는 이유가 이것이다. 장애가 나서
 #   BACKUP 이 MASTER 가 되면 IP 뿐 아니라 **MAC 까지 그대로 넘어가므로**,
@@ -41,7 +53,7 @@
     - {k: net.ipv4.conf.all.arp_announce,     v: "2"}
     - {k: net.ipv4.conf.default.arp_announce, v: "2"}
   loop_control: {label: "{{ item.k }}={{ item.v }}"}
-  when: lab_interfaces | selectattr('active') | selectattr('vrrp', 'defined') | list | length > 0
+  when: vrrp_arp_needed
 
 - name: 이미 올라온 포트에도 arp_ignore 를 적용
   # all·default 를 바꿔도 **이미 만들어진** 포트의 값은 안 바뀐다.
@@ -49,7 +61,7 @@
     for f in /proc/sys/net/ipv4/conf/*/arp_ignore; do echo 1 > "$f"; done
     for f in /proc/sys/net/ipv4/conf/*/arp_announce; do echo 2 > "$f"; done
   changed_when: false
-  when: lab_interfaces | selectattr('active') | selectattr('vrrp', 'defined') | list | length > 0
+  when: vrrp_arp_needed
 
 # macvlan 은 **부모 인터페이스가 있어야** 만들 수 있다. 그 부모(eth3.10 · eth3.20)를
 # 만드는 것은 netplan 이고, netplan 은 common 의 handler 라 이 역할보다 뒤에 돈다.
