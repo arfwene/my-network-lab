@@ -30,6 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import labdesign as L
 
 FOLDER = "my-network-lab"
+# Xshell [사용자 키 관리자]에 등록될 개인 키의 이름. 세션 파일이 이 이름을 가리킨다.
+KEY_NAME = "my-network-lab"
 
 # Xshell 이 저장한 파일에서 그대로 가져온 값들. 건드리지 않는다 —
 # 여기 있는 것을 빼면 Xshell 이 자기 기본값으로 채우므로 동작에는 문제가 없지만,
@@ -63,7 +65,7 @@ COMMON = {
 }
 
 
-def _session(host, port, user, proxy, desc):
+def _session(host, port, user, proxy, desc, key):
     """한 세션의 섹션 목록. Xshell 이 쓰는 순서를 흉내낼 필요는 없다."""
     s = {k: list(v) for k, v in COMMON.items()}
     s["CONNECTION"] = [
@@ -76,7 +78,11 @@ def _session(host, port, user, proxy, desc):
         # 이 랩은 어디서도 비밀번호로 로그인하지 않는다. 비워 두면 Xshell 이
         # 공개 키를 먼저 시도하고, 실패했을 때 이유가 그대로 보인다.
         ("Password", ""), ("Passphrase", ""),
-        ("UserKey", ""),             # 키 이름은 Xshell 의 [사용자 키 관리]에서 고른다
+        # Xshell 은 개인 키를 파일 경로가 아니라 **[사용자 키 관리자]에 등록된
+        # 이름**으로 가리킨다. 비워 두면 접속할 때마다 키를 고르라고 묻는다 —
+        # 세션이 14개라 14번 묻는다. 이름을 정해 두고, 그 이름으로 가져오라고
+        # 「읽어보세요.txt」에서 안내한다.
+        ("UserKey", key),
         # Xshell 이 저장하는 기본 목록 그대로다. 랩 노드의 sshd 가 비밀번호를
         # 아예 제공하지 않으므로 순서를 바꿀 이유가 없다.
         ("AuthMethodList", "00,11,20,30"),
@@ -99,7 +105,7 @@ def _bom(data):
     return b"\xff\xfe" + data
 
 
-def build(lab_id, user=None):
+def build(lab_id, user=None, key=KEY_NAME):
     """{폴더 안 파일 이름: 바이트열} 을 만든다."""
     A = L.IPAM["access"]
     jump_ip = A["jump_host"]["office_ip"]
@@ -110,21 +116,21 @@ def build(lab_id, user=None):
     files = {}
     # 점프 호스트 자신. 프록시의 [세션 파일] 인증에 이 파일을 지정한다.
     #   셸이 없는 계정이라 이것만 열면 바로 끊긴다 — 그게 정상이다.
-    files[f"0-점프호스트 (프록시용).xsh"] = _bom(_render(_session(
+    files["0-점프호스트 (프록시용).xsh"] = _bom(_render(_session(
         jump_ip, 22, jump_user, "",
-        f"my-network-lab lab{lab_id} jump host ({jump_user}@{jump_ip})")))
+        f"my-network-lab lab{lab_id} 점프 호스트", key)))
 
     for n in L.TOPO["nodes"]:
         name = n["name"]
         files[f"{name}.xsh"] = _bom(_render(_session(
             L.mgmt_ip(lab_id, name), 22, lab_user, proxy,
-            f"lab{lab_id} {name} - {n.get('desc', '')}".strip())))
+            f"lab{lab_id} {name} — {n.get('desc', '')}".strip(" —"), key)))
 
-    files["읽어보세요.txt"] = _readme(lab_id, jump_ip, jump_user, lab_user, proxy)
+    files["읽어보세요.txt"] = _readme(lab_id, jump_ip, jump_user, lab_user, proxy, key)
     return files
 
 
-def _readme(lab_id, jump_ip, jump_user, lab_user, proxy):
+def _readme(lab_id, jump_ip, jump_user, lab_user, proxy, key):
     # 메모장이 UTF-8 을 알아보도록 BOM 을 붙인다. 줄바꿈도 CRLF.
     t = f"""my-network-lab · lab{lab_id} Xshell 세션
 ============================================================
@@ -166,10 +172,17 @@ JUMPHOST** 가 같은 일을 합니다.
    나머지 세션들은 이미 이 이름을 적어 두었으므로 따로 고칠 것이 없습니다.
 
 
-3. 내 공개 키를 Xshell 에 등록합니다
+3. 내 개인 키를 Xshell 에 등록합니다  (이름을 맞춰 주세요)
 ------------------------------------------------------------
    [도구] > [사용자 키 관리자] > [가져오기] 로 개인 키 파일을 넣습니다.
    웹 콘솔 [접속 키] 에 등록한 그 키와 **짝이 맞는 개인 키**여야 합니다.
+
+   가져온 뒤 [속성] 에서 이름을 이렇게 바꿉니다:
+
+     {key}          <- 반드시 이대로
+
+   세션 파일들이 키를 **이름으로** 가리킵니다. 이름이 다르면 접속할 때마다
+   키를 고르라고 묻습니다 — 세션이 여러 개라 그만큼 묻습니다.
 
    Xshell 에서 키를 새로 만들었다면([도구] > [사용자 키 생성 마법사]),
    그 공개 키를 웹 콘솔 [접속 키] 에 등록하고 [지금 랩에 반영] 을 누르세요.
@@ -206,12 +219,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--lab", type=int, default=1)
     ap.add_argument("--user", help="점프 계정 이름 (생략 시 site.yml 의 값)")
+    ap.add_argument("--key", default=KEY_NAME,
+                    help=f"Xshell 사용자 키 이름 (기본 {KEY_NAME})")
     ap.add_argument("--out", default="dist", help="여기 아래에 폴더를 만든다")
     ap.add_argument("--zip", dest="zip_to",
                     help="폴더 대신 zip 하나로. '-' 면 표준출력")
     a = ap.parse_args()
 
-    files = build(a.lab, a.user)
+    files = build(a.lab, a.user, a.key)
 
     if a.zip_to:
         buf = io.BytesIO()
