@@ -157,7 +157,7 @@ def _installer(lab_id, jump_ip, proxy, key):
 # 하는 일 세 가지입니다.
 #   ① 이 폴더의 세션 파일을 Xshell 세션 폴더로 복사
 #   ② 점프 호스트 프록시({proxy}) 를 만들어 준다
-#   ③ 이미 등록돼 있는 개인 키에 세션을 맞춘다
+#   ③ 개인 키가 준비됐는지 확인한다 (넣는 것은 직접 하셔야 합니다)
 $ErrorActionPreference = "Stop"
 
 # 「문서」는 OneDrive 로 옮겨가 있을 수 있다. 레지스트리에 적힌 실제 위치를 묻는다.
@@ -207,84 +207,43 @@ USERNAME=
 [IO.File]::WriteAllText((Join-Path $proxydir "{proxy}.ini"), $ini, [Text.Encoding]::Unicode)
 Write-Host "프록시 등록: {proxy}  ->  {jump_ip}:22" -ForegroundColor Green
 
-# ③ 개인 키. 두 가지 길이 있고, 확실한 것부터 쓴다.
+# ③ 개인 키는 **건드리지 않는다.** 넣어만 두면 되는 줄 알았는데 아니었다 —
+#    Xshell 은 UserKeys 에 그냥 놓아 둔 OpenSSH 키를 읽지 못한다. [가져오기] 를
+#    거치면서 자기 형식(`---- BEGIN NSSSH PRIVATE KEY ----`)으로 바꿔 저장하고,
+#    그 과정을 밖에서 대신해 줄 방법이 없다.
 #
-#    (가) 파일을 UserKeys\<이름>.pri 로 넣는다.
-#         교재가 시킨 이름(~/.ssh/{key})으로 만든 키가 있으면 그것을 넣는다 —
-#         어느 것을 쓸지 헷갈릴 여지가 없는 유일한 경우다.
-#         다만 Xshell 은 [가져오기] 할 때 키를 자기 형식으로 바꿔 저장한다
-#         (`---- BEGIN NSSSH PRIVATE KEY ----`). OpenSSH 키를 그대로 읽어 줄지는
-#         버전에 달렸으므로, 넣은 뒤 안 읽히면 가져오기를 쓰라고 화면에 적어 둔다.
+#    그래서 여기서는 **상태만 확인하고 무엇을 해야 하는지 말한다.** 파일을 넣어
+#    두고 "됐다" 고 하면, 실패가 접속할 때가 되어서야 나타나 원인을 못 찾는다.
 #
-#    (나) **세션을 이미 등록된 키의 이름에 맞춘다** (`UserKey=`).
-#         형식 문제가 아예 없다. 등록된 키가 하나뿐이면 이쪽이 답이다.
-#
-#    둘 다 아니면 무엇을 해야 하는지 말한다. 조용히 넘어가지 않는다.
-$keydir  = Join-Path $base "SECSH\UserKeys"
-$keyfile = Join-Path $keydir "{key}.pri"
-New-Item -ItemType Directory -Force $keydir | Out-Null
+#    다만 세션이 어느 키를 쓸지는(`UserKey=`) 설정일 뿐이라 여기서 맞춰도 된다.
+#    -KeyName 으로 받는다.
+$keydir = Join-Path $base "SECSH\UserKeys"
 $have = @(Get-ChildItem $keydir -Filter *.pri -ErrorAction SilentlyContinue |
           ForEach-Object {{ $_.BaseName }})
-
-function Set-SessionKey($name) {{
-    # .xsh 는 UTF-16 LE + BOM 이다. 다른 인코딩으로 다시 쓰면 세션이 사라진다.
-    foreach ($f in (Get-ChildItem $sessions -Filter *.xsh)) {{
-        $t = [IO.File]::ReadAllText($f.FullName, [Text.Encoding]::Unicode)
-        $t = [regex]::Replace($t, "(?m)^UserKey=[^\r\n]*", "UserKey=$name")
-        [IO.File]::WriteAllText($f.FullName, $t, [Text.Encoding]::Unicode)
-    }}
-}}
-
-function Find-PrivateKey($paths) {{
-    foreach ($c in $paths) {{
-        if (-not (Test-Path $c -PathType Leaf)) {{ continue }}
-        $head = Get-Content $c -TotalCount 1 -ErrorAction SilentlyContinue
-        # 개인 키만 집는다. 공개 키(.pub)를 넣어 두면 접속할 때가 되어서야 실패한다.
-        # OpenSSH 는 `-----BEGIN`(5), NetSarang 은 `---- BEGIN`(4) 으로 시작한다.
-        if ($head -match "^-+ *BEGIN") {{ return $c }}
-    }}
-    return $null
-}}
-
-$ours   = Join-Path $HOME ".ssh\{key}"
-$others = @("id_ed25519", "id_ecdsa", "id_rsa" | ForEach-Object {{ Join-Path $HOME ".ssh\$_" }})
-$others += @(Get-ChildItem $src -File -ErrorAction SilentlyContinue |
-             Where-Object {{ $_.Name -match "\.(pri|key|pem)$" -or $_.Name -like "id_*" }} |
-             ForEach-Object {{ $_.FullName }})
 
 if ($KeyName) {{
     Set-SessionKey $KeyName
     Write-Host "개인 키: 세션이 「$KeyName」 를 쓰도록 맞췄습니다" -ForegroundColor Green
 }} elseif ($have -contains "{key}") {{
-    Write-Host "개인 키: 이미 등록돼 있습니다 ({key})" -ForegroundColor Green
-}} elseif ($found = (Find-PrivateKey @($ours))) {{
-    # 교재가 시킨 이름 그대로 만든 키다. 어느 것을 쓸지 헷갈릴 여지가 없다.
-    Copy-Item $found $keyfile -Force
-    Write-Host "개인 키 등록: $found" -ForegroundColor Green
-}} elseif ($have.Count -eq 1) {{
-    # Xshell 에 키가 하나뿐이면 그것이 답이다. 이쪽은 형식 문제가 없다.
-    Set-SessionKey $have[0]
-    Write-Host "개인 키: 세션이 「$($have[0])」 를 쓰도록 맞췄습니다" -ForegroundColor Green
-}} elseif ($found = (Find-PrivateKey $others)) {{
-    Copy-Item $found $keyfile -Force
-    Write-Host "개인 키 등록: $found" -ForegroundColor Green
+    Write-Host "개인 키: 준비됐습니다 ({key})" -ForegroundColor Green
 }} else {{
     Write-Host ""
-    Write-Host "쓸 개인 키를 찾지 못했습니다. 셋 중 하나를 해 주세요." -ForegroundColor Yellow
-    Write-Host "  1) 웹 콘솔 [접속 키] 가 알려주는 대로 키를 만든다 (제일 깔끔합니다)"
-    Write-Host "     ssh-keygen -t ed25519 -f `$HOME\.ssh\{key}"
-    Write-Host "     만든 뒤 설치.bat 을 다시 돌리면 알아서 넣습니다."
-    Write-Host "  2) 이미 Xshell 에 있는 키를 쓴다 — 설치.bat -KeyName <키이름>"
+    Write-Host "개인 키만 직접 넣어 주세요. 한 번만 하면 됩니다." -ForegroundColor Yellow
+    Write-Host "  [도구] > [사용자 키 관리자] > [가져오기] 로 이 파일을 넣습니다."
+    Write-Host "    $env:USERPROFILE\.ssh\{key}"
+    Write-Host "  가져오면 키 이름이 파일 이름 그대로 「{key}」 가 되어 세션과 맞습니다."
+    Write-Host ""
+    Write-Host "  키가 아직 없다면 PowerShell 에서 만들고,"
+    Write-Host "    ssh-keygen -t ed25519 -f `$env:USERPROFILE\.ssh\{key}"
+    Write-Host "  공개 키({key}.pub)를 웹 콘솔 [접속 키] 에 등록하세요."
     if ($have.Count -gt 0) {{
-        Write-Host "     (지금 등록된 키: $($have -join ', '))"
+        Write-Host ""
+        Write-Host "  이미 쓰던 키를 그대로 쓰려면 그 이름으로 다시 돌리면 됩니다."
+        Write-Host "    설치.bat -KeyName <키이름>"
+        Write-Host "    (지금 등록된 키: $($have -join ', '))"
     }}
-    Write-Host "  3) 개인 키 파일을 이 폴더에 같이 넣고 설치.bat 을 다시 돌린다"
-    Write-Host "  어느 쪽이든 공개 키가 웹 콘솔 [접속 키] 에 등록돼 있어야 합니다." -ForegroundColor Yellow
-}}
-
-if ($found) {{
-    Write-Host "  Xshell 이 이 키를 못 읽는다고 하면 [도구] > [사용자 키 관리자] >" -ForegroundColor DarkGray
-    Write-Host "  [가져오기] 로 넣고 이름을 「{key}」 로 바꿔 주세요." -ForegroundColor DarkGray
+    Write-Host "  파일을 UserKeys 폴더에 복사해 넣는 것으로는 안 됩니다 —" -ForegroundColor Yellow
+    Write-Host "  Xshell 은 가져오기를 거쳐야 그 키를 읽습니다." -ForegroundColor Yellow
 }}
 
 Write-Host ""
@@ -315,7 +274,7 @@ def _readme(lab_id, jump_ip, jump_user, lab_user, proxy, key):
     t = f"""my-network-lab · lab{lab_id} Xshell 세션
 ============================================================
 
-「설치.bat」 을 두 번 누르면 끝납니다.
+「설치.bat」 을 두 번 누르고, 개인 키 하나만 직접 넣으면 됩니다(3번).
 
 랩 노드는 사무실에서 직접 보이지 않습니다. 운영 서버(점프 호스트)를 거쳐야
 합니다. Xshell 에는 OpenSSH 의 ProxyJump 가 없고, 대신 **프록시 종류
@@ -328,10 +287,10 @@ JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까�
 
      · 세션 파일을 Xshell 세션 폴더로 복사
      · 점프 호스트 프록시({proxy}) 를 등록
-     · 이미 Xshell 에 등록된 개인 키에 세션을 맞춤
+     · 개인 키가 준비됐는지 확인 (넣는 것은 3번에서 직접)
 
-   검은 창이 뜨고 **초록 글씨 세 줄**이 나오면 된 것입니다.
-   노란 글씨가 나오면 그 줄이 시키는 것만 해 주세요 (아래 3번).
+   초록 글씨만 나오면 다 된 것입니다.
+   노란 글씨가 나오면 개인 키가 아직 없다는 뜻입니다 — 아래 3번.
    Xshell 이 켜져 있었다면 **껐다 켜 주세요.** 세션 목록은 켤 때 읽습니다.
 
    [경고가 뜨면] Windows 가 "이 앱이 PC를 손상시킬 수 있습니다" 라고 물으면
@@ -353,32 +312,30 @@ JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까�
    셸이 없는 계정이라 그게 정상입니다.
 
 
-3. 개인 키 — 노란 글씨가 나왔을 때만
+3. 개인 키 — 이것만 직접 하셔야 합니다
 ------------------------------------------------------------
-   설치 스크립트가 이 순서로 찾습니다. 보통은 할 일이 없습니다.
+   Xshell 은 **[가져오기] 를 거친 키만** 씁니다. 키 파일을 폴더에 복사해 넣는
+   것으로는 안 됩니다 — 가져오면서 자기 형식으로 바꿔 저장하기 때문입니다.
+   그래서 이 한 단계만 자동으로 할 수가 없습니다. 한 번만 하면 됩니다.
 
-     ① 이미 「{key}」 로 등록돼 있으면          그대로 둔다
-     ② %USERPROFILE%\\.ssh\\{key} 가 있으면    Xshell 에 넣는다
-     ③ Xshell 에 등록된 키가 하나뿐이면        세션을 그 이름에 맞춘다
-     ④ %USERPROFILE%\\.ssh\\id_* · 이 폴더의 키 파일   Xshell 에 넣는다
+   [도구] > [사용자 키 관리자] > [가져오기] 로 이 파일을 넣습니다.
 
-   ②가 제일 깔끔합니다 — 웹 콘솔 [접속 키] 가 알려주는 대로 만들면 그 이름입니다.
+     %USERPROFILE%\\.ssh\\{key}
 
-     ssh-keygen -t ed25519 -f $HOME\\.ssh\\{key}
+   가져오면 키 이름이 **파일 이름 그대로** 「{key}」 가 되어 세션과 맞습니다.
+   따로 이름을 바꿀 것이 없습니다.
 
-   [못 찾았다고 할 때]
-     위 명령으로 키를 만들고 설치.bat 을 다시 돌리는 것이 제일 빠릅니다.
-     이미 Xshell 에 쓰던 키가 있다면 그 이름을 대 주세요.
+   [키가 아직 없다면] PowerShell 에서 만듭니다.
 
-       설치.bat -KeyName <키이름>
+     ssh-keygen -t ed25519 -f $env:USERPROFILE\\.ssh\\{key}
 
-   [넣었는데 Xshell 이 못 읽는다고 할 때]
-     Xshell 은 [가져오기] 할 때 키를 자기 형식으로 바꿔 저장합니다
-     (`---- BEGIN NSSSH PRIVATE KEY ----`). 넣어 둔 파일을 그대로 읽지 못하면
-     [도구] > [사용자 키 관리자] > [가져오기] 로 넣고 이름을 「{key}」 로
-     바꿔 주세요. 한 번만 하면 됩니다.
+   그리고 공개 키({key}.pub)를 웹 콘솔 [접속 키] 에 등록하세요.
+   웹 콘솔 [접속 키] 화면이 같은 명령을 알려 줍니다.
 
-   어느 쪽이든 웹 콘솔 [접속 키] 에 등록한 키와 **짝이 맞는 개인 키**여야 합니다.
+   [이미 쓰던 키를 그대로 쓰려면] 그 이름을 대 주세요. 세션이 그 키를 쓰도록
+   맞춰 줍니다.
+
+     설치.bat -KeyName <키이름>
 
 
 접속이 안 될 때
@@ -391,9 +348,9 @@ JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까�
  · 비밀번호를 묻는다
      키 인증이 실패한 것입니다. 그 비밀번호는 존재하지 않습니다.
      3번의 키 등록을 확인하세요.
- · 키를 고르라고 묻는다
-     세션이 가리키는 키 이름이 실제와 다릅니다.
-     설치.bat -KeyName <쓸 키 이름> 으로 다시 돌리세요.
+ · 키를 고르라고 묻는다 / 키를 못 찾는다
+     세션이 가리키는 이름의 키가 [사용자 키 관리자] 에 없습니다.
+     3번대로 가져오거나, 설치.bat -KeyName <쓸 키 이름> 으로 다시 돌리세요.
  · 세션 [속성] > [연결] > [프록시] 가 비어 있다
      프록시가 등록되지 않았습니다. 설치.bat 을 다시 돌리고 Xshell 을 껐다 켜세요.
  · 호스트 키 경고가 계속 거슬린다
