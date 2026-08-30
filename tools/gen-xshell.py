@@ -32,6 +32,8 @@ import labdesign as L
 FOLDER = "my-network-lab"
 # Xshell [사용자 키 관리자]에 등록될 개인 키의 이름. 세션 파일이 이 이름을 가리킨다.
 KEY_NAME = "my-network-lab"
+# 점프 호스트 세션 파일. 프록시 INI 의 SESSION= 이 이 파일을 가리킨다.
+JUMP_FILE = "0-점프호스트 (프록시용).xsh"
 
 # Xshell 이 저장한 파일에서 그대로 가져온 값들. 건드리지 않는다 —
 # 여기 있는 것을 빼면 Xshell 이 자기 기본값으로 채우므로 동작에는 문제가 없지만,
@@ -116,7 +118,7 @@ def build(lab_id, user=None, key=KEY_NAME):
     files = {}
     # 점프 호스트 자신. 프록시의 [세션 파일] 인증에 이 파일을 지정한다.
     #   셸이 없는 계정이라 이것만 열면 바로 끊긴다 — 그게 정상이다.
-    files["0-점프호스트 (프록시용).xsh"] = _bom(_render(_session(
+    files[JUMP_FILE] = _bom(_render(_session(
         jump_ip, 22, jump_user, "",
         f"my-network-lab lab{lab_id} 점프 호스트", key)))
 
@@ -126,8 +128,103 @@ def build(lab_id, user=None, key=KEY_NAME):
             L.mgmt_ip(lab_id, name), 22, lab_user, proxy,
             f"lab{lab_id} {name} — {n.get('desc', '')}".strip(" —"), key)))
 
+    files["install.ps1"] = _installer(lab_id, jump_ip, proxy)
+    files["설치.bat"] = _launcher()
     files["읽어보세요.txt"] = _readme(lab_id, jump_ip, jump_user, lab_user, proxy, key)
     return files
+
+
+# ---------------------------------------------------------------------------
+#  프록시는 세션 파일이 아니라 **따로 있는 INI 파일**이다.
+#
+#      문서\NetSarang Computer\8\Common\Proxy\<이름>.ini
+#      [SECTION]
+#      TYPE=5            <- 5 = JUMPHOST
+#      HOST=... PORT=22
+#      SESSION=<점프 호스트 세션 파일의 **절대 경로**>
+#      USERNAME= PASSWORD=   <- 인증을 SESSION 에 맡기므로 비어 있다
+#
+#  SESSION 이 절대 경로라 우리가 미리 만들어 둘 수 없다 — 계정 이름도 다르고
+#  「문서」가 OneDrive 아래로 옮겨간 PC 도 있다. 그래서 파일을 넣는 대신
+#  **그 자리에서 경로를 알아내 쓰는 스크립트**를 넣는다. 교육생이 20명이면
+#  손으로 하는 프록시 등록도 20번이다.
+# ---------------------------------------------------------------------------
+def _installer(lab_id, jump_ip, proxy):
+    ps = rf'''# my-network-lab · lab{lab_id} — Xshell 세션 설치
+# 하는 일 두 가지뿐입니다.
+#   ① 이 폴더의 세션 파일을 Xshell 세션 폴더로 복사
+#   ② 점프 호스트 프록시({proxy}) 를 만들어 준다
+$ErrorActionPreference = "Stop"
+
+# 「문서」는 OneDrive 로 옮겨가 있을 수 있다. 레지스트리에 적힌 실제 위치를 묻는다.
+$docs = [Environment]::GetFolderPath("MyDocuments")
+$base = Join-Path $docs "NetSarang Computer\8"
+if (-not (Test-Path $base)) {{
+    Write-Host "Xshell 8 폴더를 찾지 못했습니다:" -ForegroundColor Red
+    Write-Host "  $base"
+    Write-Host "Xshell 8 을 한 번 실행한 뒤 다시 시도해 주세요."
+    exit 1
+}}
+
+$src      = $PSScriptRoot
+$sessions = Join-Path $base "Xshell\Sessions\{FOLDER}"
+$proxydir = Join-Path $base "Common\Proxy"
+New-Item -ItemType Directory -Force $sessions | Out-Null
+New-Item -ItemType Directory -Force $proxydir | Out-Null
+
+# ① 세션 복사. 이미 그 자리에서 돌리고 있으면 건너뛴다.
+if ($src -ne $sessions) {{
+    Copy-Item (Join-Path $src "*.xsh") $sessions -Force
+    Copy-Item (Join-Path $src "읽어보세요.txt") $sessions -Force
+    Copy-Item (Join-Path $src "install.ps1") $sessions -Force
+    Copy-Item (Join-Path $src "설치.bat") $sessions -Force
+    Write-Host "세션 복사: $sessions" -ForegroundColor Green
+}} else {{
+    Write-Host "세션은 이미 제자리에 있습니다." -ForegroundColor Green
+}}
+
+# ② 프록시 INI. SESSION 은 절대 경로여야 한다.
+$jumpfile = Join-Path $sessions "{JUMP_FILE}"
+if (-not (Test-Path $jumpfile)) {{
+    Write-Host "점프 호스트 세션 파일이 없습니다: $jumpfile" -ForegroundColor Red
+    exit 1
+}}
+$ini = @"
+[SECTION]
+JUMPHOST=
+PASSWORD=
+PORT=22
+TYPE=5
+HOST={jump_ip}
+SESSION=$jumpfile
+USERNAME=
+"@
+# Xshell 이 저장하는 그대로 UTF-16 LE + BOM 으로 쓴다.
+[IO.File]::WriteAllText((Join-Path $proxydir "{proxy}.ini"), $ini, [Text.Encoding]::Unicode)
+Write-Host "프록시 등록: {proxy}  ->  {jump_ip}:22" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "끝났습니다. Xshell 이 켜져 있으면 껐다 켜 주세요." -ForegroundColor Cyan
+Write-Host "남은 것은 개인 키 하나입니다 — 읽어보세요.txt 의 3번을 봐 주세요."
+'''
+    return b"\xef\xbb\xbf" + ps.replace("\n", "\r\n").encode("utf-8")
+
+
+def _launcher():
+    """PowerShell 스크립트는 두 번 눌러서 실행되지 않는다(실행 정책).
+
+    이 한 줄짜리 배치가 그 자리에서만 정책을 우회해 띄운다 — PC 설정을
+    바꾸지 않는다. 교육생에게 "정책을 푸세요" 라고 시키지 않기 위한 것이다.
+    """
+    # **내용은 ASCII 만 쓴다.** cmd 는 배치 파일을 현재 코드 페이지로 읽는다 —
+    # 안에 한글이 있으면 PC 마다 다르게 깨져서 명령이 통째로 어긋난다.
+    # 파일 **이름**의 한글은 상관없다(그건 파일 시스템이 다룬다).
+    bat = ("@echo off\r\n"
+           "chcp 65001 > nul\r\n"
+           "powershell -NoProfile -ExecutionPolicy Bypass "
+           "-File \"%~dp0install.ps1\"\r\n"
+           "pause\r\n")
+    return bat.encode("ascii")
 
 
 def _readme(lab_id, jump_ip, jump_user, lab_user, proxy, key):
@@ -135,46 +232,40 @@ def _readme(lab_id, jump_ip, jump_user, lab_user, proxy, key):
     t = f"""my-network-lab · lab{lab_id} Xshell 세션
 ============================================================
 
+「설치.bat」 을 두 번 누르면 끝납니다. 남는 것은 개인 키 하나뿐입니다(3번).
+
 랩 노드는 사무실에서 직접 보이지 않습니다. 운영 서버(점프 호스트)를 거쳐야
 합니다. Xshell 에는 OpenSSH 의 ProxyJump 가 없고, 대신 **프록시 종류
-JUMPHOST** 가 같은 일을 합니다.
-
-프록시는 세션 파일이 아니라 Xshell 의 프록시 목록에 등록됩니다. 그래서
-아래 2번을 **한 번만** 직접 해 주셔야 합니다. 그 뒤로는 세션을 두 번
-클릭하면 끝입니다.
+JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까지 만들어 줍니다.
 
 
-1. 이 폴더를 Xshell 의 세션 폴더에 넣습니다
+1. 설치.bat 을 두 번 누릅니다
 ------------------------------------------------------------
-   Xshell 메뉴 [파일] > [열기] 를 누르면 그 폴더가 열립니다.
-   경로를 직접 찾으려면 보통 여기입니다:
+   두 가지를 합니다.
 
-     문서\\NetSarang Computer\\8\\Xshell\\Sessions\\
+     · 세션 파일을 Xshell 세션 폴더로 복사
+     · 점프 호스트 프록시({proxy}) 를 등록
 
-   OneDrive 를 쓰면 「문서」가 OneDrive 아래에 있습니다:
+   검은 창이 뜨고 초록 글씨 두 줄이 나오면 된 것입니다.
+   Xshell 이 켜져 있었다면 **껐다 켜 주세요.** 세션 목록은 켤 때 읽습니다.
 
-     C:\\Users\\<계정>\\OneDrive\\문서\\NetSarang Computer\\8\\Xshell\\Sessions\\
-
-   그 안에 이 「my-network-lab」 폴더를 통째로 넣으세요.
-   세션 목록에 폴더와 세션 {len(L.TOPO['nodes']) + 1}개가 나타납니다
-   (랩 노드 {len(L.TOPO['nodes'])}개 + 점프 호스트 1개).
+   [경고가 뜨면] Windows 가 "이 앱이 PC를 손상시킬 수 있습니다" 라고 물으면
+   [추가 정보] > [실행] 입니다. 인터넷에서 받은 파일이라 뜨는 것입니다.
 
 
-2. 점프 호스트 프록시를 등록합니다  (한 번만)
+2. 접속
 ------------------------------------------------------------
-   아무 노드 세션(예: pc1)을 오른쪽 클릭 > [속성] > [연결] > [프록시]
-   > [찾아보기] > [추가]
+   세션을 두 번 클릭합니다. 처음에는 호스트 키를 물어보는데
+   [수락 및 저장] 을 누르면 다음부터 묻지 않습니다.
 
-     이름   : {proxy}          <- 반드시 이대로 (세션들이 이 이름을 봅니다)
-     종류   : JUMPHOST
-     호스트 : {jump_ip}
-     포트   : 22
-     사용자 : {jump_user}
-     인증   : [세션 파일] 을 고르고
-              같은 폴더의 「0-점프호스트 (프록시용).xsh」 를 지정
+   랩을 다시 만들면 노드의 호스트 키가 바뀌어 경고가 한 번 더 뜹니다.
+   **이 랩에서는 정상입니다** — [수락 및 저장] 을 다시 누르세요.
+   실무에서 같은 경고를 보면 그때는 정상이 아닙니다. 이 랩은 장비를 통째로
+   다시 만들기 때문에 바뀌는 것이고, 현장의 장비는 그럴 일이 없습니다.
 
-   저장한 뒤 [프록시 서버] 목록에서 {proxy} 가 선택돼 있는지 확인합니다.
-   나머지 세션들은 이미 이 이름을 적어 두었으므로 따로 고칠 것이 없습니다.
+   「0-점프호스트」 세션은 **직접 열지 마세요.** 프록시가 인증에 쓰는 파일입니다.
+   열면 "This account is currently not available" 하고 바로 끊깁니다 —
+   셸이 없는 계정이라 그게 정상입니다.
 
 
 3. 내 개인 키를 Xshell 에 등록합니다  (이름을 맞춰 주세요)
@@ -198,21 +289,6 @@ JUMPHOST** 가 같은 일을 합니다.
      ...\\NetSarang Computer\\8\\SECSH\\UserKeys\\{key}.pri
 
 
-4. 접속
-------------------------------------------------------------
-   세션을 두 번 클릭합니다. 처음에는 호스트 키를 물어보는데
-   [수락 및 저장] 을 누르면 다음부터 묻지 않습니다.
-
-   랩을 다시 만들면 노드의 호스트 키가 바뀌어 경고가 한 번 더 뜹니다.
-   **이 랩에서는 정상입니다** — [수락 및 저장] 을 다시 누르세요.
-   실무에서 같은 경고를 보면 그때는 정상이 아닙니다. 이 랩은 장비를 통째로
-   다시 만들기 때문에 바뀌는 것이고, 현장의 장비는 그럴 일이 없습니다.
-
-   경고가 거슬리면 저장된 옛 키를 지워도 됩니다:
-
-     ...\\NetSarang Computer\\8\\SECSH\\HostKeys\\key_<노드주소>_22.pub
-
-
 접속이 안 될 때
 ------------------------------------------------------------
  · 첫 홉에서 막힌다 (점프 호스트에서 Permission denied)
@@ -223,6 +299,46 @@ JUMPHOST** 가 같은 일을 합니다.
  · 비밀번호를 묻는다
      키 인증이 실패한 것입니다. 그 비밀번호는 존재하지 않습니다.
      3번의 키 등록을 확인하세요.
+ · 세션 [속성] > [연결] > [프록시] 가 비어 있다
+     프록시가 등록되지 않았습니다. 설치.bat 을 다시 돌리고 Xshell 을 껐다 켜세요.
+ · 호스트 키 경고가 계속 거슬린다
+     저장된 옛 키를 지워도 됩니다:
+     ...\\NetSarang Computer\\8\\SECSH\\HostKeys\\key_<노드주소>_22.pub
+
+
+손으로 할 때 (설치.bat 이 안 될 때)
+------------------------------------------------------------
+ ① 이 폴더를 통째로 Xshell 세션 폴더에 넣습니다.
+    Xshell 메뉴 [파일] > [열기] 를 누르면 그 폴더가 열립니다. 보통 여기입니다:
+
+      문서\\NetSarang Computer\\8\\Xshell\\Sessions\\
+
+    OneDrive 를 쓰면 「문서」가 OneDrive 아래에 있습니다.
+
+ ② 프록시를 만듭니다. 아무 노드 세션(예: pc1)을 오른쪽 클릭
+    > [속성] > [연결] > [프록시] > [찾아보기] > [추가]
+
+      이름   : {proxy}          <- 반드시 이대로 (세션들이 이 이름을 봅니다)
+      종류   : JUMPHOST
+      호스트 : {jump_ip}
+      포트   : 22
+      인증   : [세션 파일] 을 고르고 「{JUMP_FILE}」 를 지정
+
+    파일로 직접 만들어도 됩니다. 아래 내용으로,
+    ...\\NetSarang Computer\\8\\Common\\Proxy\\{proxy}.ini
+
+      [SECTION]
+      JUMPHOST=
+      PASSWORD=
+      PORT=22
+      TYPE=5
+      HOST={jump_ip}
+      SESSION=<위 세션 폴더의 절대 경로>\\{JUMP_FILE}
+      USERNAME=
+
+    SESSION 은 **절대 경로**여야 합니다. 이것 때문에 파일을 미리 만들어 둘 수
+    없어서 설치 스크립트가 있는 것입니다.
+
 
 이 세션들은 배정된 랩(lab{lab_id}) 기준입니다. 랩이 바뀌면 다시 받으세요.
 

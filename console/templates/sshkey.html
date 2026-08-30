@@ -168,15 +168,16 @@ ssh {{ example_node }}</code></pre>
         <a class="btn primary" href="/sshkey/xshell">Xshell 세션 내려받기</a>
         <span class="muted">my-network-lab-lab{{ lab_id }}.zip · 세션 {{ node_count + 1 }}개</span>
       </p>
-      <p>압축을 풀면 <code>my-network-lab</code> 폴더가 나옵니다. 그 폴더를 통째로
-         Xshell 의 세션 폴더에 넣으면 세션 목록에 그대로 나타납니다.</p>
-      <pre><code>문서\NetSarang Computer\8\Xshell\Sessions\</code></pre>
-      <p>세션 파일은 개인 키를 <b>이름으로</b> 가리킵니다. Xshell [도구] &gt; [사용자 키 관리자]
-         에서 내 개인 키를 가져온 뒤 이름을 <code>my-network-lab</code> 으로 바꿔 주세요.</p>
-      <p class="note">Xshell 에는 <code>ProxyJump</code> 가 없습니다. 대신 <b>프록시 종류
-         JUMPHOST</b> 가 같은 일을 하는데, 프록시는 세션 파일이 아니라 Xshell 의
-         <b>프록시 목록</b>에 등록됩니다. 그래서 <b>처음 한 번만</b> 직접 만들어 주셔야 합니다 —
-         폴더 안 <code>읽어보세요.txt</code> 에 그 절차가 있습니다.</p>
+      <p>압축을 풀고 <b><code>설치.bat</code> 을 두 번 누르면</b> 끝납니다. 세션을 Xshell
+         세션 폴더로 옮기고, 경유에 쓸 <b>점프 호스트 프록시까지 만들어 둡니다.</b>
+         Xshell 이 켜져 있었다면 껐다 켜 주세요 — 세션 목록은 켤 때 읽습니다.</p>
+      <p>남는 것은 <b>개인 키 하나</b>입니다. Xshell [도구] &gt; [사용자 키 관리자] 에서
+         내 개인 키를 가져온 뒤 이름을 <code>my-network-lab</code> 으로 바꿔 주세요 —
+         세션 파일이 키를 <b>이름으로</b> 가리킵니다.</p>
+      <p class="note"><b><code>0-점프호스트</code> 세션은 직접 열지 마세요.</b> 프록시가 인증에
+         쓰는 파일입니다. 열면 <code>This account is currently not available</code> 하고 바로
+         끊기는데, 셸이 없는 계정이라 그게 정상입니다.<br>
+         손으로 하는 절차와 안 될 때 볼 것은 폴더 안 <code>읽어보세요.txt</code> 에 있습니다.</p>
       <p class="muted">이 설정은 <b>배정된 랩({{ lab_label }})</b> 기준입니다.
          랩이 바뀌면 다시 받아야 합니다.</p>
 
