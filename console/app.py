@@ -380,6 +380,9 @@ def _sshkey_ctx(request, user, errors=(), saved="", onboard=False):
             "example_node": node, "example_ip": L.mgmt_ip(lab_id or 1, node),
             # Xshell 세션 zip 이 몇 개짜리인지 화면에 적는다
             "node_count": len(L.TOPO["nodes"]),
+            # 교육생이 만들 키의 파일 이름. Xshell 이 파일 이름을 그대로
+            # 키 이름으로 쓰므로 여기서 정한 이름이 세션까지 이어진다.
+            "key_name": A.get("key_name") or "id_ed25519",
             # 콘솔(화면) 접속용. SSH 는 키로만 받지만 콘솔은 키를 못 쓴다.
             # 만들어져 있을 때만 보여준다 — 아직 배포 전이면 굳이 만들지 않는다.
             "console_pw": db.lab_console_password(create=False),
@@ -439,6 +442,8 @@ def _onboard_ctx(request, user, step, err=""):
         # 붙잡아서, [랩 삭제] 직후 이 화면이 삭제 작업을 지켜보며 0% 에 멈춰 있었다.
         "active_job": _deploy_job(lab_id) if lab_id else None,
         "has_key": bool((user or {}).get("ssh_key")),
+        # 키 파일 이름 — [접속 키] 화면과 같은 값을 써야 한다
+        "key_name": L.IPAM["access"].get("key_name") or "id_ed25519",
     }
 
 

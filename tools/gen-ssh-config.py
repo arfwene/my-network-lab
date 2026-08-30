@@ -19,6 +19,12 @@ def main(lab_id, user=None):
     jump = A["jump_host"]["office_ip"]
     jump_user = user or A["jump_host"]["user"]
     lab_user = A["lab_user"]
+    # 교재는 기본 이름(id_ed25519) 대신 이 이름으로 키를 만들게 한다 — Xshell 이
+    # 가져온 파일 이름을 키 이름으로 쓰기 때문이다(config/site.yml 의 access.key_name).
+    # 이름이 기본값이 아니므로 ssh 에게 어느 키인지 알려 줘야 한다.
+    #   IdentitiesOnly 는 켜지 않는다. 켜면 기본 이름으로 이미 키를 만들어 둔
+    #   사람이 그 키를 못 쓰게 된다 — 이 줄은 **더해 주는** 것이지 막는 것이 아니다.
+    key = A.get("key_name") or "id_ed25519"
     out = [
         f"# ============================================================",
         f"#  my-network-lab  ·  lab{lab_id}  접속 설정",
@@ -41,6 +47,7 @@ def main(lab_id, user=None):
         f"Host lab{lab_id}-jump",
         f"    HostName {jump}",
         f"    User {jump_user}",
+        f"    IdentityFile ~/.ssh/{key}",
         # 이 랩은 어디서도 비밀번호로 로그인하지 않는다. 끄지 않으면 키가 실패했을 때
         # 조용히 비밀번호를 묻고, 교육생은 "무슨 비밀번호?" 에서 막힌다.
         # 꺼 두면 이유가 그대로 나온다: Permission denied (publickey).
@@ -50,6 +57,7 @@ def main(lab_id, user=None):
         f"# 랩 노드 공통 설정 — 점프 호스트 경유",
         f"Host " + " ".join(n["name"] for n in L.TOPO["nodes"]),
         f"    User {lab_user}",
+        f"    IdentityFile ~/.ssh/{key}",
         f"    ProxyJump lab{lab_id}-jump",
         "    PasswordAuthentication no",
         "    PreferredAuthentications publickey",
