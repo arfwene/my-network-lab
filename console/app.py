@@ -353,12 +353,15 @@ def _jump_account_exists(username):
         return False
 
 
-def _sshkey_ctx(request, user, errors=(), saved="", onboard=False):
+def _sshkey_ctx(request, user, errors=(), saved="", onboard=False, value=""):
     lab_id = pick_lab(user)
     raw = (db.get_user(user["username"]) or {}).get("ssh_key") or ""
     node = L.TOPO["nodes"][0]["name"]
     A = L.IPAM["access"]
     return {**nav_ctx(user, "sshkey", lab_id),
+            # 거절당했을 때 붙여넣은 값을 그대로 되돌려 준다. 지워 버리면
+            # 어디가 잘못됐는지 보라고 해 놓고 볼 것을 없애는 셈이다.
+            "value": value,
             "request": request, "user": user, "site_name": L.SITE["site"]["name"],
             "health": pve.last(), "pve": pve.public(),
             "lab_id": lab_id,
@@ -565,7 +568,7 @@ async def sshkey_save(request: Request, key: str = Form(""), remove: str = Form(
         normalized = sshkeys.normalize(key)
     except sshkeys.Invalid as e:
         return tpl.TemplateResponse(request, "sshkey.html",
-                                    _sshkey_ctx(request, user, errors=[str(e)]),
+                                    _sshkey_ctx(request, user, errors=[str(e)], value=key),
                                     status_code=400)
     # 처음 넣은 것인지 바꾼 것인지는 안내 문구만 가른다.
     # **반영은 둘 다 자동으로 건다** — 바꿀 때만 손으로 눌러야 했더니,
