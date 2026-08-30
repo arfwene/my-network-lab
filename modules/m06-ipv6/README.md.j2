@@ -386,9 +386,20 @@ ping6 -c 3 -I eth1 ff02::1
 ```
 
 ```
-64 bytes from fe80::5054:ff:fe21:3%eth1: icmp_seq=1 ttl=64 time=0.6 ms
-64 bytes from fe80::5054:ff:fe12:1%eth1: icmp_seq=1 ttl=64 time=0.9 ms
+ping6: Warning: source address might be selected on device other than: eth1
+PING ff02::1 (ff02::1) from :: eth1: 56 data bytes
+64 bytes from fe80::5054:ff:fe11:1%eth1: icmp_seq=1 ttl=64 time=0.03 ms
+64 bytes from fe80::5054:ff:fe31:1%eth1: icmp_seq=1 ttl=64 time=0.82 ms
+64 bytes from fe80::200:5eff:fe00:10a%eth1: icmp_seq=1 ttl=64 time=0.83 ms
+64 bytes from fe80::5054:ff:fe33:3%eth1: icmp_seq=1 ttl=64 time=0.58 ms
 ```
+
+첫 줄의 경고는 무시해도 됩니다 — 아직 이 선에서 쓸 글로벌 주소가 없어서 나오는 말입니다.
+
+답한 넷이 누구인지 읽어 보세요. 자기 자신, `r1` 의 `eth1.10`,
+**`r1` 의 가상 MAC 인터페이스**(`00:00:5e:...` 에서 만들어진 `fe80`), 그리고 `r3` 의 `eth3.10` 입니다.
+M5 에서 만든 것이 IPv6 쪽에서도 그대로 보입니다. `pc2` 는 답하지 않습니다 — VLAN 이 다르니까요.
+`52:54:` 로 시작하지 않는 주소가 하나 더 섞여 있으면 가상화 계층의 것입니다 (M1 실습 3).
 
 `ff02::1` 은 "이 선의 모든 노드" 라는 뜻의 멀티캐스트 주소입니다.
 IPv4 라면 브로드캐스트로 했을 일인데, IPv6 에는 브로드캐스트가 없어 멀티캐스트가 그 자리를 대신합니다.
@@ -405,7 +416,8 @@ ip -6 route show
 r1# show ipv6 route
 ```
 
-`r1` 도 마찬가지입니다. `show ipv6 ospf6 neighbor` 는 아무것도 내놓지 않습니다.
+`r1` 도 마찬가지입니다. `show ipv6 ospf6 neighbor` 는 `% OSPFv3 instance not found`
+라고 답합니다 — **인접이 없다는 뜻이 아니라 아직 켜지 않았다는 뜻**입니다 (M4 3.1 과 같습니다).
 
 ### 3.2 1단계 — 사용자망에 IPv6 주소를 붙입니다 (할 일 ①)
 

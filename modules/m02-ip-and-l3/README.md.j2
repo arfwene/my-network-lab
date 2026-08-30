@@ -472,9 +472,12 @@ port              vlan-id
 eth1              1 PVID Egress Untagged
 eth2              1 PVID Egress Untagged
 eth3              1 PVID Egress Untagged
+br0               1 PVID Egress Untagged
 ```
 
 포트 셋이 전부 VLAN 1 에 있습니다. 스위치가 한 덩어리라는 뜻입니다.
+마지막 `br0` 줄은 스위치 자신입니다 — 포트가 아니라 브리지 본체라 3.2 이후에는
+목록에서 빠집니다.
 
 ```bash
 # pc1
@@ -555,6 +558,11 @@ ip neigh show dev eth1
 
 `ping` 을 막 돌린 직후라면 `INCOMPLETE` 로 보입니다 — 아직 물어보는 중이라는 뜻이고,
 커널이 포기하면 `FAILED` 가 됩니다. 둘 다 **응답이 오지 않았다**는 같은 이야기입니다 (M1 실습 2).
+
+> 주의 — 3.1 에서 방금 통신했으므로 캐시에 `pc2` 가 아직 남아 있습니다. 그래서
+> **바로 친 첫 `ping` 은 위 문구 없이 그냥 100% 손실로 끝납니다.** 캐시가 낡아
+> 커널이 다시 물어보기 시작해야 `INCOMPLETE` 가 되고, 포기해야 `FAILED` 가 됩니다.
+> 몇 초 뒤에 한 번 더 쳐 보세요.
 
 `FAILED` 는 ARP 응답이 오지 않았다는 뜻입니다. `pc1` 의 ARP Request 는 브로드캐스트이고,
 그 브로드캐스트는 VLAN {{ vlans[10].id }} 밖으로 나가지 못합니다. `pc2` 는 질문 자체를 듣지 못합니다.
@@ -1267,7 +1275,7 @@ ping -c 2 -M do -s 1472 {{ ip.pc2 }}
 ```
 
 ```
-From {{ gw.vlan10 }} icmp_seq=1 Frag needed and DF set (mtu 1400)
+From {{ gw.vlan10 }} icmp_seq=1 Frag needed and DF set (mtu = 1400)
 ```
 
 누가 알려 줬는지 보라 — `{{ gw.vlan10 }}`, 즉 r1 입니다.
@@ -1319,9 +1327,14 @@ ping -c 2 {{ ip.pc2 }}                    # 작은 것은 여전히 잘 된다
 보내는 쪽은 성공하든 실패하든 똑같이 10초 뒤에 끝나기 때문입니다.
 
 ```bash
-# pc2 (터미널 2) — 받는 쪽
-nc -l 9000 | wc -c
+# pc2 (터미널 2) — 받는 쪽. 20초 뒤 스스로 끝난다
+timeout 20 nc -l 9000 | wc -c
 ```
+
+`timeout` 을 붙인 이유가 있습니다. 막힌 쪽에서는 보내는 쪽의 종료 신호조차
+빠져나가지 못해 **받는 쪽이 영원히 기다립니다.** 그러면 화면이 비어 있는 것이
+"아직 기다리는 중" 인지 "0 바이트로 끝났다" 인지 알 수 없습니다. 20초를 주고
+끊으면 어느 쪽이든 숫자가 나옵니다.
 
 ```bash
 # pc1 — 3MB 를 보낸다
@@ -1359,7 +1372,7 @@ sudo nft add rule ip mangle forward tcp flags syn tcp option maxseg size set rt 
 
 ```bash
 # pc2 — 다시 받는다
-nc -l 9000 | wc -c
+timeout 20 nc -l 9000 | wc -c
 ```
 
 ```bash
@@ -1372,8 +1385,9 @@ head -c 3M /dev/zero | nc -w 10 {{ ip.pc2 }} 9000
 3145728
 ```
 
-**3MB 가 다 갔습니다.** 걸린 시간도 보이는 화면도 아까와 똑같습니다 — 달라진 것은
-이 숫자 하나뿐입니다. SYN 을 잡아 보면 이유가 나옵니다.
+**3MB 가 다 갔습니다.** 이번에는 20초를 기다릴 것도 없이 전송이 끝나자마자
+숫자가 나옵니다 — 보내는 쪽이 정상으로 끊었기 때문입니다. 보이는 화면은 아까와
+똑같고 달라진 것은 이 숫자 하나뿐입니다. SYN 을 잡아 보면 이유가 나옵니다.
 
 ```bash
 # pc2 — handshake 만 본다
