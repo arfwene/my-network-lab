@@ -169,7 +169,7 @@ python3 tools/render-opsvm.py --labs {maxlab} --vmid {vm}   # 문서 다시 생�
 cd infra/terraform/envs/lab3 && terraform destroy
 ```
 
-VM 13대와 랩 링크 브리지 13개가 사라진다.
+VM {len(L.TOPO['nodes'])}대와 랩 링크 브리지 {len(L.TOPO['bridges'])}개가 사라진다.
 관리망 브리지 `{br}` 와 운영 서버의 `{L.mgmt_iface(3)}` 는 **그대로 남는다** — 다른 랩이 쓰고 있고,
 같은 랩을 다시 만들 때 그대로 이어 쓴다. 남아 있어도 트래픽이 없으므로 비용이 없다.
 """

@@ -138,8 +138,8 @@ ssh-keygen -t ed25519 -f $HOME\.ssh\{{ key_name }} -C "{{ user.username }}@내PC
       } else {
         bar.style.width = j.pct + '%';
         pct.textContent = j.pct + '%';
-        // 숫자는 장비로 말한다. terraform 이 세는 27개는 VM 13대 + 링크 브리지 13개라,
-        // 그대로 보여 주면 "가상 장비 13대" 라고 해 놓고 26대가 지나간다.
+        // 숫자는 장비로 말한다. terraform 이 세는 수에는 VM 말고 링크 브리지도 들어가서,
+        // 그대로 보여 주면 "가상 장비 14대" 라고 해 놓고 30개가 지나간다.
         msg.textContent = `장비 ${j.vm}/${TOTAL}대 · ${Math.round(j.elapsed)}초`;
       }
       if (j.status === 'ok') return 'ok';

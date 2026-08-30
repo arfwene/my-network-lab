@@ -42,7 +42,7 @@
 | Python | 3.10+ |
 | 운영 서버 자원 | 2 vCPU · 2 GB RAM · 5 GB 디스크 |
 | 운영 서버 계정 | **root 아님.** sudo 되는 일반 계정 |
-| Proxmox | VE 8.x · 랩당 RAM 약 9.7 GB (64 GB → 6랩 권장) |
+| Proxmox | VE 8.x · 랩당 RAM 9.5 GiB (64 GiB → 6랩 권장) |
 | 인터넷 | 설치 시에만 필요. 없으면 [8. 폐쇄망](#8-폐쇄망) |
 
 Terraform · Ansible 을 손으로 깔지 않는다. `install.sh` 가 Terraform 을 `/usr/local/bin` 에,

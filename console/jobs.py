@@ -37,7 +37,7 @@ APB = _bin("ansible-playbook")
 TF = "terraform"                      # PATH 에서 찾는다 (Proxmox 관리 워크스테이션에 설치)
 
 # terraform 을 한꺼번에 몇 개나 돌릴 것인가. 기본값은 10 이다.
-#   13대를 동시에 복제하면 pveproxy 가 연결을 끊는다 — HTTP 596 Broken pipe.
+#   전 노드를 동시에 복제하면 pveproxy 가 연결을 끊는다 — HTTP 596 Broken pipe.
 #   실패한 자원 하나 때문에 배포 전체가 멈추고, 그 VM 만 안 뜬 채로 남는다.
 #   4 로 낮추면 조금 느려지지만 그 실패가 사라진다.
 TF_PARALLELISM = 4
@@ -277,7 +277,7 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
         return [gen, (ANSIBLE, [APB, "-i", inv, "playbooks/site.yml",
                                 "-e", f"lab_stage={stage}"])]
     if action == "keys":
-        # 접속 키만. site.yml 을 통째로 다시 올리면 13대 × 전 역할이 다시 도는데,
+        # 접속 키만. site.yml 을 통째로 다시 올리면 전 노드 × 전 역할이 다시 도는데,
         # authorized_keys 한 줄 때문에 그럴 이유가 없다 — 태그로 세 작업만 고른다.
         # 단계 설정은 건드리지 않으므로 state 의 stage 도 움직이지 않는다.
         return [gen, (ANSIBLE, [APB, "-i", inv, "playbooks/site.yml",
@@ -358,9 +358,9 @@ class Job:
         # 로그에 그대로 나온다. 그 둘로 센다 — 지어내지 않는다.
         self.total = 0
         self.done = 0
-        # 자원 중 **VM 만** 따로 센다. terraform 은 VM 13대와 링크 브리지 13개를
-        # 합쳐 27개라고 말하는데, 교육생에게 "13/26대" 라고 보여 주면 장비가
-        # 두 배로 늘어난 것처럼 읽힌다. 막대는 전체로, 숫자는 장비로 말한다.
+        # 자원 중 **VM 만** 따로 센다. terraform 은 VM 과 링크 브리지를 합쳐
+        # 세는데(지금 설계로 14 + 16 + 관리망), 그 수를 교육생에게 대수로 보여 주면
+        # 장비가 두 배로 늘어난 것처럼 읽힌다. 막대는 전체로, 숫자는 장비로 말한다.
         self.done_vm = 0
         self.status = "queued"          # queued | running | ok | failed
         # 마지막으로 한 줄이라도 나온 시각. 조용한 구간이 얼마나 길어졌는지 재려고 둔다 —

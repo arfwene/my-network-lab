@@ -500,7 +500,7 @@ async def onboard_deploy(request: Request):
         return JSONResponse({"busy": True, "what": ACTION_LABEL.get(action, action)})
     have, total = await asyncio.to_thread(pve.lab_vms, lab_id)
     # VM 이 다 있다고 끝난 것이 아니다. 복제는 됐는데 설정에서 실패하면 —
-    # 실제로 VM.Config.CDROM 권한이 없어 13대가 그렇게 남았다 — 꺼진 채로
+    # 실제로 VM.Config.CDROM 권한이 없어 전 노드가 그렇게 남았다 — 꺼진 채로
     # 다 있다. 그걸 "준비됐다" 로 보면 교육생은 아무것도 안 도는 랩을 받는다.
     # provisioned 는 **성공한 배포**에서만 True 가 된다.
     #   None = 이 기능 이전에 만들어진 랩이다. 모르면 있는 것을 믿는다.
@@ -647,7 +647,7 @@ async def sshkey_xshell(request: Request):
 async def sshkey_apply(request: Request):
     """접속 키만 랩 노드에 올린다 (common 역할의 keys 태그).
 
-    예전에는 site.yml 전체를 다시 돌렸다. 키 한 줄 넣자고 13대의 설정을 다시
+    예전에는 site.yml 전체를 다시 돌렸다. 키 한 줄 넣자고 전 노드의 설정을 다시
     올리느라 몇 분이 걸렸고, 교육생은 버튼이 먹통인 줄 알았다."""
     user = current_user(request)
     if not user:

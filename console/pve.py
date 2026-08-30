@@ -614,7 +614,7 @@ def _owned(vm, names=None):
 
     보통은 태그로 안다. 그런데 태그는 VM 을 **설정할 때** 붙는다 — 복제는 됐지만
     설정에서 실패하면 태그 없는 VM 이 남는다. 그 상태로 다시 [랩 생성] 을 누르면
-    검사가 자기가 만든 13대를 "남의 VM" 이라며 막고, 화면은 vmid_start 를 옮기라고
+    검사가 자기가 만든 VM 을 "남의 것" 이라며 막고, 화면은 vmid_start 를 옮기라고
     한다. 정반대의 안내다.
 
     이름은 복제할 때 이미 정해진다(lab1-pc1 …). 그래서 이름도 함께 본다.
@@ -757,20 +757,22 @@ def preflight(lab_id, cfg=None):
     #
     #  [설치 상태] 화면에도 여유 공간이 나오지만 그건 보여 줄 뿐 막지는 않는다.
     #  자원을 실제로 만드는 것은 여기이므로, 막는 것도 여기서 한다.
-    NEED_PER_LAB = 25 * 1024 ** 3                # 랩 하나의 실사용 실측치
+    # 노드 하나의 실사용 실측치. 13대 랩에서 25GiB 를 쓴 것을 대수로 나눈 값이라,
+    # 설계에 노드가 늘면(M5 의 r5) 필요 공간도 함께 늘어난다.
+    NEED_PER_NODE = 2 * 1024 ** 3
     c_sp = Check("space", f"{cfg['datastore']} 여유 공간")
     cs.append(c_sp)
     try:
         total_nodes = len(L.TOPO["nodes"])
         todo = max(total_nodes - existing, 0)
-        need = int(NEED_PER_LAB * todo / total_nodes) if total_nodes else 0
+        need = NEED_PER_NODE * todo
         st = _api(cfg, f"/api2/json/nodes/{cfg['node']}/storage") or []
         mine_ds = next((s for s in st if s.get("storage") == cfg["datastore"]), None)
         if not mine_ds:
             c_sp.set("warn", f"'{cfg['datastore']}' 를 찾지 못해 건너뛴다")
         elif not todo:
             c_sp.set("ok", f"여유 {mine_ds.get('avail', 0) / 1024 ** 3:.0f} GiB "
-                           f"· 13대가 이미 있어 새로 만들 디스크가 없다")
+                           f"· {total_nodes}대가 이미 있어 새로 만들 디스크가 없다")
         else:
             avail = mine_ds.get("avail", 0)
             g = avail / 1024 ** 3
