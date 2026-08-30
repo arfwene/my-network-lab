@@ -173,7 +173,7 @@ def sudo_missing(mod_dir):
 # 머리말에 `# r1 - vtysh` 또는 `# r1 - linux` 를 달기로 했다.
 #   라우터가 아닌 노드(pc1 · web · sw1 …)에는 vtysh 가 없으므로 붙이지 않는다 —
 #   구분할 것이 없는 자리에 표시를 달면 글자만 는다.
-ROUTERS = ("r1", "r2", "r3", "r4", "edge")
+ROUTERS = ("r1", "r2", "r3", "r4", "r5", "edge")
 ROUTER_PROMPT = re.compile(r"^(%s)(\([^)]*\))?[#>]\s*\S" % "|".join(ROUTERS))
 ROUTER_HDR = re.compile(r"^#\s*(%s)\b" % "|".join(ROUTERS))
 CTX_MARK = re.compile(r"^#\s*(%s) - (vtysh|linux)\b" % "|".join(ROUTERS))

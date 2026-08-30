@@ -283,7 +283,7 @@ stages:
   m2: {nodes: [r1],             desc: "VLAN 분리 + L3 게이트웨이 등장"}
   m3: {nodes: [r2, r4, sw2, web], desc: "정적 라우팅으로 사이트 간 연결"}
   m4: {nodes: [r3],             desc: "이중 경로 + OSPF"}
-  m5: {nodes: [],               desc: "게이트웨이 이중화 (VRRP) — r3 가 sw1 에도 붙는다"}
+  m5: {nodes: [r5],             desc: "게이트웨이 이중화 (VRRP) — 백업 게이트웨이 r5 가 들어온다"}
   m6: {nodes: [],               desc: "전 구간 IPv6 dual-stack (노드 추가 없음)"}
   m7: {nodes: [],               desc: "TCP/포트/세션 (기존 노드 활용)"}
   m8: {nodes: [],               desc: "tcpdump 심화 (기존 노드 활용)"}

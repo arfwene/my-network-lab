@@ -195,6 +195,8 @@ pc1 --- sw1 --- r1 === r2 === r4 --- sw2 --- web
 | Site-B 요약 | `{{ zone['site-b'] }}` | — | 광고 단위 |
 | 주 경로 r1↔r2 | `{{ p2p['r1-r2'].cidr }}` | — | cost {{ p2p['r1-r2'].ospf_cost }} |
 | 백업 r1↔r3 | `{{ p2p['r1-r3'].cidr }}` | — | cost {{ p2p['r1-r3'].ospf_cost }} |
+| 백업 게이트웨이 r5↔r2 | `{{ p2p['r5-r2'].cidr }}` | — | cost {{ p2p['r5-r2'].ospf_cost }} |
+| 백업 게이트웨이 r5↔r3 | `{{ p2p['r5-r3'].cidr }}` | — | cost {{ p2p['r5-r3'].ospf_cost }} |
 | 공인 회선 | `{{ public.transit.cidr }}` | — | edge `{{ public.transit.addresses.edge }}` · inet `{{ public.transit.addresses.inet }}` |
 | 관리망 (lab {{ lab_id }}) | `{{ mgmt_cidr }}` | — | **랩 설정과 무관하게 항상 통합니다** |
 

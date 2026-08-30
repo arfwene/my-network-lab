@@ -29,7 +29,7 @@
     state: absent
   notify: netplan apply
 
-# 설계에 포트가 하나 더 생기면(M5 의 sw1 eth4 · r3 eth3) Proxmox 가 NIC 을
+# 설계에 포트가 하나 더 생기면(M5 의 sw1 eth4 · r2 eth3 · r3 eth3) Proxmox 가 NIC 을
 # 꽂아 주지만, 이름은 부팅 때 정해진다 — 돌고 있는 노드에서는 ens21 처럼
 # 원래 이름 그대로 나타난다. 그러면 netplan 도 스위치 스크립트도 그 포트를
 # 못 찾는다. MAC 으로 짝을 지어 여기서 이름을 맞춰 준다. 재부팅이 필요 없다.
