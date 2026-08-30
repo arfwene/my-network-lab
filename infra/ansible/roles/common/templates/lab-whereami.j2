@@ -67,9 +67,14 @@ if [ -z "$a" ]; then
   if [ "$(live_state "$dev")" = up ]; then missing=1; else down_no_addr=1; fi
 fi
 {% endif %}
+{# VLAN 표시는 **M2 부터**다. M1 의 랩에는 VLAN 이 없다 — 브리지는
+   vlan_filtering 0 이고 두 PC 가 한 대역에 있다. 그런데도 여기에 [VLAN 10]
+   이 찍히면 두 가지가 동시에 나쁘다. 지금 상태에 대한 거짓말이고(이 스크립트가
+   주소를 설계값이 아니라 실제값으로 읽는 것과 같은 이유다), M2 3장에서
+   교육생이 직접 나눌 것을 미리 알려 주는 것이 된다. #}
 printf '%-10s %-8s %-20s %-14s %s\n' "$dev" \
   "$(live_state "$dev")" "${a:--}" "{{ i.peer | default('-') }}" \
-  "{{ i.desc | default(i.role | default('', true), true) }}{% if i.vlan is defined and i.vlan %} [VLAN {{ i.vlan }}]{% endif %}"
+  "{{ i.desc | default(i.role | default('', true), true) }}{% if i.vlan is defined and i.vlan and stages.index(config_stage | default(lab_stage)) >= stages.index('m2') %} [VLAN {{ i.vlan }}]{% endif %}"
 {% endfor %}
 echo
 # 배열 길이를 세는 bash 문법(달러-중괄호-샵)은 여기서 쓸 수 없다.
