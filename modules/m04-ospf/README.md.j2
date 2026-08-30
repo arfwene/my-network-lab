@@ -483,10 +483,13 @@ r1# show ip route
 ```
 C>* {{ cidr.vlan10 }} is directly connected, eth1.10
 C>* {{ cidr.vlan20 }} is directly connected, eth1.20
+S>* {{ zone['site-b'] }} [1/0] via {{ p2p['r1-r2'].addresses.r2 }}, eth2
 C>* {{ p2p['r1-r2'].cidr }} is directly connected, eth2
 C>* {{ p2p['r1-r3'].cidr }} is directly connected, eth3
-S>* {{ zone['site-b'] }} [1/0] via {{ p2p['r1-r2'].addresses.r2 }}, eth2
 ```
+
+주소 순으로 나오므로 `S` 줄이 가운데에 끼어 있습니다. `lo0` 과 `mgmt0` 줄도
+함께 나오는데 실습과 무관해서 뺐습니다 (M3 3.1).
 
 | 글자 | 뜻 |
 |---|---|
@@ -667,6 +670,17 @@ O>* {{ p2p['r2-r4'].cidr }} [110/20] via {{ p2p['r1-r2'].addresses.r2 }}, eth2, 
 20 은 `r1` 의 `eth2`({{ p2p['r1-r2'].ospf_cost }}) 와 `r2` 의 `eth2`({{ p2p['r2-r4'].ospf_cost }}) 를 더한 값입니다.
 `r2` 의 루프백 `{{ loopback.r2 }}/32` 도 한 줄 함께 올라옵니다.
 
+실제 화면에는 줄이 더 많습니다. `>*` 가 없는 `O` 줄이 함께 나옵니다.
+
+```
+O   {{ cidr.vlan10 }} [110/1] is directly connected, eth1.10, weight 1, 00:00:55
+O   {{ p2p['r1-r2'].cidr }} [110/10] is directly connected, eth2, weight 1, 00:00:55
+```
+
+**자기 발밑의 대역입니다.** OSPF 도 그 대역을 알고는 있지만, 직접 붙어 있는 것(`C`)이
+이기므로 실제로 쓰이지는 않습니다 — 그래서 `>*` 가 없습니다. 3.1 의 표에서 본
+그 표시입니다. 이 교재의 예시는 **새로 배운 줄만** 옮겨 적습니다.
+
 ```labdiagram
 kind: mini
 cols: [r1, [r2, r3], r4]
@@ -793,6 +807,8 @@ O>* {{ p2p['r3-r4'].cidr }} [110/120] via {{ p2p['r1-r2'].addresses.r2 }}, eth2,
 ```
 
 서버망 `{{ cidr.vlan40 }}` 이 나타났고, next-hop 이 `{{ p2p['r1-r2'].addresses.r2 }}`(주 경로)입니다.
+여기서도 `>*` 가 붙은 줄만 옮겼습니다. 실제 화면에는 3.3 에서 본 발밑 대역들과
+루프백 `/32` 들이 함께 있습니다 — 세는 것이 아니라 **찾는 것**이 목적입니다.
 
 마지막 줄도 보세요. `r3`–`r4` 구간(`{{ p2p['r3-r4'].cidr }}`)으로 가는 길조차
 **`r2` 를 도는 편이 쌉니다** — 10+10+100 이 100+100 보다 작기 때문입니다.
@@ -1045,7 +1061,7 @@ sudo journalctl -u frr --since '5 min ago' | grep -i mtu
 ```
 
 ```
-OSPF Packet[DD]: Neighbor {{ loopback.r3 }} MTU 1500 is larger than [eth3]'s MTU 1400
+Packet[DD]: Neighbor {{ loopback.r3 }} MTU 1500 is larger than [eth3:{{ p2p['r1-r3'].addresses.r1 }}]'s MTU 1400
 ```
 
 **조치** — 낮은 쪽을 올려 맞춥니다. 실무에서는 중간 장비(스위치 · 터널 · VPN)가 MTU 를
@@ -1240,7 +1256,8 @@ Dead timer {{ routing.ospf.timers.dead }}초를 기다리지 않습니다. 내 �
 sudo ip link set eth2 up
 ```
 
-몇 초 뒤 경로가 다시 `r2` 로 돌아옵니다. **이때도 ping 이 한두 개 빠집니다.**
+몇 초 뒤 경로가 다시 `r2` 로 돌아옵니다. **이때도 순단이 있습니다** — `-i 0.05` 로
+돌리고 있었다면 한 개쯤 빠진 것이 보입니다 (`-i 0.2` 로는 대개 안 보입니다).
 장애 복구 작업이 또 한 번의 순단이라는 사실은 실무 작업 계획에서 반드시 고려해야 합니다.
 
 ### 6.2 cost 로 경로를 유도한다
@@ -1270,13 +1287,20 @@ traceroute -n {{ ip.pc1 }}
 ```
  1  {{ gw.vlan40 }}
  2  {{ p2p['r2-r4'].addresses.r2 }}
- 3  {{ p2p['r1-r2'].addresses.r1 }}
+ 3  {{ p2p['r1-r3'].addresses.r1 }}
  4  {{ ip.pc1 }}
 ```
 
-**여전히 `r2` 다.** 가는 길은 r3, 오는 길은 r2 인 비대칭 경로가 만들어졌습니다.
+**여전히 `r2` 다.** 2번 홉이 `{{ p2p['r2-r4'].addresses.r2 }}` — `r2` 를 지났다는 뜻입니다.
+가는 길은 r3, 오는 길은 r2 인 비대칭 경로가 만들어졌습니다.
 통신은 정상입니다. 하지만 경로에 방화벽이 있었다면 한쪽 방향만 지나가 세션이 깨집니다.
 이것이 M10 에서 다시 나옵니다.
+
+3번 홉이 `{{ p2p['r1-r3'].addresses.r1 }}`(r3 쪽 포트)인 것에는 따로 설명이 필요합니다.
+그 줄은 `r1` 이 보낸 답이고, 리눅스는 **그 답을 내보내는 인터페이스**의 주소를
+출발지로 씁니다. 지금 `r1` 이 `web` 쪽으로 나가는 문은 `eth3` 이라 그 주소가 찍혔습니다 —
+패킷이 들어온 문(`eth2`)이 아닙니다. 앞에서 "홉에 보이는 것은 들어온 쪽 주소" 라고
+배웠는데, 그것은 **경로가 대칭일 때만** 그렇게 보이는 것입니다.
 
 cost 는 나가는 방향에만 적용됩니다. 양쪽을 함께 바꿔야 대칭이 유지됩니다.
 
@@ -1395,7 +1419,7 @@ sudo journalctl -u frr --since '2 min ago' | grep -i mtu
 ```
 
 ```
-OSPF Packet[DD]: Neighbor {{ loopback.r3 }} MTU 1500 is larger than [eth3]'s MTU 1400
+Packet[DD]: Neighbor {{ loopback.r3 }} MTU 1500 is larger than [eth3:{{ p2p['r1-r3'].addresses.r1 }}]'s MTU 1400
 ```
 
 **그리고 지금 통신은 멀쩡합니다.** 주 경로가 살아 있기 때문입니다.
