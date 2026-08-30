@@ -75,7 +75,7 @@ docs: modules appendix diagrams
 	@$(PY) tools/render-labmap.py
 	@$(PY) tools/render-access.py
 	@$(PY) tools/render-host-guard.py
-	@$(PY) tools/render-opsvm.py --vmid $(VMID)
+	@$(PY) tools/render-opsvm.py $(if $(VMID),--vmid $(VMID))
 
 modules:
 	@$(PY) tools/render-modules.py --lab $(LAB)
@@ -93,7 +93,7 @@ appendix:
 
 # 운영 서버를 관리망에 연결하는 절차. VMID 를 주면 명령이 그대로 복사된다.
 opsvm:
-	@$(PY) tools/render-opsvm.py --labs $(LABS) --vmid $(VMID) --net $(OPSNET)
+	@$(PY) tools/render-opsvm.py --labs $(LABS) $(if $(VMID),--vmid $(VMID)) --net $(OPSNET)
 
 # 운영 서버를 관리망에 연결한다 — 1회. 자기 VM 을 찾아 트렁크 NIC 을 붙이고
 # VLAN 서브인터페이스까지 만든다. netplan 쓰는 부분에서만 sudo 를 쓴다.
