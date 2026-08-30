@@ -206,7 +206,7 @@ scp /tmp/lab.img root@<proxmox>:/var/lib/vz/template/lab/
 
 - Xshell 에는 `ProxyJump` 가 없다. 대신 **프록시 종류 JUMPHOST** 가 같은 일을 하는데, 프록시는 세션 파일이 아니라 `Common\Proxy\<이름>.ini` 에 따로 있고 그 안의 `SESSION=` 이 **절대 경로**라 미리 만들어 둘 수 없다 → zip 의 `설치.bat` 이 그 자리에서 경로를 찾아 써 준다.
 - **개인 키 가져오기 한 번만 수동이다.** Xshell 은 `[가져오기]` 를 거치며 키를 자기 형식(`NSSSH`)으로 바꿔 저장하고, `SECSH\UserKeys\` 에 그냥 놓아 둔 OpenSSH 키는 읽지 않는다(확인함) → 밖에서 대신해 줄 방법이 없다. `설치.bat` 은 상태만 확인하고 절차를 띄운다.
-- 키 이름은 교재·콘솔이 `ssh-keygen -f ~/.ssh/<access.key_name>` 으로 만들게 해 맞춘다. Xshell 이 가져온 파일 이름을 키 이름으로 쓰므로 이름을 바꿀 일이 없다. 다른 이름을 쓰던 사람은 `설치.bat -KeyName <이름>` 으로 세션의 `UserKey=` 를 맞춘다.
+- 키 이름은 교재·콘솔이 `ssh-keygen -f ~/.ssh/<access.key_name>` 으로 만들게 해 맞춘다. Xshell 이 가져온 파일 이름을 키 이름으로 쓰므로 이름을 바꿀 일이 없다. 다른 이름을 쓰던 사람은 `[사용자 키 관리자]` 에서 그 키의 이름을 바꾼다.
 - 키 이름이 기본값(`id_ed25519`)이 아니므로 `gen-ssh-config.py` 가 `IdentityFile` 을 함께 넣는다. `IdentitiesOnly` 는 켜지 않는다 — 기본 이름으로 이미 키를 만들어 둔 사람을 막지 않기 위해서다.
 - CLI 로 같은 것을 만들려면 `make xshell LAB=1` (→ `dist/my-network-lab/`).
 

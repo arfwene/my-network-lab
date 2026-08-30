@@ -152,8 +152,7 @@ def build(lab_id, user=None, key=KEY_NAME):
 #  손으로 하는 프록시 등록도 20번이다.
 # ---------------------------------------------------------------------------
 def _installer(lab_id, jump_ip, proxy, key):
-    ps = rf'''param([string]$KeyName = "")
-# my-network-lab · lab{lab_id} — Xshell 세션 설치
+    ps = rf'''# my-network-lab · lab{lab_id} — Xshell 세션 설치
 # 하는 일 세 가지입니다.
 #   ① 이 폴더의 세션 파일을 Xshell 세션 폴더로 복사
 #   ② 점프 호스트 프록시({proxy}) 를 만들어 준다
@@ -214,17 +213,11 @@ Write-Host "프록시 등록: {proxy}  ->  {jump_ip}:22" -ForegroundColor Green
 #
 #    그래서 여기서는 **상태만 확인하고 무엇을 해야 하는지 말한다.** 파일을 넣어
 #    두고 "됐다" 고 하면, 실패가 접속할 때가 되어서야 나타나 원인을 못 찾는다.
-#
-#    다만 세션이 어느 키를 쓸지는(`UserKey=`) 설정일 뿐이라 여기서 맞춰도 된다.
-#    -KeyName 으로 받는다.
 $keydir = Join-Path $base "SECSH\UserKeys"
 $have = @(Get-ChildItem $keydir -Filter *.pri -ErrorAction SilentlyContinue |
           ForEach-Object {{ $_.BaseName }})
 
-if ($KeyName) {{
-    Set-SessionKey $KeyName
-    Write-Host "개인 키: 세션이 「$KeyName」 를 쓰도록 맞췄습니다" -ForegroundColor Green
-}} elseif ($have -contains "{key}") {{
+if ($have -contains "{key}") {{
     Write-Host "개인 키: 준비됐습니다 ({key})" -ForegroundColor Green
 }} else {{
     Write-Host ""
@@ -238,8 +231,8 @@ if ($KeyName) {{
     Write-Host "  공개 키({key}.pub)를 웹 콘솔 [접속 키] 에 등록하세요."
     if ($have.Count -gt 0) {{
         Write-Host ""
-        Write-Host "  이미 쓰던 키를 그대로 쓰려면 그 이름으로 다시 돌리면 됩니다."
-        Write-Host "    설치.bat -KeyName <키이름>"
+        Write-Host "  이미 쓰던 키를 그대로 쓰려면 [사용자 키 관리자] 에서 그 키의"
+        Write-Host "  [속성] 을 열어 이름을 「{key}」 로 바꿔도 됩니다."
         Write-Host "    (지금 등록된 키: $($have -join ', '))"
     }}
     Write-Host "  파일을 UserKeys 폴더에 복사해 넣는 것으로는 안 됩니다 —" -ForegroundColor Yellow
@@ -264,7 +257,7 @@ def _launcher():
     bat = ("@echo off\r\n"
            "chcp 65001 > nul\r\n"
            "powershell -NoProfile -ExecutionPolicy Bypass "
-           "-File \"%~dp0install.ps1\" %*\r\n"
+           "-File \"%~dp0install.ps1\"\r\n"
            "pause\r\n")
     return bat.encode("ascii")
 
@@ -332,10 +325,8 @@ JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까�
    그리고 공개 키({key}.pub)를 웹 콘솔 [접속 키] 에 등록하세요.
    웹 콘솔 [접속 키] 화면이 같은 명령을 알려 줍니다.
 
-   [이미 쓰던 키를 그대로 쓰려면] 그 이름을 대 주세요. 세션이 그 키를 쓰도록
-   맞춰 줍니다.
-
-     설치.bat -KeyName <키이름>
+   [이미 쓰던 키를 그대로 쓰려면] [사용자 키 관리자] 에서 그 키의 [속성] 을 열어
+   이름을 「{key}」 로 바꿔도 됩니다. 세션이 그 이름을 보고 있습니다.
 
 
 접속이 안 될 때
@@ -349,8 +340,7 @@ JUMPHOST** 가 같은 일을 합니다. 설치 스크립트가 그 프록시까�
      키 인증이 실패한 것입니다. 그 비밀번호는 존재하지 않습니다.
      3번의 키 등록을 확인하세요.
  · 키를 고르라고 묻는다 / 키를 못 찾는다
-     세션이 가리키는 이름의 키가 [사용자 키 관리자] 에 없습니다.
-     3번대로 가져오거나, 설치.bat -KeyName <쓸 키 이름> 으로 다시 돌리세요.
+     [사용자 키 관리자] 에 「{key}」 라는 이름의 키가 없습니다. 3번을 보세요.
  · 세션 [속성] > [연결] > [프록시] 가 비어 있다
      프록시가 등록되지 않았습니다. 설치.bat 을 다시 돌리고 Xshell 을 껐다 켜세요.
  · 호스트 키 경고가 계속 거슬린다
