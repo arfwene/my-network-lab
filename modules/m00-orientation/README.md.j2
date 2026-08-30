@@ -149,8 +149,14 @@ ssh pc1
 
 ```powershell
 New-Item -ItemType Directory -Force $HOME\.ssh | Out-Null
-Get-Content $HOME\Downloads\ssh-config-lab{{ lab_id }} | Add-Content $HOME\.ssh\config
+Get-Content -Encoding UTF8 $HOME\Downloads\ssh-config-lab{{ lab_id }} | Add-Content $HOME\.ssh\config
 ```
+
+> 주의 — `-Encoding UTF8` 을 빼지 마세요. PowerShell 은 파일을 읽을 때
+> 기본으로 UTF-8 이 아니라 Windows 의 기본 인코딩을 씁니다. 빼고 돌리면
+> 설정 안의 한글 주석이 `?궡 PC` 처럼 깨집니다. 접속에는 지장이 없지만,
+> 깨진 채로 두면 나중에 그 파일을 읽을 수 없습니다. 이미 깨뜨렸다면
+> `notepad $HOME\.ssh\config` 로 열어 깨진 줄을 지우고 다시 붙이세요.
 
 <details><summary>macOS · Linux 를 쓴다면</summary>
 

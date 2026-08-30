@@ -27,7 +27,11 @@ def main(lab_id, user=None):
         f"#",
         f"#  Windows (PowerShell):",
         f"#    New-Item -ItemType Directory -Force $HOME\\.ssh | Out-Null",
-        f"#    Get-Content $HOME\\Downloads\\ssh-config-lab{lab_id} | Add-Content $HOME\\.ssh\\config",
+        # -Encoding UTF8 을 빼면 안 된다. Windows PowerShell(5.1)의 Get-Content 는
+        # 기본이 ANSI(한국어 Windows 에서 CP949)라 이 파일의 한글 주석이 깨진다.
+        # 깨진 주석은 ssh 동작에는 지장이 없지만, 교육생이 처음 만나는 화면이
+        # "?궡 PC" 로 시작하면 설정이 잘못된 줄 안다.
+        f"#    Get-Content -Encoding UTF8 $HOME\\Downloads\\ssh-config-lab{lab_id} | Add-Content $HOME\\.ssh\\config",
         f"#",
         f"#  macOS / Linux:",
         f"#    mkdir -p ~/.ssh",

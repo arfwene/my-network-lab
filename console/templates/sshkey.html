@@ -78,7 +78,7 @@
       <pre><code>ssh-keygen -t ed25519 -C "{{ user.username }}@내PC"</code></pre>
       <p>세 번 묻습니다. <b>전부 그냥 Enter</b> (저장 위치 기본값, 암호 없음).
          그다음 아래로 공개키를 꺼냅니다.</p>
-      <pre><code>Get-Content $HOME\.ssh\id_ed25519.pub</code></pre>
+      <pre><code>Get-Content -Encoding UTF8 $HOME\.ssh\id_ed25519.pub</code></pre>
       <p><code>ssh-ed25519 AAAA...</code> 로 시작하는 <b>한 줄</b>이 나옵니다.
          그 줄을 통째로 복사해 아래에 붙여넣습니다.</p>
       <p class="note">
@@ -150,8 +150,13 @@ cat ~/.ssh/id_ed25519.pub</code></pre>
       </p>
       <p><b>Windows</b> — 받은 파일은 보통 <code>다운로드</code> 폴더에 있습니다.</p>
       <pre><code>New-Item -ItemType Directory -Force $HOME\.ssh | Out-Null
-Get-Content $HOME\Downloads\ssh-config-lab{{ lab_id }} | Add-Content $HOME\.ssh\config
+Get-Content -Encoding UTF8 $HOME\Downloads\ssh-config-lab{{ lab_id }} | Add-Content $HOME\.ssh\config
 ssh {{ example_node }}</code></pre>
+      <p class="note"><code>-Encoding UTF8</code> 을 빼지 마세요. PowerShell 은 파일을 읽을 때
+         기본으로 UTF-8 이 아니라 Windows 의 기본 인코딩을 씁니다. 빼고 돌리면 설정 안의
+         한글 주석이 <code>?궡 PC</code> 처럼 깨집니다. 접속에는 지장이 없지만 나중에 그 파일을
+         읽을 수 없습니다. 이미 깨뜨렸다면 <code>notepad $HOME\.ssh\config</code> 로 열어
+         깨진 줄을 지우고 다시 붙이세요.</p>
       <details><summary>macOS · Linux 를 쓴다면</summary>
       <pre><code>mkdir -p ~/.ssh
 cat ~/Downloads/ssh-config-lab{{ lab_id }} >> ~/.ssh/config
