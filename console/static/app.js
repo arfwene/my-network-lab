@@ -531,18 +531,25 @@
     if (e.target.closest('#examstart')) startExam();
   });
 
-  $('#clearlog').onclick = () => log.textContent = '';
+  // 로그 콘솔은 **index.html 에만** 있다. 설치·관리 화면에는 없다.
+  //   가드 없이 만지면 그 줄에서 예외가 나고, 이 파일의 **나머지가 통째로 안 돈다** —
+  //   아래 window.copyText 대입까지 못 가서 그 화면의 [복사] 가 죽는다.
+  //   페이지마다 있는 것이 다르므로 여기서는 늘 있는지부터 본다.
+  if (log && consoleBox) {
+    $('#clearlog')?.addEventListener('click', () => { log.textContent = ''; });
+    $('#togglelog')?.addEventListener('click', () => {
+      consoleBox.classList.toggle('collapsed');
+      $('#togglelog').textContent = consoleBox.classList.contains('collapsed') ? '펼치기' : '접기';
+    });
+  }
   if (rawlog) rawlog.onclick = async () => {
     rawlog.hidden = true;
     paint('$ ── 원본 로그 (관리자) ── 여기부터는 무엇을 주입했는지 그대로 보입니다');
     await stream(rawlog.dataset.job, true);
   };
-  $('#togglelog').onclick = () => {
-    consoleBox.classList.toggle('collapsed');
-    $('#togglelog').textContent = consoleBox.classList.contains('collapsed') ? '펼치기' : '접기';
-  };
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && !$('#modal').hidden) $('#modal-cancel').click();
+    const m = $('#modal');
+    if (e.key === 'Escape' && m && !m.hidden) $('#modal-cancel')?.click();
   });
 
   // 클립보드 복사. **HTTP 로 서비스하면 navigator.clipboard 가 아예 없다** —
