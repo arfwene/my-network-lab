@@ -195,6 +195,12 @@ def missing_tables(con):
     return sorted(EXPECTED_TABLES - have)
 
 
+# 사용자 한 명이 남기는 것 전부. username 을 키로 쓰는 표를 여기 모아 둔다.
+#   새 표를 만들면서 여기에 안 넣으면, 지운 사람의 흔적이 남아 **같은 이름으로
+#   다시 만들었을 때 옛 진도가 그대로 살아난다.**
+USER_OWNED = ("progress", "submissions", "attempts", "exams", "tab_seen", "login_attempts")
+
+
 def init():
     """스키마 생성 · 버전 이행 · 최초 관리자 계정 생성."""
     with connect() as con:
@@ -220,7 +226,22 @@ def init():
                 f"  살릴 수 없는 DB 라면 옮겨 두고 다시 시작하면 새로 만든다 "
                 f"(계정·API 토큰은 다시 넣어야 한다).")
     _migrate_from_yaml()
+    _purge_orphan_rows()
     ensure_bootstrap_admin()
+
+
+def _purge_orphan_rows():
+    """주인이 없는 행을 지운다.
+
+    전에는 delete_user 가 `users` 행만 지워서 진도·제출·퀴즈 이력이 남았다.
+    그 상태로 같은 이름의 계정을 다시 만들면 옛 진도가 되살아난다.
+    지금은 함께 지우지만, **이미 그렇게 지운 DB** 는 스스로 낫지 않는다.
+    시작할 때 한 번 훑어 정리한다 — 남아 있을 것이 없으면 아무 일도 하지 않는다.
+    """
+    with connect() as con:
+        for t in USER_OWNED:
+            con.execute(
+                f"DELETE FROM {t} WHERE username NOT IN (SELECT username FROM users)")
 
 
 def _upgrade_v1_to_v2(con, version):
@@ -588,12 +609,6 @@ def set_lab(username, lab_id):
         return cur.rowcount > 0
 
 
-# 사용자 한 명이 남기는 것 전부. username 을 키로 쓰는 표를 여기 모아 둔다.
-#   새 표를 만들면서 여기에 안 넣으면, 지운 사람의 흔적이 남아 **같은 이름으로
-#   다시 만들었을 때 옛 진도가 그대로 살아난다.**
-USER_OWNED = ("progress", "submissions", "attempts", "exams", "tab_seen", "login_attempts")
-
-
 def delete_user(username):
     """사용자와 그 사람이 남긴 것 전부를 지운다.
 
@@ -603,9 +618,10 @@ def delete_user(username):
     """
     with connect() as con:
         cur = con.execute("DELETE FROM users WHERE username=?", (username,))
-        if cur.rowcount:
-            for t in USER_OWNED:
-                con.execute(f"DELETE FROM {t} WHERE username=?", (username,))
+        # 계정이 이미 없어도 딸린 행은 지운다. 예전 방식으로 지워져 남은 것을
+        # 같은 화면에서 한 번 더 눌러 치울 수 있어야 한다.
+        for t in USER_OWNED:
+            con.execute(f"DELETE FROM {t} WHERE username=?", (username,))
         return cur.rowcount > 0
 
 
