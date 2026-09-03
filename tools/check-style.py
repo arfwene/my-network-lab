@@ -236,41 +236,63 @@ def quiz_count(mod_dir):
 #  교재 · 과제는 존댓말로 쓴다 (docs/STYLE.md 1). 예전 모듈은 평서형(`~한다`)이라
 #  한 번에 다 못 바꾼다 — 막지 않고 **몇 문장 남았는지만** 센다. 0 이면 다 바뀐 것이다.
 #  제목과 도입부(첫 `---` 위)는 이름표에 가까우므로 세지 않는다.
-#  `[가-힣]*` 인 이유 — `…(management)다.` 처럼 **닫는 괄호나 백틱이 바로 앞**에
-#  오는 자리를 놓쳤다. 한글이 하나는 있어야 한다고 보면 `)다` 를 못 잡는다.
-#  대신 `니다` 만은 빼야 하므로 뒤에서 따로 걸러낸다.
-PLAIN = re.compile(r"(?<!니)다(?=[.\s]|$)")
-# 괄호가 바로 붙어 문장이 끝나는 자리. PLAIN 은 구절 끝에서만 세므로 이것을 놓쳤다.
-PAREN = re.compile(r"(?<!니)다(?=\*{0,2}\()")
+#
+#  ▸ 왜 문단으로 이어 붙인 뒤에 자르나
+#    전에는 줄 하나를 문장 하나로 보고 `다.` 뒤에서만 잘랐다. 그래서
+#      · 온점 없이 끝나는 문장(`… 타이핑한다:` `… 감싼다 — 콜론이 겹친다.`)을
+#        통째로 놓쳤다. 검사는 0 인데 화면에는 평서형이 그대로 있었다.
+#      · 반대로 **줄바꿈에 속아** 멀쩡한 연결형을 셌다 — 한 문장이 두 줄에 걸치면
+#        (`… 한 번 내려갔다` / `올라오는 것만으로 …`) 앞줄 끝이 종결처럼 보인다.
+#    문단을 먼저 잇고, 그다음에 문장 끝날 자리에서 자르면 둘 다 사라진다.
+PLAIN = re.compile(r"(?<!니)(?<!\s)다$")
+#  「둘 다」 는 부사, 「~마다 · ~보다」 는 조사다. 종결이 아니다.
+NOT_PLAIN = re.compile(r"(마다|보다|만하다)$")
+#  산문만 남긴다 — 명령·인용·표시는 문장 규칙 대상이 아니다.
+INLINE = re.compile(r"`[^`]*`")                      # 인라인 코드
+QUOTED = re.compile(r'"[^"]*"|「[^」]*」')             # 남의 말 · 증상 그대로
+LINKED = re.compile(r"\[([^\]]*)\]\([^)]*\)")        # [글자](주소) -> 글자
+JINJA = re.compile(r"\{\{.*?\}\}|\{%.*?%\}")
+EMPH = re.compile(r"\*\*|\*|__")
+#  문장이 끝나는 자리. em 대시와 콜론도 센다 — 이 교재는 거기서 문장을 자주 끊는다.
+SPLIT = re.compile(r"[.!?…]\s|[.!?…]$|\s—\s|—$|:\s|:$|\|")
+
+
+def _sentences(par):
+    t = LINKED.sub(r"\1", par)
+    t = INLINE.sub(" ", t)
+    t = QUOTED.sub(" ", t)
+    t = JINJA.sub(" ", t)
+    t = EMPH.sub("", t)
+    for seg in SPLIT.split(t):
+        yield seg.strip(" \t)(»”'·;,:>")
+
+
+def plain_sentences(raw):
+    """평서형으로 끝나는 문장들. 세는 쪽과 보여 주는 쪽이 같은 것을 본다."""
+    body = strip_blocks(raw).split("\n---\n", 1)[-1]
+    out, par = [], []
+    def flush():
+        if par:
+            for sent in _sentences(" ".join(par)):
+                if len(sent) > 2 and PLAIN.search(sent) and not NOT_PLAIN.search(sent):
+                    out.append(sent)
+            par.clear()
+    for line in body.splitlines():
+        t = line.strip()
+        # 빈 줄 · 제목 · 목차 줄에서 문단이 끊긴다. 목록은 항목마다 끊는다 —
+        # 항목 하나가 문장 하나라서, 이어 붙이면 앞 항목의 끝을 놓친다.
+        if not t or t.startswith("#") or t.lstrip("> ").startswith("- ["):
+            flush()
+            continue
+        if re.match(r"[-*+]\s|\d+\.\s", t.lstrip("> ")):
+            flush()
+        par.append(t.lstrip("> "))
+    flush()
+    return out
 
 
 def plain_form(raw):
-    body = strip_blocks(raw)
-    body = body.split("\n---\n", 1)[-1]
-    n = 0
-    quoted = ""
-    for line in body.splitlines():
-        if not line.strip():
-            quoted = ""          # 빈 줄에서 문단이 끊긴다
-        if line.startswith("#") or line.lstrip().startswith("- ["):
-            continue
-        # 문장이 괄호로 끝나는 자리 — "…보낸다(M2 에서 본 것)." 도 평서형이다.
-        # 따옴표 안은 세지 않는다. 증상이나 남의 말을 그대로 옮긴 인용이라
-        # 평서형이 맞기 때문이다.
-        # 따옴표 가드는 **문단 안에서** 센다. 인용이 두 줄에 걸치면 뒷줄만
-        # 홀수로 세어져 멀쩡한 문장을 인용으로 오인하고 건너뛰었다.
-        for m in PAREN.finditer(line):
-            if (quoted + line[:m.start()]).count('"') % 2 == 0:
-                n += 1
-        quoted += line
-        for seg in re.split(r"(?<=다[.])\s+|\|", line):
-            # 문장 끝의 괄호와 굵게 표시를 걷어내야 "(M3 에서 쓴다)" 나
-            # "**...생겼다.**" 처럼 표시에 감싸인 평서형이 잡힌다. 따옴표는
-            # 걷어내지 않는다 — 증상이나 남의 말을 그대로 옮긴 인용은 평서형이 맞다.
-            seg = seg.strip().rstrip(".)* ").strip()
-            if seg and PLAIN.search(seg) and PLAIN.search(seg).end() == len(seg):
-                n += 1
-    return n
+    return len(plain_sentences(raw))
 
 
 def measure(p):
@@ -290,7 +312,13 @@ def measure(p):
     sent = len(re.findall(r"(?:다|요)[.]|[.!?]\s*$", body, re.M)) or 1
     ntab, tab_lines, tiny, all_lines = tables(raw)
     return {
-        "plain": plain_form(raw),
+        # 평서형은 **교육생이 보는 문서 전부**에서 센다. README 만 보면
+        # 과제에 남은 평서형을 아무도 못 잡는다 — 과제도 교육생이 읽는다.
+        # answers 는 강사용이라 평서형이 맞다 (STYLE §1). 세지 않는다.
+        "plain": sum(len(plain_sentences(f.read_text(encoding="utf-8")))
+                     for f in (p, p.parent / "tasks.md.j2") if f.exists()),
+        "plain_at": [(f.name, t) for f in (p, p.parent / "tasks.md.j2") if f.exists()
+                     for t in plain_sentences(f.read_text(encoding="utf-8"))],
         "lines": len(lines), "quote_lines": len(quotes), "quote_blocks": len(blocks),
         "bad_prefix": bad_prefix, "bold": bold, "sent": sent, "tiny": tiny,
         "bold_per_sent": bold / sent, "quote_per_100": len(quotes) / max(len(lines), 1) * 100,
@@ -366,6 +394,12 @@ def main(only=None):
               f"{len(cx):>11}{len(fq):>11}{m['bold_per_sent']:>10.2f}"
               f"{m['quote_per_100']:>11.1f}{m['table_pct']:>7.1f}{len(m['tiny']):>7}"
               f"{len(m['bad_prefix']):>15}{m['plain']:>8}{N}")
+        # 평서형은 막지 않지만(STYLE §12) **어느 문장인지**는 보여 준다.
+        # 개수만 찍으면 어디를 고쳐야 하는지 찾느라 다시 훑게 된다.
+        for fn, t in m["plain_at"][:6]:
+            print(f"        {Y}평서형{N} {fn}: {t[:72]}")
+        if len(m["plain_at"]) > 6:
+            print(f"        {Y}평서형{N} … {len(m['plain_at']) - 6}문장 더")
         if marks:
             bad += 1
             for b in m["bad_prefix"][:2]:
