@@ -58,18 +58,17 @@ pc1 에서 `ping -c 3 {{ ip.web }}` 후 Ctrl-C.
 |---|---|---|
 | 1 | pc1↔web 전부 (SSH 제외) | `host {{ ip.pc1 }} and host {{ ip.web }} and not port 22` |
 | 2 | 연결 시도만 | `tcp[tcpflags] & (tcp-syn\|tcp-ack) == tcp-syn` |
-| 3 | RST 만 | `tcp[tcpflags] & tcp-rst != 0` |
-| 4 | 서버망과 오간 ICMP | `net {{ cidr.vlan40 }} and icmp` |
-| 5 | 트렁크의 VLAN {{ vlans[20].id }} | `vlan {{ vlans[20].id }}` |
-| 6 | ARP 또는 ICMP | `arp or icmp` |
-| 7 | FTP passive 대역 | `portrange {{ services.ftp.passive_range }}` |
-| 8 | 브로드캐스트 | `ether broadcast` |
+| 3 | 서버망과 오간 ICMP | `net {{ cidr.vlan40 }} and icmp` |
 
-**9.** `tcp[tcpflags] & tcp-syn != 0` 은 **SYN 과 SYN-ACK 을 모두** 잡는다 (둘 다 SYN 비트가 켜져 있다).
+> 문법을 외웠는지는 보지 않는다. **교재를 보고 쓰게 할 것.**
+> 1번에서 `not port 22` 가 빠지면 짚어 줄 것 — 필터는 무엇을 잡을까만이 아니라
+> **무엇을 뺄까**이기도 하다. 과제 1 이 검사로 강제하는 것과 같은 이야기다.
+
+**4.** `tcp[tcpflags] & tcp-syn != 0` 은 **SYN 과 SYN-ACK 을 모두** 잡는다 (둘 다 SYN 비트가 켜져 있다).
 2번은 "SYN 은 켜지고 ACK 은 꺼진 것" 이므로 **연결 시도만** 남는다.
-→ 연결 수를 셀 때 앞의 것을 쓰면 **항상 두 배**로 센다.
+→ 연결 수를 셀 때 앞의 것을 쓰면 **항상 두 배**로 센다. **여기가 이 과제의 값이다.**
 
-**10.** ① **필터가 틀렸다** (특히 트렁크에서 `vlan` 누락)
+**5.** ① **필터가 틀렸다** (특히 트렁크에서 `vlan` 누락)
 ② **인터페이스를 잘못 골랐다** (`eth1` vs `eth1.10`, 관리망 vs 서비스망)
 ③ **정말로 트래픽이 없다** — 그런데 이 결론은 ①②를 배제한 뒤에만 낼 수 있다.
 (+ 미러링 환경이라면 **미러가 안 걸렸을** 가능성)
