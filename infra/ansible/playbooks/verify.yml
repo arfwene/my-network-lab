@@ -72,7 +72,7 @@
 
     - name: "[M9+] FTP 제어 채널 응답"
       ansible.builtin.shell: |
-        exec 3<>/dev/tcp/{{ ipv4.segments.vlan40.hosts.ftp }}/21 && head -1 <&3
+        timeout 5 nc {{ ipv4.segments.vlan40.hosts.ftp }} 21 | head -1
       args: {executable: /bin/bash}
       register: ftp_banner
       changed_when: false

@@ -1088,8 +1088,8 @@ sudo nft list ruleset | grep -c 'iifname "eth2" oifname "eth1"'
 #### 직접 증명한다 — 세션을 지워 본다.
 
 ```bash
-# pc1 — 연결을 하나 열어 둔다 (M7 에서 쓴 방법)
-exec 3<>/dev/tcp/{{ public.external_site.inet_loopback }}/80
+# 터미널 pc1 ① — 연결을 하나 열어 둔다 (M7 3.2 와 같은 방법)
+nc {{ public.external_site.inet_loopback }} 80
 ```
 
 ```bash
@@ -1097,24 +1097,24 @@ exec 3<>/dev/tcp/{{ public.external_site.inet_loopback }}/80
 sudo conntrack -F
 ```
 
-```bash
-# pc1 — 열어 둔 연결로 요청을 보내 본다
-printf 'GET / HTTP/1.0\r\n\r\n' >&3
-timeout 5 cat <&3 ; echo "rc=$?"
+이제 **열어 둔 `nc` 창**으로 돌아가 요청을 직접 칩니다. (마지막 빈 줄까지)
+
+```
+GET / HTTP/1.0
+
 ```
 
 응답이 오지 않습니다. 세션 기록이 사라져 리턴 패킷이 `invalid` 로 버려졌기 때문입니다.
 
 ```bash
-# 새 연결은?
+# 터미널 pc1 ② — 새 연결은?
 curl -s -o /dev/null -w '%{http_code}\n' http://{{ public.external_site.inet_loopback }}/
 ```
 
 정상입니다. 나가는 방향은 정책으로 허용돼 있으므로 새 세션이 바로 만들어집니다.
 
 ```bash
-# pc1 — 정리
-exec 3<&-
+# 터미널 pc1 ① — 정리. Ctrl-C 로 끊는다
 ```
 
 "방화벽 세션이 끊겼다" 는 말의 실체가 이것입니다.
@@ -1170,25 +1170,26 @@ curl -s -o /dev/null -w '%{http_code}\n' http://{{ dweb.public }}/
 ### 6.5 열지 않은 포트는 어떻게 실패하는가
 ```bash
 # inet — 공개된 포트
-time timeout 5 bash -c "echo > /dev/tcp/{{ dweb.public }}/80" ; echo "rc=$?"
+time nc -v -z -w 5 {{ dweb.public }} 80
 ```
 
 ```
-rc=0        ← 즉시 성공
+Connection to {{ dweb.public }} 80 port [tcp/http] succeeded!
+real  0m0.0s        ← 즉시
 ```
 
 ```bash
 # inet — 공개하지 않은 포트
-time timeout 5 bash -c "echo > /dev/tcp/{{ dweb.public }}/22" ; echo "rc=$?"
+time nc -v -z -w 5 {{ dweb.public }} 22
 ```
 
 ```
-real  0m5.0s
-rc=124      ← 5초를 다 쓰고 타임아웃
+nc: connect to {{ dweb.public }} port 22 (tcp) timed out: Operation now in progress
+real  0m5.0s        ← 5초를 다 쓰고 타임아웃
 ```
 
-`rc=124` 는 타임아웃입니다 — M7 감별표의 ②(DROP).
-만약 서버까지 갔다면 커널이 RST 를 줘서 **즉시 거부**(`rc=1`)였을 것입니다.
+`timed out` 은 M7 감별표의 ②(DROP)입니다. **5초를 다 쓴 것이 그 증거입니다.**
+만약 서버까지 갔다면 커널이 RST 를 줘서 `Connection refused` 가 **즉시** 왔을 것입니다.
 
 **실패까지 걸린 시간이 "어디서 막혔는지" 를 말해 줍니다.**
 즉시 거부 = 서버까지 갔습니다 / 타임아웃 = 중간에서 버려졌습니다.

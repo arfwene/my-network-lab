@@ -652,10 +652,8 @@ notes:
 
 ```bash
 # pc1
-exec 3<>/dev/tcp/web.{{ dns.zone }}/{{ services.web.tcp[0] }}
-printf 'GET / HTTP/1.1\r\nHost: web.{{ dns.zone }}\r\nConnection: close\r\n\r\n' >&3
-cat <&3
-exec 3<&-
+printf 'GET / HTTP/1.1\r\nHost: web.{{ dns.zone }}\r\nConnection: close\r\n\r\n' \
+  | nc web.{{ dns.zone }} {{ services.web.tcp[0] }}
 ```
 
 ```

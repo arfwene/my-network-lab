@@ -346,7 +346,7 @@ echo "== ② L3"
 ip route get "$T" 2>&1 | head -1
 ping -c2 -W2 "$T" >/dev/null && echo "  ping OK" || echo "  ping 실패"
 echo "== ③ 서비스"
-timeout 5 bash -c "echo > /dev/tcp/$T/$P" 2>/dev/null \
+nc -z -w 5 "$T" "$P" 2>/dev/null \
   && echo "  $P 포트 연결됨" || echo "  $P 포트 실패"
 EOF
 chmod +x ~/check3.sh

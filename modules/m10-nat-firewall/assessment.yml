@@ -280,13 +280,12 @@ checks:
       title: "공개 IP 의 열지 않은 포트는 **조용히 버려지는가**"
       host: inet
       run: >-
-        timeout 5 bash -c 'echo > /dev/tcp/{{ (public.nat_pool.dnat | selectattr('node','equalto','web') | first).public }}/22' 2>/dev/null;
-        echo rc=$?
-      expect: "rc=124"
+        nc -v -z -w 5 {{ (public.nat_pool.dnat | selectattr('node','equalto','web') | first).public }} 22 2>&1 | tail -1
+      expect: "timed out"
       hint: |
-        rc=124 → 타임아웃 = 정책 drop (M7 감별표 ②). 정상입니다.
-        rc=1   → 즉시 거부 = 패킷이 서버까지 갔다는 뜻 → 정책이 열려 있습니다.
-        rc=0   → **연결됐습니다.** 공개하면 안 되는 포트가 열려 있습니다.
+        `timed out` (5초를 다 씀) → 정책 drop (M7 감별표 ②). 정상입니다.
+        `Connection refused` → 패킷이 서버까지 갔다는 뜻 → 정책이 열려 있습니다.
+        `succeeded` → **연결됐습니다.** 공개하면 안 되는 포트가 열려 있습니다.
 
     # --- 설정 · 상태 ---
     - id: nat-rules
