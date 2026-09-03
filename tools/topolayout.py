@@ -209,15 +209,26 @@ class _Placer:
 def _y_at(pts, x):
     """경로가 그 x 에서 몇 y 인가. 대역 이름을 선 위에 얹을 때 쓴다."""
     for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
-        if abs(y1 - y2) < 1 and min(x1, x2) - 1 <= x <= max(x1, x2) + 1:
+        if not min(x1, x2) - 1 <= x <= max(x1, x2) + 1:
+            continue
+        if abs(y1 - y2) < 1:
             return y1
+        if abs(x1 - x2) < 1:
+            continue                    # 세로 구간은 x 하나로 y 가 안 정해진다
+        return y1 + (y2 - y1) * (x - x1) / (x2 - x1)   # 비스듬한 구간
     return pts[len(pts) // 2][1]
+
+
+def _between(A, B, placed):
+    """두 장비 **사이의 열**에 다른 장비가 서 있는가."""
+    lo, hi = (A, B) if A["gx"] < B["gx"] else (B, A)
+    return any(lo["gx"] < n["gx"] and n["gx"] + n["gw"] <= hi["gx"] for n in placed)
 
 
 def _if_spot(pts, first):
     """인터페이스 이름 자리. 선이 나가는 방향을 따라가되 글리프에서 떨어뜨린다."""
     (x1, y1), (x2, y2) = (pts[0], pts[1]) if first else (pts[-1], pts[-2])
-    if abs(y1 - y2) < 1:                        # 가로로 나간다 -> 선 아래
+    if abs(y1 - y2) <= abs(x1 - x2):            # 가로에 가깝다 -> 선 아래
         right = x2 > x1
         return x1 + (6 if right else -6), y1 + 12, "start" if right else "end"
     d = 24 if y2 > y1 else -24                  # 세로로 나간다 -> 선 오른쪽
@@ -429,6 +440,12 @@ def layout(stage="m11"):
             if not fwd:
                 ends.reverse()
             if abs(p1[1] - p2[1]) < 1:
+                pts, kind = [p1, p2], "straight"
+            elif not _between(A, B, placed):
+                # 이웃 열끼리는 **곧게** 잇는다. M5 의 r1↔r3 · r5↔r2 처럼 서로
+                # 엇갈리는 두 링크를 직각으로 꺾어 놓으면 X 자가 사라져서,
+                # 그림만 봐서는 mesh 인지 각자 한 가닥씩인지 구분이 안 된다.
+                # 사이 열에 장비가 없으므로 비스듬한 선이 무엇을 가로지를 일도 없다.
                 pts, kind = [p1, p2], "straight"
             else:
                 # 꺾는 x 를 링크마다 어긋나게 — 같은 자리에서 꺾으면 선이 포개진다.
