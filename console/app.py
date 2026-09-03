@@ -38,6 +38,7 @@ import labdesign as L          # noqa: E402
 import preflight              # noqa: E402  (tools/ — make doctor 와 같은 검사)
 import assess, auth, autokey, db, docs, exam, jobs, passwords, pve, sshkeys, state, topology_svg  # noqa: E402
 import topodrawio, diagramdrawio  # noqa: E402  (tools/ — topology_svg 가 경로를 먼저 넣는다)
+import setup_auto          # noqa: E402  (설치 절차 자동 진행기)
 
 db.init()   # 스키마 생성 + (있다면) 예전 YAML 계정 이관
 state.repair()   # 지운 랩이 단계를 들고 있는 등, 앞뒤가 안 맞는 상태를 바로잡는다
@@ -57,8 +58,12 @@ async def lifespan(_app):
     """
     # 점프 헬퍼를 쓸 수 있는지 묻는 방법을 autokey 에 꽂는다. 판단은 한 곳에만 둔다.
     autokey.ready = _jump_apply_ready
+    setup_auto.ready_jump = _jump_apply_ready
+    setup_auto.ready_mgmt = _mgmt_apply_ready
     tasks = [asyncio.create_task(exam.sweeper(runner)),
-             asyncio.create_task(autokey.worker(runner))]
+             asyncio.create_task(autokey.worker(runner)),
+             # 설치 절차를 스스로 끝까지 진행한다 — 관리자가 누를 것을 없앤다.
+             asyncio.create_task(setup_auto.worker(runner))]
     try:
         yield
     finally:
@@ -1484,54 +1489,45 @@ async def exam_op(request: Request, exam_id: int, op: str, minutes: str = Form("
 #  "설치하고 GUI 열면 그냥 쓸 수 있어야 한다" — 맞는 말이다.
 #  남은 준비 작업을 화면 하나에 모으고, 콘솔이 스스로 할 수 있는 것은 버튼으로 만든다.
 #  root 나 다른 호스트가 필요한 것만 명령으로 보여 준다 (복사 버튼과 함께).
-def _setup_buttons(jump_ready, mgmt_ready=False):
-    b = [{**x, "what": _access_what(jump_ready) if x["action"] == "setup-access" else x["what"]}
-         for x in SETUP_BUTTONS]
-    if mgmt_ready:
-        # 브리지 만들기 **바로 다음** 자리다. 순서가 곧 절차다 —
-        # 브리지를 만들고 나면 이 서버를 거기에 붙이는 것이 다음 일이다.
-        b.insert(1, {
-            "action": "setup-mgmt-net", "label": "이 서버를 관리망에 연결",
-            "what": ("이 서버가 Proxmox 위의 어느 VM 인지 찾아 관리망 트렁크 NIC 을 붙이고, "
-                     "랩별 VLAN 주소를 올립니다. 전 랩 공용이라 최초 1회면 됩니다. "
-                     "이게 없으면 랩은 만들어져도 [이 모듈 적용]·[연결 확인] 이 노드에 닿지 못합니다."),
-            "need": "Proxmox 연결 · install.sh 가 설치하는 root 헬퍼"})
-    if jump_ready:
-        b.insert(0, {
-            "action": "setup-jump-apply", "label": "점프 계정 적용",
-            "what": ("콘솔에 등록된 교육생 키로 운영 서버의 점프 계정을 만들고 "
-                     "sshd 제한을 갱신합니다. 교육생을 추가하거나 키를 바꾼 뒤에 누릅니다. "
-                     "빠진 사람은 만들고, 콘솔에서 사라진 사람은 접근을 회수합니다."),
-            "need": "install.sh 가 설치하는 root 헬퍼"})
+def _setup_buttons(auto):
+    """이 화면에 남길 버튼.
+
+    콘솔이 스스로 하는 일에는 버튼을 두지 않는다. **막힌 것에만** 둔다 —
+    자동으로 못 한 사유를 읽고 사람이 치우고 나서 다시 걸 자리가 필요하다.
+    """
+    b = [dict(x) for x in SETUP_BUTTONS]
+    for step, why in (auto.get("blocked") or {}).items():
+        spec = BLOCKED_BUTTON.get(step)
+        if spec:
+            b.insert(0, {**spec, "need": why})
     return b
 
 
-def _access_what(jump_ready):
-    """점프 계정 스크립트는 root 헬퍼가 없을 때만 쓰인다.
-
-    헬퍼가 설치돼 있으면 [점프 계정 적용] 버튼이 같은 일을 직접 한다.
-    그런데도 "점프 계정 스크립트를 만든다" 라고 적어 두면, 관리자가 dist/ 의
-    스크립트를 손으로 돌리는 **두 번째 root 경로**를 만든다 — 두 길이 갈라진다.
-    """
-    if jump_ready:
-        return ("Proxmox 콘솔 계정 스크립트를 dist/ 에 만듭니다. "
-                "점프 계정은 위 [점프 계정 적용] 이 직접 처리하므로 스크립트가 필요 없습니다.")
-    return ("점프 계정 스크립트와 Proxmox 콘솔 계정 스크립트를 dist/ 에 만듭니다. "
-            "만들기만 하고 적용하지 않습니다 — 적용은 아래 root 절차입니다.")
-
-
+#  콘솔이 **스스로** 하는 일에는 버튼을 두지 않는다 (console/setup_auto.py).
+#  버튼은 누군가 이 화면을 열어 봐야 눌린다 — 교육생이 키를 등록해도, 랩을 늘려도,
+#  그 사실을 아는 사람이 화면에 올 때까지 아무 일도 일어나지 않았다.
+#  여기 남는 것은 **자동으로 못 하는 것**뿐이다.
+#    · 문서 생성  — 언제 뽑을지는 관리자가 정한다 (교재를 인쇄해 나눠 줄 때)
+#    · 막힌 단계  — 아래 _setup_buttons 가 사유와 함께 그때만 끼워 넣는다
 SETUP_BUTTONS = [
-    {"action": "setup-mgmt", "label": "관리망 브리지 만들기",
-     "what": "Proxmox 에 VLAN 브리지 1개를 만듭니다. 전 랩 공용이라 최초 1회면 됩니다.",
-     "need": "Proxmox 연결"},
-    {"action": "setup-access", "label": "교육생 접속 파일 만들기",
-     "what": "",       # jump_ready 에 따라 _setup_buttons 가 채운다
-     "need": ""},
     {"action": "setup-docs", "label": "문서 생성",
      "what": "교재·부록·랩 지도·접속 안내를 dist/ 에 파일로 뽑습니다. "
              "웹 화면은 이것 없이도 나옵니다 — 인쇄·배포용입니다.",
      "need": ""},
 ]
+
+#  막힌 단계에 끼워 넣을 버튼. 사유는 setup_auto 가 준다.
+BLOCKED_BUTTON = {
+    "access": {"action": "setup-access", "label": "교육생 접속 파일 만들기",
+               "what": "Proxmox 콘솔 계정 스크립트를 dist/ 에 다시 만듭니다."},
+    "mgmt-bridge": {"action": "setup-mgmt", "label": "관리망 브리지 만들기",
+                    "what": "Proxmox 에 VLAN 브리지 1개를 만듭니다. 전 랩 공용이라 최초 1회면 됩니다."},
+    "mgmt-net": {"action": "setup-mgmt-net", "label": "이 서버를 관리망에 연결",
+                 "what": "관리망 트렁크 NIC 을 붙이고 랩별 VLAN 주소를 올립니다."},
+    "jump": {"action": "setup-jump-apply", "label": "점프 계정 적용",
+             "what": "콘솔에 등록된 교육생 키로 운영 서버의 점프 계정을 만들고 "
+                     "sshd 제한을 갱신합니다."},
+}
 
 
 _HELPER_READY = {}
@@ -1592,24 +1588,26 @@ def _setup_manual(jump_ready=False, mgmt_ready=False):
             {"title": "이 서버를 관리망에 연결",
              "where": "이 운영 서버, sudo",
              "why": ("netplan 을 쓰는 데 root 가 필요합니다. 콘솔은 root 로 돌지 않습니다. 최초 1회. "
-                     "아래 한 줄을 한 번 실행해 두면 이 일이 위쪽 버튼으로 바뀝니다 — "
+                     "아래 한 줄을 한 번 실행해 두면 이 일도 콘솔이 스스로 합니다 — "
                      f"cd {root} && ./install.sh --no-apt"),
              "cmd": f"cd {root} && make mgmt-net"}]),
         *([] if jump_ready else [
             {"title": "점프 계정 적용",
              "where": "이 운영 서버, sudo",
              "why": ("OS 계정과 sshd 설정을 건드립니다. 교육생이 늘 때마다 필요합니다. "
-                     "아래 한 줄을 한 번 실행해 두면 이 일이 위쪽 버튼으로 바뀝니다 — "
+                     "아래 한 줄을 한 번 실행해 두면 이 일도 콘솔이 스스로 합니다 — "
                      f"cd {root} && ./install.sh --no-apt"),
              "cmd": (f"cd {root} && sudo ./dist/jump-access.sh\n"
                      "sudo cp dist/jump-access.conf /etc/ssh/sshd_config.d/60-lab-jump.conf\n"
                      "sudo sshd -t && sudo systemctl reload ssh")}]),
         {"title": "Proxmox 콘솔 계정 적용",
          "where": f"Proxmox 호스트({node}) 에서 root",
-         "why": ("pveum 은 Proxmox 호스트에만 있습니다. 랩당 1계정이라 "
-                 "교육생이 늘어도 다시 할 필요는 없습니다 — 랩을 늘릴 때만 합니다. "
+         "why": ("pveum 은 Proxmox 호스트에만 있습니다 — 콘솔은 그 호스트에 셸이 없습니다. "
+                 "스크립트는 이미 dist/console-access.sh 에 만들어져 있습니다(랩 수만큼). "
+                 "옮겨서 한 번 실행하면 끝이고, 교육생이 늘어도 다시 할 필요가 없습니다. "
                  "비밀번호는 교육생이 [접속 키] 화면에서 직접 봅니다."),
-         "cmd": "./console-access.sh          # dist/ 에서 복사해 온 파일"},
+         "cmd": (f"scp {root}/dist/console-access.sh root@{node}:/tmp/\n"
+                 f"ssh root@{node} /tmp/console-access.sh")},
     ]
 
 
@@ -1628,6 +1626,7 @@ async def admin_setup(request: Request, lab: int = 1, fresh: int = 0):
     checks = await asyncio.to_thread(preflight.collect, lab, False, bool(fresh))
     jump_ready = await asyncio.to_thread(_jump_apply_ready, bool(fresh))
     mgmt_ready = await asyncio.to_thread(_mgmt_apply_ready, bool(fresh))
+    auto = setup_auto.status()
     n = {"ok": 0, "warn": 0, "error": 0, "skip": 0}
     for c in checks:
         if c["status"] in n:
@@ -1637,7 +1636,7 @@ async def admin_setup(request: Request, lab: int = 1, fresh: int = 0):
         "user": user, "site_name": L.SITE["site"]["name"],
         "health": pve.last(), "pending": db.count_pending(),
         "checks": checks, "counts": n, "lab": lab,
-        "buttons": _setup_buttons(jump_ready, mgmt_ready),
+        "buttons": _setup_buttons(auto), "auto": auto,
         "jump_stale": db.jump_stale_users(),
         "manual": _setup_manual(jump_ready, mgmt_ready), "jump_ready": jump_ready,
         "busy": runner.busy(jobs.SETUP_LAB),

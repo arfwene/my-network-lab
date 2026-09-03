@@ -529,6 +529,15 @@ def _mgmt_reach():
                  "돌릴 것 (dist/access.md 8.2)")
 
 
+def mgmt_attached():
+    """이 서버가 랩 관리망에 발을 걸치고 있는가.
+
+    지역 주소만 본다 — API 왕복이 없어서 자주 물어도 된다.
+    설치 자동 진행기가 「이 서버를 관리망에 연결」 이 끝났는지 판단할 때 쓴다.
+    """
+    return _mgmt_reach().status == "ok"
+
+
 def _wrap(cfg, checks, t0):
     ds = [c.as_dict() for c in checks]
     level = "error" if any(c["status"] == "error" for c in ds) else \

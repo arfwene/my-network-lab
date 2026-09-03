@@ -711,6 +711,16 @@ pre.code{background:var(--code-bg);padding:14px 16px;border-radius:var(--r-md);o
 }
 
 /* ---------------------------------------------------------------- 설치 화면 */
+/* 설치 자동 진행 상태 — 무엇이 끝났고 무엇이 막혔는가 */
+.auto-steps{width:100%;border-collapse:collapse;margin:12px 0}
+.auto-steps td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.auto-steps td.s{width:72px} .auto-steps td.n{width:200px;font-weight:600;color:var(--ink)}
+.auto-steps td.d{color:var(--muted);font-size:13px}
+.auto-steps .tag{padding:1px 8px;border-radius:var(--r-md);font-size:12px;
+  background:var(--sunken);color:var(--muted)}
+.auto-steps .tag.ok{background:color-mix(in srgb,var(--ok) 15%,var(--panel));color:var(--ok)}
+.auto-steps .tag.warn{background:color-mix(in srgb,var(--warn-line) 18%,var(--panel));color:var(--warn)}
+
 .setup-sum{display:flex;gap:8px;align-items:center;margin:10px 0}
 .setup-sum .tag{padding:2px 9px;border-radius:var(--r-md);font-size:12px;font-weight:600}
 .setup-sum .tag.ok{background:var(--tag-ok-bg);color:var(--tag-ok-ink)}

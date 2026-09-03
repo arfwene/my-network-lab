@@ -44,15 +44,28 @@
   </section>
 
   <section class="card">
-    <h3>여기서 바로 할 수 있는 것</h3>
+    <h3>콘솔이 스스로 하는 것</h3>
     <p class="legend">
-      전에는 서버에 SSH 로 들어가 <code>make</code> 를 쳐야 했습니다. 이제 버튼입니다.
-      같은 명령을 콘솔이 대신 돌리고 로그를 아래에 그대로 보여 줍니다.
+      아래 네 가지는 누가 누르지 않아도 콘솔이 알아서 맞춥니다. 뜰 때 한 번,
+      그 뒤로 5분마다 <b>지금 상태</b>와 <b>있어야 할 상태</b>를 견주어 모자란 것만 채웁니다.
+      {% if auto.ran_at %}<br><span class="muted">마지막 확인 {{ auto.ran_at }}{% if auto.running %} · 지금 진행 중{% endif %}</span>{% endif %}
     </p>
+    <table class="auto-steps">
+      {% for st in auto.steps %}
+      <tr>
+        <td class="s">{% if st.blocked %}<span class="tag warn">막힘</span>
+            {% elif st.done %}<span class="tag ok">완료</span>
+            {% else %}<span class="tag">확인 중</span>{% endif %}</td>
+        <td class="n">{{ st.label }}</td>
+        <td class="d">{% if st.blocked %}{{ st.blocked }}
+            {% elif st.done %}<span class="muted">{{ st.done }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
     {% if not jump_ready %}
     <p class="flash">
-      <b>교육생이 늘 때마다</b> 서버에 들어가 점프 계정을 만드는 일이 남아 있습니다.
-      아래 한 줄을 <b>한 번</b> 실행해 두면 그 일도 이 화면의 버튼이 됩니다.
+      점프 계정과 관리망 연결은 root 가 필요합니다. 아래 한 줄을 <b>한 번</b> 실행해 두면
+      그 둘도 콘솔이 스스로 합니다.
       <br><code>./install.sh --no-apt</code>
       <br><span class="muted">콘솔 계정에 sudo 를 통째로 주지 않습니다 — root 소유 전용 프로그램
       하나만, 인자 없이 실행할 수 있게 합니다.</span>
@@ -63,9 +76,8 @@
       <b>교육생 {{ jump_stale|length }}명의 키가 점프 계정에 아직 반영되지 않았습니다.</b>
       {% for u in jump_stale %}<code>{{ u.username }}</code>{% if not loop.last %} {% endif %}{% endfor %}<br>
       이 사람들이 <code>ssh</code> 를 하면 <b>첫 홉에서</b> 막힙니다.
-      아래 <b>[점프 계정 적용]</b> 을 누르면 해결됩니다.
-      {% if not jump_ready %}<br><span class="muted">버튼이 없으면 위의
-      <code>./install.sh --no-apt</code> 를 먼저 한 번 실행해 주세요.</span>{% endif %}
+      {% if jump_ready %}다음 확인에서 저절로 반영됩니다 — 기다리기 싫으면 아래 버튼을 누르세요.
+      {% else %}위의 <code>./install.sh --no-apt</code> 를 먼저 한 번 실행해 주세요.{% endif %}
     </p>
     {% endif %}
     <div class="setup-acts">

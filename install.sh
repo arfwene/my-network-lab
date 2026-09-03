@@ -297,16 +297,21 @@ cat <<EOF
        admin / admin  →  비밀번호 변경  →  [연결 설정] 에 Proxmox 토큰 입력
        확인을 누르면 [설치] 화면으로 넘어간다.
 
-       [설치] 화면이 남은 것을 전부 보여 준다:
-         · 무엇이 준비됐고 무엇이 안 됐는지 (make doctor 와 같은 검사)
-         · 콘솔이 대신 할 수 있는 것은 버튼    (관리망 브리지 · 접속 파일 · 문서)
-         · root 가 필요한 것은 복사할 명령     (sudo make mgmt-net 등)
+       토큰이 확인되면 **콘솔이 남은 설치를 스스로 진행한다.**
+       누를 것이 없다. [설치] 화면이 무엇이 끝났는지 보여 준다:
+         · 교육생 접속 파일 (dist/console-access.sh)
+         · 관리망 브리지            ← Proxmox 에 만든다
+         · 이 서버를 관리망에 연결   ← netplan
+         · 점프 계정                ← 교육생이 키를 넣을 때마다 저절로
 
-  4. 초록이 되면 랩 화면에서 [랩 생성]. make 를 칠 일은 없다.
+       콘솔이 못 하는 것만 그 화면에 사유와 함께 남는다.
 
-  ※ 교육생이 늘 때마다 서버에 들어와 점프 계정을 만드는 일이 번거롭다면
-       ./install.sh --no-apt
-     한 번 실행해 두면 그 일도 콘솔 버튼이 된다 (root 소유 헬퍼 + 인자 없는 sudoers).
+  4. dist/console-access.sh 를 Proxmox 호스트로 옮겨 root 로 한 번 실행한다.
+       scp $ROOT/dist/console-access.sh root@<노드>:/tmp/
+       ssh root@<노드> /tmp/console-access.sh
+     랩당 1계정이라 교육생이 늘어도 다시 할 필요가 없다.
+
+  5. 초록이 되면 랩 화면에서 [랩 생성]. make 를 칠 일은 없다.
 
   전체 절차: docs/DEPLOY.md
 EOF
