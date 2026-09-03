@@ -40,6 +40,7 @@ import assess, auth, autokey, db, docs, exam, jobs, passwords, pve, sshkeys, sta
 import topodrawio, diagramdrawio  # noqa: E402  (tools/ — topology_svg 가 경로를 먼저 넣는다)
 
 db.init()   # 스키마 생성 + (있다면) 예전 YAML 계정 이관
+state.repair()   # 지운 랩이 단계를 들고 있는 등, 앞뒤가 안 맞는 상태를 바로잡는다
 pve.sync()  # DB 에 저장된 Proxmox 접속 정보를 var/runtime.yml 로 다시 내보낸다
 
 runner = jobs.Runner()

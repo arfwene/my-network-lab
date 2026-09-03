@@ -20,13 +20,8 @@ def _path(lab_id):
     return DIR / f"lab{lab_id}.json"
 
 
-def load(lab_id):
-    p = _path(lab_id)
-    if p.exists():
-        try:
-            return json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+def fresh(lab_id):
+    """아무것도 하지 않은 랩의 상태. 랩을 지우면 여기로 되돌린다."""
     return {"lab_id": lab_id, "stage": None, "applied": [], "verified": [],
             "last_job": None, "broken": [], "provisioned": None,
             # 장애 실습: 주입한 뒤 **검사가 실제로 실패하는 것을 본** 모듈들.
@@ -38,6 +33,16 @@ def load(lab_id):
             "blind": False,
             # 중간 점검에서 받아 간 힌트 수. 새 회차마다 0 으로 돌아간다.
             "hints": 0}
+
+
+def load(lab_id):
+    p = _path(lab_id)
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return fresh(lab_id)
 
 
 def save(lab_id, st):
@@ -91,6 +96,39 @@ def stage_gap(lab_id, module_stage):
             "now": now, "need": module_stage}
 
 
+def repair():
+    """앞뒤가 안 맞는 랩 상태를 바로잡는다. 콘솔이 뜰 때 한 번 부른다.
+
+    **없는 랩이 단계를 갖고 있을 수 없다.** 전에는 [랩 삭제] 가 provisioned 만
+    껐고 stage·applied 를 그대로 뒀다. 그 파일이 남아 있으면 지운 랩인데도
+    모듈 카드가 「적용됨」·「통과」로 남는다. 지금은 지울 때 함께 되돌리지만,
+    **이미 그렇게 남은 파일**은 스스로 낫지 않으므로 여기서 한 번 훑는다.
+
+    고칠 것이 없으면 아무 파일도 건드리지 않는다.
+    """
+    fixed = []
+    if not DIR.exists():
+        return fixed
+    for f in sorted(DIR.glob("lab*.json")):
+        try:
+            st = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if st.get("provisioned") is not False:
+            continue
+        if not (st.get("stage") or st.get("applied") or st.get("verified")
+                or st.get("broken") or st.get("drill_seen")):
+            continue
+        lab_id = st.get("lab_id")
+        keep = st.get("last_job")
+        st = fresh(lab_id)
+        st["provisioned"] = False
+        st["last_job"] = keep
+        save(lab_id, st)
+        fixed.append(lab_id)
+    return fixed
+
+
 def record(lab_id, action, stage=None, ok=True, scenario=None, job_id=None):
     st = load(lab_id)
     st["last_job"] = {"action": action, "stage": stage, "ok": ok,
@@ -130,7 +168,14 @@ def record(lab_id, action, stage=None, ok=True, scenario=None, job_id=None):
     if ok and action == "deploy":
         st["provisioned"] = True
     if ok and action == "destroy":
+        # 랩이 없어졌으면 **진행 상태도 없어야 한다.**
+        #   전에는 provisioned 만 껐다. 그래서 지운 랩인데도 모듈 카드가
+        #   「적용됨」·「통과」로 남았고, 새로 만든 랩이 남의 진도를 물려받았다.
+        #   지운 순간이 곧 시작점이므로 통째로 되돌린다.
+        st = fresh(lab_id)
         st["provisioned"] = False
+        st["last_job"] = {"action": action, "stage": stage, "ok": ok,
+                          "scenario": scenario, "job_id": job_id}
     return save(lab_id, st)
 
 
