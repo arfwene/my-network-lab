@@ -88,7 +88,7 @@
         {% else %}<b>{{ quiz.pass_score }}% 이상이면 통과</b>예요.{% endif %}
         횟수 제한은 없습니다. 틀린 문항은 <b>어느 것을 틀렸는지</b>와
         <b>내가 고른 답</b>까지만 알려 줍니다 — 맞는 답은 교재에서 찾으세요.<br>
-        여기는 <b>개념만</b> 확인해요. 랩에서 직접 만드는 일은 다음 <b>[과제]</b> 에서 합니다.</p>
+        여기는 <b>개념만</b> 확인합니다. 랩에서 직접 만드는 일은 다음 <b>[과제]</b> 에서 합니다.</p>
     </div>
 
     <form id="quizform" data-module="{{ module.id }}" data-phase="quiz">
@@ -131,10 +131,10 @@
       <h3>검증</h3>
       <p>
         {% if has_checks %}과제에서 만든 설정을 <b>실제 노드에서 확인</b>합니다.{% endif %}
-        {% if written %}{% if has_checks %} 그리고 {% endif %}서술 {{ written | length }}개를 제출해요.{% endif %}
-        <br><b>여기를 통과하면 다음 모듈이 열립니다.</b> 횟수 제한은 없어요.
+        {% if written %}{% if has_checks %} 함께 {% endif %}서술 {{ written | length }}개를 제출합니다.{% endif %}
+        <br><b>여기를 통과하면 다음 모듈이 열립니다.</b> 횟수 제한은 없습니다.
         {% if written and not mstate.need_review %}
-        <br>서술은 <b>제출하면 바로 넘어갑니다.</b> 관리자가 나중에 읽고 피드백을 남겨요.
+        <br>서술은 <b>제출하면 바로 넘어갑니다.</b> 관리자가 나중에 읽고 피드백을 남깁니다.
         {% elif mstate.need_review %}
         <br><b>이 모듈의 서술은 관리자 승인이 있어야 통과됩니다.</b>
         {% endif %}
@@ -146,7 +146,7 @@
       {% if has_checks %}
       <div class="checkinfo">
         <b>랩 상태 검사</b>가 실행됩니다.
-        설정이 들어갔는지, 의도한 대로 통신이 되는지 실제 노드에서 확인해요.
+        설정이 들어갔는지 의도한 대로 통신이 되는지 실제 노드에서 확인합니다.
         <span class="muted">먼저 [과제] 를 마치고 눌러 주세요.</span>
       </div>
       {% endif %}
@@ -195,7 +195,7 @@
   <div class="assess-intro next-step">
     <h3>다 하셨나요?</h3>
     <p>{% if has_checks %}<b>[검증]</b> 을 누르면 실제 노드에서 랩 상태를 확인합니다.{% endif %}
-      {% if written %} 거기서 서술 {{ written | length }}개도 함께 제출해요.{% endif %}</p>
+      {% if written %} 거기서 서술 {{ written | length }}개도 함께 제출합니다.{% endif %}</p>
     {% if mstate.need_drill %}
     <p class="drillreq {{ 'ok' if mstate.drill_passed }}">
       {% if mstate.drill_passed %}
@@ -206,7 +206,7 @@
       오른쪽 실행 패널의 <b>[중간 점검 시작]</b> 을 누르세요. 서버가 장애 하나를
       말없이 주입합니다. 증상만 보고 원인을 찾아 고친 뒤 <b>[결과 확인]</b> 을 누릅니다.<br>
       <span class="muted">이 모듈은 <b>중간 점검만</b> 실습으로 칩니다 — 시나리오를 직접 골라
-        주입하는 연습은 얼마든지 해도 되지만, 통과 조건은 이쪽입니다.<br>
+        주입하는 연습은 얼마든지 해도 되지만 통과 조건은 이쪽입니다.<br>
         고친 <b>직후</b> [결과 확인] 을 누르면 빨간 줄이 남아 있을 수 있습니다 —
         OSPF 인접은 다시 붙는 데 40초쯤 걸립니다. 잠시 뒤 한 번 더 누르세요.<br>
       {% else %}
@@ -217,7 +217,7 @@
         OSPF 인접은 40초쯤 지나야 끊깁니다. 잠시 뒤 다시 보세요.<br>
         {% endif %}
         [복구] 나 [이 모듈 적용] 으로 되돌리면 실습으로 치지 않습니다 —
-        정답을 본 것이지 찾은 것이 아니기 때문입니다. 막히면 [힌트] 를 쓰세요.</span>
+        찾은 것이 아니라 정답을 본 것입니다. 막히면 [힌트] 를 쓰세요.</span>
       {% endif %}</p>
     {% endif %}
     <button class="btn primary" data-kind="verify" {{ 'disabled' if not ta.verify }}>검증</button>
