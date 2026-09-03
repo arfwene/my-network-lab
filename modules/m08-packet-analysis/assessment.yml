@@ -232,17 +232,6 @@ checks:
         (그리고 tcpdump 출력이 SSH 로 나가면서 다시 캡처되는 되먹임까지 생깁니다)
         **필터는 "무엇을 잡을까" 만이 아니라 "무엇을 뺄까" 이기도 합니다.**
 
-    - id: trunk-pcap-vlan
-      kind: state
-      title: "트렁크에서 뜬 pcap 에 VLAN 태그 프레임이 있는가 (`/tmp/m08-trunk.pcap`)"
-      host: r1
-      run: "echo vlan=$(tcpdump -r /tmp/m08-trunk.pcap -nn vlan 2>/dev/null | wc -l)"
-      expect_regex: "vlan=[1-9]"
-      hint: |
-        r1 에서 **eth1**(트렁크)에 걸어야 합니다. eth1.10 에서 뜨면 태그가 이미 벗겨져 있습니다.
-          sudo tcpdump -i eth1 -w /tmp/m08-trunk.pcap vlan
-        아무것도 안 잡히면 필터에 `vlan` 을 빠뜨린 것입니다 (M2 의 함정).
-
     - id: icmp-pcap-bidir
       kind: state
       title: "목적지에서 뜬 pcap 에 **요청과 응답이 둘 다** 있는가 (`/tmp/m08-icmp.pcap`)"
@@ -257,13 +246,6 @@ checks:
         pc1 에서 ping 을 돌린 뒤 Ctrl-C.
         한쪽만 있다면 **가는 길과 오는 길 중 하나가 없다**는 뜻입니다 (M3 의 리턴 경로).
 
-    - id: ring-buffer
-      kind: state
-      title: "링 버퍼로 나눠 저장한 파일이 2개 이상 있는가 (`/tmp/m08-ring*`)"
-      host: pc1
-      run: "echo files=$(ls /tmp/m08-ring* 2>/dev/null | wc -l)"
-      # 2개 이상. 10개 이상도 통과해야 하므로 두 자리 수를 함께 허용한다.
-      expect_regex: "files=([2-9]|[1-9][0-9]+)"
       hint: |
         sudo tcpdump -i eth1 -w /tmp/m08-ring -C 1 -W 3 'not port 22'
         그리고 트래픽을 만들어 파일이 넘어가게 합니다 (`ping -f` 또는 큰 curl 반복).

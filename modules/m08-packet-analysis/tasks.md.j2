@@ -8,7 +8,11 @@
 
 ## 실습 과제
 
-### 과제 1. 산출물 세 개 만들기 ★
+### 과제 1. 캡처 두 개 만들기 ★
+
+tcpdump 를 **언제 걸고**(먼저인가 나중인가), **무엇을 빼고**(필터),
+**어디서 뜨는가**(출발지인가 목적지인가) — 이 셋을 손으로 겪는 과제입니다.
+
 #### (1) `/tmp/m08-http.pcap` — pc1 에서
 
 **조건**
@@ -37,20 +41,21 @@ tcpdump -r /tmp/m08-http.pcap -nn 'tcp[tcpflags] & tcp-syn != 0' | wc -l     # 1
 tcpdump -r /tmp/m08-http.pcap -nn 'port 22' | wc -l                          # 반드시 0
 ```
 
-#### (2) `/tmp/m08-trunk.pcap` — r1 에서
-
-**조건**: **802.1Q 태그가 붙은 프레임**이 담겨 있어야 합니다.
-
-> 어느 인터페이스에서 떠야 하는가? `eth1` 인가 `eth1.10` 인가?
-> 그리고 트렁크 링크에서 필터에 무엇을 빠뜨리면 한 줄도 안 잡히는가?
-
-```bash
-tcpdump -r /tmp/m08-trunk.pcap -nn vlan | wc -l      # 1 이상
-```
-
-#### (3) `/tmp/m08-icmp.pcap` — web 에서
+#### (2) `/tmp/m08-icmp.pcap` — web 에서
 
 **조건**: pc1 → web ping 의 **요청과 응답이 둘 다** 담겨 있어야 합니다.
+
+```bash
+# web - linux — 캡처를 먼저 건다
+sudo tcpdump -i eth1 -w /tmp/m08-icmp.pcap -nn '<필터를 직접 작성>'
+```
+
+```bash
+# pc1
+ping -c 3 {{ ip.web }}
+```
+
+**스스로 검증한 뒤 [검증] 으로 넘어가세요.**
 
 ```bash
 tcpdump -r /tmp/m08-icmp.pcap -nn 'icmp[icmptype]==8' | wc -l    # 요청
@@ -58,14 +63,6 @@ tcpdump -r /tmp/m08-icmp.pcap -nn 'icmp[icmptype]==0' | wc -l    # 응답
 ```
 
 > **한쪽만 있다면 무엇을 뜻하는가?** 답을 적어 둘 것 (확인 문제 7 과 이어집니다).
-
-#### (4) 링 버퍼 — pc1 에서 `/tmp/m08-ring*`
-
-1MB 짜리 파일 **3개**를 돌려 쓰도록 걸고, 파일이 **2개 이상 생기게** 트래픽을 만듭니다.
-
-```bash
-ls -la /tmp/m08-ring*
-```
 
 **마지막으로 모든 tcpdump 를 종료해 주세요** (`pgrep tcpdump` 가 비어야 합니다).
 

@@ -2,7 +2,7 @@
 
 # M8 정답 · 해설 (교육 담당자용)
 
-## 과제 1. 산출물 — 정답 명령
+## 과제 1. 캡처 둘 — 정답 명령
 
 #### (1) `/tmp/m08-http.pcap` (pc1)
 
@@ -16,16 +16,7 @@ sudo tcpdump -i eth1 -w /tmp/m08-http.pcap -nn 'host {{ ip.web }} and tcp port 8
 **가장 흔한 실패**: curl 을 먼저 돌리고 캡처를 건다 → SYN 이 없다.
 그리고 **Ctrl-C 로 안 끝내면 파일이 비어 있다** (tcpdump 는 버퍼를 모아 쓴다).
 
-#### (2) `/tmp/m08-trunk.pcap` (r1)
-
-```bash
-sudo tcpdump -i eth1 -w /tmp/m08-trunk.pcap -nn vlan
-```
-
-> **`eth1.10` 에서 뜨면 태그가 이미 벗겨져 있다.** 반드시 `eth1`(물리 트렁크).
-> 그리고 `vlan` 을 빼면 한 줄도 안 잡힌다 — M2 에서 겪은 함정을 여기서 스스로 넘게 한다.
-
-#### (3) `/tmp/m08-icmp.pcap` (web)
+#### (2) `/tmp/m08-icmp.pcap` (web)
 
 ```bash
 sudo tcpdump -i eth1 -w /tmp/m08-icmp.pcap -nn icmp
@@ -36,14 +27,9 @@ pc1 에서 `ping -c 3 {{ ip.web }}` 후 Ctrl-C.
 > **한쪽만 있다면**: request 만 = 응답이 안 나갔다(서버 · 리턴 경로 문제).
 > reply 는 나갔는데 출발지에 안 왔다 = **돌아오는 길에서 사라진다** (M3 의 리턴 경로).
 
-#### (4) 링 버퍼 (pc1)
-
-```bash
-sudo tcpdump -i eth1 -w /tmp/m08-ring -C 1 -W 3 -nn 'not port 22'
-sudo ping -f -c 3000 {{ ip.web }}      # 다른 창에서 파일을 넘긴다
-```
-
-> `-C` 단위는 **MB**. `-W` 를 빼면 파일이 무한히 늘어난다 — 디스크를 채우는 사고의 단골이다.
+> **트렁크 태그와 링 버퍼는 검사하지 않는다.** 교재 6.2 · 6.3 에서 한 번씩 해 보는 것으로
+> 충분하다고 보고 산출물에서 뺐다. 이 과제가 묻는 것은 **언제 걸고 · 무엇을 빼고 · 어디서 뜨는가**
+> 셋뿐이다. 필터 문법은 과제 3 이 따로 판다.
 
 ---
 
