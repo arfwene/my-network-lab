@@ -242,8 +242,9 @@ ssh {{ example_node }}</code></pre>
             <td><b>Proxmox VE authentication server</b>
             <span class="muted">— 기본값 'Linux PAM' 이면 로그인되지 않습니다</span></td></tr>
         {% if pve_user and pve_pw %}
-        <tr><th>&nbsp;&nbsp;&nbsp;계정</th><td><code>{{ pve_user }}</code>
-            <span class="muted">({{ lab_label }} 공용)</span></td></tr>
+        <tr><th>&nbsp;&nbsp;&nbsp;계정</th><td><code>{{ pve_user.split('@')[0] }}</code>
+            <span class="muted">({{ lab_label }} 공용) — <b>@pve 는 빼고</b> 입력하고
+            Realm 에서 고릅니다. 같이 넣으면 로그인되지 않습니다</span></td></tr>
         <tr><th>&nbsp;&nbsp;&nbsp;비밀번호</th><td><code>{{ pve_pw }}</code></td></tr>
         {% else %}
         <tr><th>&nbsp;&nbsp;&nbsp;계정</th>

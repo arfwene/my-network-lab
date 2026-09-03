@@ -105,14 +105,19 @@ def main(lab, outdir):
 
     for lab_id, uid, pw, vmids in rows:
         n = counts.get(lab_id, 0)
+        # 비밀번호는 **계정을 만든 뒤 따로** 세운다.
+        #   `pveum user modify` 에는 --password 가 없다. 있는 계정에 그걸 쓰면
+        #   스크립트가 그 자리에서 죽는다. 비밀번호 변경은 /access/password 다.
+        #   두 번째 실행부터도 값이 DB 와 같아지므로 다시 실행해도 안전하다.
         sh += [f'# ---- lab{lab_id} · VM {vmids[0]}~{vmids[-1]} · 교육생 {n}명 ----',
                f'if pveum user list --output-format json | grep -q \'"{uid}"\'; then',
-               f'  pveum user modify {uid} --password \'{pw}\' '
+               f'  pveum user modify {uid} --enable 1 '
                f'--comment "my-network-lab lab{lab_id} 콘솔 (공용)"',
                "else",
-               f'  pveum user add {uid} --password \'{pw}\' '
+               f'  pveum user add {uid} --enable 1 '
                f'--comment "my-network-lab lab{lab_id} 콘솔 (공용)"',
-               "fi"]
+               "fi",
+               f"pvesh set /access/password --userid {uid} --password '{pw}' >/dev/null"]
         # 자기 랩 VM 에만. /vms 전체에 주면 남의 랩 화면이 열린다.
         for vmid in vmids:
             sh += [f'pveum aclmod /vms/{vmid} -user {uid} -role {ROLE} >/dev/null']
@@ -121,7 +126,10 @@ def main(lab, outdir):
     sh += ['echo',
            f'echo "랩 {len(rows)}개 계정 준비 완료."',
            'echo "비밀번호는 교육생이 웹 콘솔 [접속 키] 화면에서 직접 본다 — 전달할 것이 없다."',
-           'echo "로그인 시 Realm 은 \'Linux PAM\' 이 아니라 \'Proxmox VE authentication server\'"']
+           'echo',
+           'echo "로그인 화면에서:"',
+           "echo \"  Realm     'Proxmox VE authentication server'  (기본값 'Linux PAM' 이면 안 된다)\"",
+           f"echo \"  User name {rows[0][1].split('@')[0]}   ← @pve 는 빼고 넣는다. 같이 넣으면 401 이다\""]
     (out / "console-access.sh").write_text("\n".join(sh) + "\n", encoding="utf-8")
     (out / "console-access.sh").chmod(0o750)
 

@@ -220,6 +220,7 @@ scp dist/console-access.sh root@<proxmox>:/tmp/ && ssh root@<proxmox> /tmp/conso
 
 - **랩당 1계정**이다 (1인 1계정 아님). 교육생이 늘어도 다시 하지 않고, **랩을 늘릴 때만** 한다.
 - 계정 `lab<N>-console@pve` 는 **그 랩 VM 14대의 콘솔만** 열린다.
+- 로그인 화면에는 **`lab<N>-console` 만** 넣고 Realm 에서 `Proxmox VE authentication server` 를 고른다. `@pve` 를 같이 넣으면 `...@pve@pve` 가 되어 **401** 이다.
 - 비밀번호는 `var/console.db` 에 있고 교육생 `[접속 키] → 5. 콘솔` 에 자기 랩 것만 표시된다.
 
 ---
