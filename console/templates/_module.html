@@ -168,7 +168,7 @@
         {% endif %}
         <textarea name="w_{{ w.id }}" rows="{{ 10 if w.kind == 'diagram' else 6 }}"
                   class="{{ 'mono' if w.kind == 'diagram' }}"
-                  placeholder="{{ '구성도를 글자로 그려 주세요 (pc1 --- sw1 --- r1 …)' if w.kind == 'diagram' else '적어 주세요' }}">{{ cur.body if cur else '' }}</textarea>
+                  placeholder="{{ '구성도를 글자로 그려 주세요' if w.kind == 'diagram' else '적어 주세요' }}">{{ cur.body if cur else '' }}</textarea>
         <div class="wmeta">
           {% if w.min_chars %}{{ w.min_chars }}자 이상{% endif %}
           {% if w.rubric %} · 다뤄야 할 것:
