@@ -570,6 +570,22 @@ def list_users():
             "SELECT * FROM users ORDER BY role DESC, username")]
 
 
+def lab_owner(lab_id):
+    """이 랩에 배정된 교육생. 없으면 None.
+
+    두 곳이 이것을 묻는다 — 관리자에게 **누구 진도**를 보여 줄지, 그리고 랩을
+    지울 때 진행 상태를 **버려도 되는지**. 둘 다 "쓰는 사람이 있는가" 만
+    알면 되므로, 여럿 배정돼 있어도 하나만 돌려준다.
+
+    계정이 잠겨 있어도(disabled) 주인은 주인이다. 잠금은 잠시 막아 두는 것이지
+    랩을 비운 것이 아니다 — 여기서 빼면 그 사람의 랩이 남의 것처럼 다뤄진다.
+    """
+    with connect() as con:
+        r = con.execute("SELECT username FROM users WHERE lab_id=? AND role='user'"
+                        " ORDER BY username LIMIT 1", (lab_id,)).fetchone()
+    return r["username"] if r else None
+
+
 def get_user(username):
     with connect() as con:
         return _row(con.execute(

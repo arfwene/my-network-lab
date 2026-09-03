@@ -249,8 +249,7 @@ def progress_owner(user, lab_id):
     """
     if not auth.can(user, "lab.all"):
         return user["username"]
-    return next((u["username"] for u in db.list_users()
-                 if u.get("lab_id") == lab_id and u.get("role") == "user"), None)
+    return db.lab_owner(lab_id)
 
 
 def base_ctx(request, user, lab_id):

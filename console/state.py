@@ -35,6 +35,20 @@ def fresh(lab_id):
             "hints": 0}
 
 
+def owner(lab_id):
+    """이 랩을 쓰는 교육생의 이름. 아무도 없으면 None.
+
+    db 를 여기서 늦게 부른다 — state 는 파일만 다루는 모듈이고, 계정 표는
+    콘솔이 뜬 뒤에야 준비된다.
+    """
+    import db                                          # noqa: PLC0415
+    try:
+        return db.lab_owner(lab_id)
+    except Exception:
+        # 물어볼 수 없으면 **있다고 본다.** 틀렸을 때 잃는 것이 훨씬 크다.
+        return "?"
+
+
 def load(lab_id):
     p = _path(lab_id)
     if p.exists():
@@ -99,11 +113,12 @@ def stage_gap(lab_id, module_stage):
 def repair():
     """앞뒤가 안 맞는 랩 상태를 바로잡는다. 콘솔이 뜰 때 한 번 부른다.
 
-    **없는 랩이 단계를 갖고 있을 수 없다.** 전에는 [랩 삭제] 가 provisioned 만
-    껐고 stage·applied 를 그대로 뒀다. 그 파일이 남아 있으면 지운 랩인데도
-    모듈 카드가 「적용됨」·「통과」로 남는다. 지금은 지울 때 함께 되돌리지만,
-    **이미 그렇게 남은 파일**은 스스로 낫지 않으므로 여기서 한 번 훑는다.
+    **주인도 VM 도 없는 랩이 단계를 갖고 있을 수 없다.** 그런 파일이 남아
+    있으면 다음에 그 랩을 배정받는 사람이 남의 단계와 「적용됨」 카드를
+    물려받는다. 지울 때 함께 되돌리지만, 계정을 지우는 것처럼 **나중에**
+    주인이 없어지는 길도 있어서 여기서 한 번 더 훑는다.
 
+    VM 이 살아 있는 랩(provisioned)과 주인이 있는 랩은 건드리지 않는다.
     고칠 것이 없으면 아무 파일도 건드리지 않는다.
     """
     fixed = []
@@ -120,6 +135,8 @@ def repair():
                 or st.get("broken") or st.get("drill_seen")):
             continue
         lab_id = st.get("lab_id")
+        if owner(lab_id):
+            continue
         keep = st.get("last_job")
         st = fresh(lab_id)
         st["provisioned"] = False
@@ -168,14 +185,20 @@ def record(lab_id, action, stage=None, ok=True, scenario=None, job_id=None):
     if ok and action == "deploy":
         st["provisioned"] = True
     if ok and action == "destroy":
-        # 랩이 없어졌으면 **진행 상태도 없어야 한다.**
-        #   전에는 provisioned 만 껐다. 그래서 지운 랩인데도 모듈 카드가
-        #   「적용됨」·「통과」로 남았고, 새로 만든 랩이 남의 진도를 물려받았다.
-        #   지운 순간이 곧 시작점이므로 통째로 되돌린다.
-        st = fresh(lab_id)
+        # VM 이 없어졌으니 **주입해 둔 장애도 없다.** 이건 주인이 있든 없든 같다.
         st["provisioned"] = False
-        st["last_job"] = {"action": action, "stage": stage, "ok": ok,
-                          "scenario": scenario, "job_id": job_id}
+        st["broken"], st["drill_seen"], st["blind"], st["hints"] = [], [], False, 0
+        if not owner(lab_id):
+            # 주인이 없는 랩만 시작점으로 되돌린다.
+            #   [랩 생성] 은 저장된 stage 를 그대로 다시 올린다. 그래서 랩이
+            #   망가져 지웠다 다시 만드는 교육생은 있던 자리로 돌아온다 —
+            #   여기서 stage 를 지워 버리면 M0 부터 다시 적용해야 한다.
+            #   반대로 주인이 없으면 되돌릴 사람도 없다. 남겨 두면 다음에
+            #   배정받는 사람이 **남의 단계에서 시작한다.**
+            keep = st["last_job"]
+            st = fresh(lab_id)
+            st["provisioned"] = False
+            st["last_job"] = keep
     return save(lab_id, st)
 
 
