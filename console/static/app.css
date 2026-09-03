@@ -705,8 +705,8 @@ pre.code{background:var(--code-bg);padding:14px 16px;border-radius:var(--r-md);o
   .doc h2 { page-break-before: auto; }
   .doc h2, .doc h3 { page-break-after: avoid; }
   /* 종이는 넘길 수 없다. 인쇄할 때만 폭에 맞춰 줄인다. */
-  .topo-wrap { overflow: visible; page-break-inside: avoid; }
-  .topo-wrap svg.topo { width: 100%; height: auto; max-width: 100%; }
+  .topo-wrap, .dia-wrap { overflow: visible; page-break-inside: avoid; }
+  .topo-wrap svg.topo, .dia-wrap svg.dia { width: 100%; height: auto; max-width: 100%; }
   a[href^="/"]::after { content: ""; }   /* 내부 링크 주소는 인쇄에 필요 없다 */
 }
 

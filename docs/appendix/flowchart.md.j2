@@ -47,71 +47,64 @@ items:
 ## [A] 링크가 UP 이 아니다  → M1
 
 ```labdiagram
-kind: branch
-root: "ip -br link 출력의 플래그를 읽는다"
+kind: checks
+title: "링크 점검 — 플래그에서 VLAN 태그까지"
 items:
-  - label: "DOWN <NO-CARRIER, … ,UP>"
-    lines: ["내가 켰는데 상대가 없다",
-            "→ 케이블 · 트랜시버 · 상대 포트 · 상대 장비"]
-  - label: "DOWN <BROADCAST,MULTICAST>   (UP 플래그가 없다)"
-    lines: ["내가 꺼 놨다",
-            "→ sudo ip link set <if> up"]
-  - label: "UP 인데 통신이 안 된다"
-    lines: ["스위치를 본다"]
-    items:
-      - label: "bridge link show"
-        lines: ["그 포트가 브리지 멤버인가",
-                "아니면 → sudo ip link set <if> master br0"]
-      - label: "bridge vlan show dev <트렁크>"
-        lines: ["그 VLAN 태그가 있는가 · native 가 양쪽에서 같은가",
-                "없거나 다르면 = 그 VLAN 만 안 된다"]
+  - { n: "①", title: 플래그, ask: UP 이 붙어 있는가, tool: "ip -br link",
+      fail: "내가 꺼 놨다 — sudo ip link set <if> up" }
+  - { n: "②", title: 상대, ask: NO-CARRIER 가 없는가, tool: "ip -br link",
+      fail: "케이블 · 트랜시버 · 상대 포트 · 상대 장비" }
+  - { n: "③", title: 브리지, ask: 그 포트가 멤버인가, tool: "bridge link show",
+      fail: "sudo ip link set <if> master br0" }
+  - { n: "④", title: VLAN, ask: 태그와 native 가 양쪽에서 맞는가,
+      tool: "bridge vlan show dev <트렁크>", fail: "그 VLAN 만 안 된다" }
 ```
+
+①②는 링크 자체를, ③④는 스위치가 그 프레임을 어디로 보내는지를 봅니다.
 
 ---
 
 ## [B] L3 가 안 간다  → M2 · M3 · M4
 
-```labdiagram
-kind: branch
-root: "ping <내 게이트웨이>"
-items:
-  - label: 실패
-    lines: ["ip -br addr     내 주소 · 마스크가 맞는가",
-            "ip route show   default 가 있는가 — 없으면 내 문제 (M2)",
-            "ip neigh show   게이트웨이가 FAILED 인가",
-            "FAILED 면 그 주소에 게이트웨이가 없다 (주소 오설정 · VLAN 불일치)"]
-  - label: 성공
-    lines: ["ping <상대> 로 넘어간다"]
-    items:
-      - label: "상대도 성공"
-        lines: ["L3 는 정상이다 → [C] 로"]
-      - label: "상대는 실패"
-        lines: ["traceroute -n <상대>"]
-        items:
-          - label: "몇 홉 가다 멈춘다"
-            lines: ["그 홉의 다음 구간 · 또는 리턴 경로"]
-          - label: "같은 두 주소가 번갈아 반복된다"
-            lines: ["라우팅 루프 — 두 라우터의 그 목적지 경로를 비교한다"]
-          - label: "끝까지 가는데 응답만 없다"
-            lines: ["리턴 경로다 ★"]
-```
-
-### ★ 가는 길인가 오는 길인가
-
-셋 중 둘이 여기로 모입니다. **목적지에서 잡아야** 갈립니다.
+세 관문입니다. **가는 길이 되어도 오는 길이 남습니다.**
 
 ```labdiagram
-kind: branch
-root: "sudo tcpdump -i <if> -n 'host <출발지>'"
-sub: "목적지에서 잡는다"
+kind: checks
+title: "L3 세 관문 — 게이트웨이 · 가는 길 · 오는 길"
 items:
-  - label: "요청이 안 보인다"
-    lines: ["가는 길이다. 더 앞에서 이등분한다"]
-  - label: "요청은 오는데 응답이 없다"
-    lines: ["서비스 · 목적지 문제다"]
-  - label: "요청도 응답도 보인다"
-    lines: ["오는 길(리턴 경로)이다 ★★"]
+  - { n: "①", title: 게이트웨이, ask: 첫 홉까지 가는가, tool: "ping <내 게이트웨이>",
+      fail: "내 쪽이다 (M2)" }
+  - { n: "②", title: 가는 길, ask: 상대까지 가는가, tool: "traceroute -n <상대>",
+      fail: "경로다 (M3 · M4)" }
+  - { n: "③", title: 오는 길, ask: 응답이 돌아오는가, tool: "목적지에서 sudo tcpdump",
+      fail: "리턴 경로다 ★" }
 ```
+
+### ① 이 실패하면 — 내 쪽을 봅니다
+
+| 명령 | 무엇을 보는가 |
+|---|---|
+| `ip -br addr` | 내 주소 · 마스크가 맞는가 |
+| `ip route show` | `default` 가 있는가 — 없으면 내 문제입니다 |
+| `ip neigh show` | 게이트웨이가 `FAILED` 면 그 주소에 게이트웨이가 없습니다 (주소 오설정 · VLAN 불일치) |
+
+### ② 가 실패하면 — traceroute 를 읽습니다
+
+| 보이는 것 | 무슨 뜻인가 |
+|---|---|
+| 몇 홉 가다 멈춘다 | 그 홉의 다음 구간 · 또는 리턴 경로입니다 |
+| 같은 두 주소가 번갈아 반복된다 | 라우팅 루프입니다 — 두 라우터의 그 목적지 경로를 비교합니다 |
+| 끝까지 가는데 응답만 없다 | 리턴 경로입니다 ★ — ③ 으로 |
+
+### ③ ★ 가는 길인가 오는 길인가
+
+`sudo tcpdump -i <if> -n 'host <출발지>'` — **목적지에서** 잡습니다.
+
+| 보이는 것 | 어느 쪽 문제인가 |
+|---|---|
+| 요청이 안 보인다 | 가는 길입니다. 더 앞에서 이등분합니다 |
+| 요청은 오는데 응답이 없다 | 서비스 · 목적지 문제입니다 |
+| 요청도 응답도 보인다 | **오는 길**(리턴 경로)입니다 ★★ |
 
 리턴 경로를 의심할 곳은 셋입니다.
 
@@ -133,33 +126,22 @@ items:
 
 **시간과 응답만 보면 갈립니다. 설정을 열기 전에 이것부터.**
 
-```labdiagram
-kind: branch
-root: "telnet <상대> <포트>    ·    nc -v -z -w 5 <상대> <포트>"
-items:
-  - label: "즉시  Network is unreachable"
-    lines: ["패킷이 나가지도 않았다 — 내 라우팅 문제 (M2 · M3)"]
-  - label: "즉시  Connection refused"
-    lines: ["끝까지 갔고 RST 를 받았다",
-            "★ 네트워크는 완벽하다는 증거다"]
-    items:
-      - label: "서버에서  ss -ltnp"
-        lines: ["그 포트를 안 듣는다 → 서비스가 내려갔다",
-                "듣는데도 refused → REJECT 규칙"]
-  - label: "10초 넘게 매달리다 타임아웃"
-    lines: ["어딘가에서 조용히 버려진다 (DROP)",
-            "캡처하면 SYN 만 반복해 나가고 아무것도 안 온다"]
-    items:
-      - label: "경로상 장비의  sudo nft list ruleset  을 순서대로"
-        lines: ["M8-02 는 r4 · M7-01 은 web · M10-03 은 edge"]
-  - label: "연결은 됐는데 응답이 없다"
-    lines: ["SYN → SYN-ACK → ACK 까지 정상, 그 뒤 침묵",
-            "★ 3-way 는 커널이 한다. 프로세스가 죽어도 연결은 된다"]
-    items:
-      - label: "ps -o stat= -C <프로세스>"
-        lines: ["T · t 면 멈춘 것이다 (SIGSTOP)",
-                "그 외 → 백엔드 대기 · 과부하 · 애플리케이션 행"]
-```
+`telnet <상대> <포트>` 또는 `nc -v -z -w 5 <상대> <포트>` 를 치고 나온 것을 찍습니다.
+
+| 보이는 것 | 시간 | 무슨 뜻인가 | 다음에 칠 것 |
+|---|---|---|---|
+| `Network is unreachable` | 즉시 | 패킷이 나가지도 않았습니다 | `ip route get <상대>` — 내 라우팅 (M2 · M3) |
+| `Connection refused` | 즉시 | 끝까지 갔고 RST 를 받았습니다 ★ | 서버에서 `ss -ltnp` |
+| 매달리다 타임아웃 | 오래 | 조용히 버려집니다 (DROP) | 경로상 장비의 `sudo nft list ruleset` |
+| 연결은 됐는데 응답이 없다 | 애플리케이션 타임아웃 | 3-way 는 커널이 합니다 | `ps -o stat= -C <프로세스>` |
+
+`Connection refused` 는 **네트워크가 완벽하다는 증거**입니다. 서버에서 `ss -ltnp` 를 쳐서
+그 포트를 안 듣고 있으면 서비스가 내려간 것이고, 듣고 있는데도 거절이면 REJECT 규칙입니다.
+
+`ps -o stat=` 이 `T` 나 `t` 면 프로세스가 멈춘 것입니다(SIGSTOP).
+그 외에는 백엔드 대기 · 과부하 · 애플리케이션 행입니다.
+
+> 이 랩에서 타임아웃을 만드는 자리 — M8-02 는 `r4`, M7-01 은 `web`, M10-03 은 `edge`.
 
 > 그 외 — `Cannot assign requested address` 는 상대 문제가 아닙니다.
 > 내 쪽 출발지 포트가 고갈된 것입니다. `cat /proc/sys/net/ipv4/ip_local_port_range`
@@ -169,24 +151,26 @@ items:
 ## [D] 이름으로만 안 된다  → M9
 
 ```labdiagram
-kind: branch
-root: "IP 로 직접 접속해 본다"
-sub: "이 한 줄이 절반을 가른다"
-items:
-  - label: "IP 로는 된다"
-    lines: ["DNS 문제다  —  dig +short @{{ ip.dns }} <이름>"]
-    items:
-      - label: "응답이 없다 (타임아웃)"
-        lines: ["DNS 서버가 내려갔다 · 또는 그 서버로 못 간다"]
-      - label: "응답은 오는데 값이 틀리다"
-        lines: ["★ 가장 놓치기 쉬운 DNS 장애 — 레코드를 고친다"]
-      - label: "응답이 정상이다"
-        lines: ["서버는 정상. 클라이언트 설정이다",
-                "cat /etc/resolv.conf   ← nameserver 가 맞는가",
-                "dig @서버 는 되는데 그냥 dig 는 안 된다 = 이것"]
-  - label: "IP 로도 안 된다"
-    lines: ["DNS 는 정상이다 — [B] 또는 [C] 로 돌아간다"]
+kind: flow
+title: "이름과 네트워크를 가르는 한 줄"
+rows:
+  - [ { shape: decision, title: "IP 로 직접 접속해 본다" } ]
+  - [ { label: 된다, title: "DNS 문제다",
+        lines: ["dig +short @{{ ip.dns }} <이름>"] },
+      { label: 안 된다, title: "DNS 는 정상이다",
+        lines: ["[B] 또는 [C] 로 돌아간다"] } ]
 ```
+
+이 한 줄이 절반을 가릅니다. DNS 쪽이면 `dig` 결과로 다시 셋으로 갈립니다.
+
+| `dig` 결과 | 무슨 뜻인가 |
+|---|---|
+| 응답이 없다 (타임아웃) | DNS 서버가 내려갔거나 그 서버로 못 갑니다 |
+| 응답은 오는데 값이 틀리다 | ★ 가장 놓치기 쉬운 DNS 장애입니다 — 레코드를 고칩니다 |
+| 응답이 정상이다 | 서버는 정상입니다. 클라이언트 설정입니다 |
+
+마지막 칸이면 `cat /etc/resolv.conf` 로 `nameserver` 를 봅니다.
+`dig @서버` 는 되는데 그냥 `dig` 는 안 되는 것이 정확히 이 경우입니다.
 
 ---
 
@@ -226,19 +210,15 @@ items:
 
 ## [F] "느립니다"  → M8
 
-```labdiagram
-kind: branch
-root: "정말 느린가, 처음만 느린가"
-items:
-  - label: "처음 접속만 느리다"
-    lines: ["이름 해석이다 (DNS 타임아웃) → [D]"]
-  - label: "특정 크기부터 멈춘다"
-    lines: ["MTU · PMTUD — ICMP 가 막혔는지 본다"]
-  - label: "전반적으로 느리다"
-    lines: ["캡처를 뜬다 — 재전송 · 중복 ACK · 창 크기 축소",
-            "같은 seq 가 반복되면 중간 구간에서 버려지고 있다",
-            "구간을 이등분해 어디서 손실이 생기는지 좁힌다"]
-```
+| 어떻게 느린가 | 무엇을 보는가 |
+|---|---|
+| 처음 접속만 느리다 | 이름 해석입니다 (DNS 타임아웃) → [D] |
+| 특정 크기부터 멈춘다 | MTU · PMTUD — ICMP 가 막혔는지 봅니다 |
+| 전반적으로 느리다 | 캡처를 뜹니다 |
+
+캡처에서 찾을 것은 셋입니다 — 재전송 · 중복 ACK · 창 크기 축소.
+같은 `seq` 가 반복되면 중간 구간에서 버려지고 있습니다.
+구간을 이등분해 어디서 손실이 생기는지 좁힙니다.
 
 ---
 
