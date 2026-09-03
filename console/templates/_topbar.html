@@ -63,7 +63,7 @@
       <a href="/admin" {% if here == 'users' %}aria-current="page"{% endif %}>계정 관리</a>
       <a href="/admin/reviews" {% if here == 'reviews' %}aria-current="page"{% endif %}>검토 큐
         {%- if pending %} <b class="pill">{{ pending }}</b>{% endif %}</a>
-      <a href="/admin/exams" {% if here == 'exams' %}aria-current="page"{% endif %}>시험</a>
+      {% if capstone %}<a href="/admin/exams" {% if here == 'exams' %}aria-current="page"{% endif %}>시험</a>{% endif %}
     </div>
   </details>
   {% endif %}

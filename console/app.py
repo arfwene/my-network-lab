@@ -228,6 +228,9 @@ def nav_ctx(user, here, lab_id=None):
         "has_ssh_key": bool((user or {}).get("ssh_key")),
         "health": pve.last(),
         "site_name": L.SITE["site"]["name"],
+        # 캡스톤을 쓰지 않으면(console.capstone.module 이 비면) 헤더의 [시험] 을 감춘다.
+        # 화면마다 따로 넣으면 어느 화면에서는 뜨고 어느 화면에서는 안 뜬다.
+        "capstone": exam.module_id(),
     }
 
 

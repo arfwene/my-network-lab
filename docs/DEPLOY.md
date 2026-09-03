@@ -189,7 +189,7 @@ scp /tmp/lab.img root@<proxmox>:/var/lib/vz/template/lab/
 ```
 
 점프 계정은 **셸이 없고 자기 랩 노드로만 나간다** (`ForceCommand` + nologin, `PermitOpen` = 자기 랩 14대:22).
-운영 서버 셸을 주면 강사용 해설(`answers.md`)과 캡스톤 대응표를 읽을 수 있기 때문이다.
+운영 서버 셸을 주면 강사용 해설(`answers.md`)과 장애 대응표를 읽을 수 있기 때문이다.
 
 **관리자가 할 일**
 - `[관리자 → 계정 관리]` 에서 계정 발급. 그 뒤는 자동이다.
