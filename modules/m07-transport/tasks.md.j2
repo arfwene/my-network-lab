@@ -29,7 +29,19 @@
 
 ### 과제 2. 하나의 HTTP 요청, 전체 생애주기
 `curl http://{{ ip.web }}/` 한 번에서 일어나는 **모든 TCP 이벤트**를 캡처하고,
-아래 두 가지를 만듭니다.
+아래 두 가지를 만듭니다. 창 **셋**을 씁니다.
+
+```bash
+# pc1 창 ① — 캡처를 먼저 건다
+sudo tcpdump -i eth1 -nn -w /tmp/m07-http.pcap 'host {{ ip.web }} and tcp port 80'
+# pc1 창 ② — 상태를 0.2초마다 본다 (상태는 순식간에 지나갑니다)
+watch -n 0.2 'ss -tan dst {{ ip.web }}'
+# pc1 창 ③
+curl -s -o /dev/null http://{{ ip.web }}/
+```
+
+창 ① 을 `Ctrl-C` 로 끊고 `tcpdump -r /tmp/m07-http.pcap -nn` 으로 다시 읽습니다.
+`web` 쪽 상태는 `web` 에서 같은 `ss` 를 칩니다.
 
 **(1) 순서도** — 시간 순으로 그립니다. 각 화살표에 플래그와 seq/ack 를 적어 주세요.
 

@@ -43,13 +43,24 @@ sudo nft list ruleset | grep -cE 'snat|dnat'
 ### 과제 2. ★★ 주소가 바뀌는 순간을 캡처로 증명
 경계 장비 **양쪽**에 동시에 캡처를 걸고 SNAT 와 DNAT 를 각각 증명합니다.
 
+`edge` 에 창 **두 개**를 엽니다. 한 창에서 둘을 이어 치면 첫 줄에서 멈춥니다.
+
 ```bash
-# edge - linux — 저장
+# edge - linux · 창 ① 안쪽
 sudo tcpdump -i eth1 -nn -w /tmp/m10-inside.pcap  'not port 22'
+# edge - linux · 창 ② 바깥쪽
 sudo tcpdump -i eth2 -nn -w /tmp/m10-outside.pcap 'not port 22'
 ```
 
-**(1) SNAT** — pc1 에서 `{{ public.external_site.inet_loopback }}` 으로 접속하고 표를 채웁니다.
+둘 다 걸어 둔 채로 접속하고, `Ctrl-C` 로 끊은 뒤
+`tcpdump -r <파일> -nn` 으로 각각 읽어 표를 채웁니다.
+
+**(1) SNAT** — `pc1` 에서 아래를 치고 표를 채웁니다.
+
+```bash
+# pc1
+curl -sS -m5 -o /dev/null http://{{ public.external_site.inet_loopback }}/
+```
 
 | | 출발지 IP | 출발지 포트 | 목적지 IP | 목적지 포트 |
 |---|---|---|---|---|
@@ -57,7 +68,12 @@ sudo tcpdump -i eth2 -nn -w /tmp/m10-outside.pcap 'not port 22'
 | 바깥쪽 (`eth2`) | | | | |
 | **무엇이 바뀌었나** | | | | |
 
-**(2) DNAT** — inet 에서 `{{ dweb.public }}` 으로 접속하고 같은 표를 채웁니다.
+**(2) DNAT** — `inet` 에서 아래를 치고 같은 표를 채웁니다.
+
+```bash
+# inet
+curl -sS -m5 -o /dev/null http://{{ dweb.public }}/health
+```
 
 | | 출발지 IP | 출발지 포트 | 목적지 IP | 목적지 포트 |
 |---|---|---|---|---|
@@ -75,14 +91,24 @@ sudo tcpdump -i eth2 -nn -w /tmp/m10-outside.pcap 'not port 22'
 ### 과제 3. 음성 검사 — 되면 안 되는 것
 **"되는 것" 만 확인하는 검증은 절반짜리입니다.** 되면 안 되는 것도 확인합니다.
 
-`inet` 에서 아래를 시도하고 **결과와 실패의 성격**을 적습니다.
+`inet` 에서 아래 다섯을 치고 **결과와 실패의 성격**을 적습니다.
+포트는 `nc` 로 두드립니다 — `-v` 가 에러 문구를, `time` 이 걸린 시간을 줍니다.
+
+```bash
+# inet
+ping -c2 -W2 {{ ip.web }}
+ping -c2 -W2 {{ dweb.public }}
+time nc -v -z -w 5 {{ dweb.public }} 80
+time nc -v -z -w 5 {{ dweb.public }} 22
+ping -c2 -W2 {{ ip.pc1 }}
+```
 
 | # | 시도 | 결과 | 실패의 성격 (경로 없음 / DROP / refused / 성공) | 어디서 막혔나 |
 |---|---|---|---|---|
 | 1 | `ping {{ ip.web }}` (사설) | | | |
 | 2 | `ping {{ dweb.public }}` (공개) | | | |
-| 3 | `{{ dweb.public }}:80` 접속 | | | |
-| 4 | `{{ dweb.public }}:22` 접속 | | | |
+| 3 | `{{ dweb.public }}` 의 80 | | | |
+| 4 | `{{ dweb.public }}` 의 22 | | | |
 | 5 | `ping {{ ip.pc1 }}` (내부 PC) | | | |
 
 **질문**
