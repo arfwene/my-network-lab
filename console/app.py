@@ -235,22 +235,42 @@ def nav_ctx(user, here, lab_id=None):
     }
 
 
+def progress_owner(user, lab_id):
+    """이 랩의 진도를 누구 것으로 보여 줄까.
+
+    `progress` 표는 **사람 기준**이고 랩을 구분하지 않는다. 교육생은 랩 하나만
+    쓰므로 문제가 없지만, 관리자는 랩을 옮겨 다니며 본다 — 그래서 예전에
+    자기가 통과시킨 모듈이 **아무 랩에서나 ✔ 로 따라다녔다.**
+
+    관리자에게 이 화면은 자기 성적표가 아니라 **그 랩의 현황**이다.
+    그래서 배정된 교육생의 진도를 보여 준다. 아무도 없으면 빈 진도다 —
+    주인이 없는 랩은 아무것도 통과하지 않은 것이 맞다.
+    자기 진도는 [내 제출 이력] 에서 본다.
+    """
+    if not auth.can(user, "lab.all"):
+        return user["username"]
+    return next((u["username"] for u in db.list_users()
+                 if u.get("lab_id") == lab_id and u.get("role") == "user"), None)
+
+
 def base_ctx(request, user, lab_id):
     st = state.load(lab_id)
     ex = exam.view(lab_id, user)
     mods = docs.modules()
     is_admin = auth.can(user, "lab.all")
     unlocked = assess.unlocked_modules(user["username"], is_admin)
+    owner = progress_owner(user, lab_id)
     return {
         **nav_ctx(user, "lab", lab_id),
         "request": request, "user": user, "lab_id": lab_id,
         "labs": auth.allowed_labs(user),
         "modules": [{**m, "status": state.module_status(lab_id, m),
                      "unlocked": unlocked.get(m["id"], False),
-                     "progress": assess.module_state(user["username"], m, is_admin)}
+                     "progress": assess.module_state(owner, m, is_admin)}
                     for m in mods],
         "unlocked": unlocked,
         "is_admin": is_admin,          # 실행 로그의 [원본 로그] 버튼이 이걸 본다
+        "progress_owner": owner,
         "lab_state": st,
         "busy": runner.busy(lab_id),
         # 코드만 나열하면 무엇을 고를지 알 수 없다 — 증상과 단계를 함께 싣는다.
@@ -835,7 +855,8 @@ def _assess_ctx(user, lab_id, module):
         "quiz": assess.quiz_for_client(module, lab_id) if assess.has_quiz(module) else None,
         "has_checks": assess.has_checks(module),
         "written": assess.written_items(module, lab_id),
-        "mstate": assess.module_state(user["username"], module, auth.can(user, "lab.all")),
+        "mstate": assess.module_state(progress_owner(user, lab_id), module,
+                                     auth.can(user, "lab.all")),
         "last_quiz": db.latest_attempt(user["username"], module["id"], "quiz"),
         "last_checks": db.latest_attempt(user["username"], module["id"], "checks"),
         "next_module": mods[i + 1] if i + 1 < len(mods) else None,

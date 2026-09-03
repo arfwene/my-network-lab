@@ -23,6 +23,10 @@
       <span class="dot applied"></span>적용됨 &nbsp;
       <span class="dot pending"></span>미적용 &nbsp; 🔒 잠김
     </p>
+    {% if is_admin %}
+    <p class="legend">{% if progress_owner %}진도는 <b>{{ progress_owner }}</b> 님 것입니다
+      {% else %}이 랩에 배정된 교육생이 없어 진도가 비어 있습니다{% endif %}</p>
+    {% endif %}
     <p class="legend"><a href="/history">내 제출 이력 →</a></p>
     <p class="legend"><a href="/labmap">랩 지도 — 노드 · 링크 · 주소 →</a></p>
     <p class="legend"><a href="/appendix">부록 — 치트시트 · 플로우차트 · 용어집 →</a></p>
