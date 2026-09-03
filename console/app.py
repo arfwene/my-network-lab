@@ -1495,12 +1495,12 @@ def _setup_buttons(auto):
     콘솔이 스스로 하는 일에는 버튼을 두지 않는다. **막힌 것에만** 둔다 —
     자동으로 못 한 사유를 읽고 사람이 치우고 나서 다시 걸 자리가 필요하다.
     """
-    b = [dict(x) for x in SETUP_BUTTONS]
-    for step, why in (auto.get("blocked") or {}).items():
-        spec = BLOCKED_BUTTON.get(step)
-        if spec:
-            b.insert(0, {**spec, "need": why})
-    return b
+    # 막힌 것을 **절차 순서대로** 앞에 놓는다. setup_auto 가 이미 그 순서로 준다 —
+    # 브리지를 만들기 전에 「관리망에 연결」 이 위에 보이면 순서를 거꾸로 읽는다.
+    b = [{**BLOCKED_BUTTON[step], "need": why}
+         for step, why in (auto.get("blocked") or {}).items()
+         if step in BLOCKED_BUTTON]
+    return b + [dict(x) for x in SETUP_BUTTONS]
 
 
 #  콘솔이 **스스로** 하는 일에는 버튼을 두지 않는다 (console/setup_auto.py).
