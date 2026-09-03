@@ -320,6 +320,8 @@ svg.dia .dbox.ok{fill:color-mix(in srgb,var(--ok) 8%,var(--panel));
 svg.dia .dbox.warn{fill:color-mix(in srgb,var(--warn-line) 10%,var(--panel));
   stroke:color-mix(in srgb,var(--warn-line) 45%,var(--line))}
 svg.dia .dbox.soft{fill:var(--sunken);stroke-dasharray:4 3}
+/* 플로우차트 — 갈래가 다시 만나는 점. 선과 같은 색이라야 이어져 보인다. */
+svg.dia .dbox.dot{fill:var(--topo-link);stroke:none}
 svg.dia .l{fill:none;stroke:var(--topo-link);stroke-width:1.5;
   stroke-linejoin:round;stroke-linecap:round}
 svg.dia .l.dash{stroke-dasharray:4 4;opacity:.65}

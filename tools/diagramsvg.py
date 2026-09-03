@@ -25,7 +25,7 @@ def render(spec, title="", standalone=False):
     s = D.build(spec)
     out = [f'<svg viewBox="0 0 {s.w} {s.h}" width="{s.w}" height="{s.h}" class="dia" '
            f'xmlns="http://www.w3.org/2000/svg" role="img" '
-           f'aria-label="{escape(title or "구성도")}">',
+           f'aria-label="{escape(title or s.title or "구성도")}">',
            # 화살촉은 한 번만 정의하고 선들이 가리킨다.
            '<defs><marker id="dh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" '
            'markerHeight="7" orient="auto-start-reverse">'
@@ -35,8 +35,19 @@ def render(spec, title="", standalone=False):
 
     for b in s.boxes:
         cls = ("dbox " + b["tone"]).strip()
-        out.append(f'<rect class="{cls}" x="{b["x"]:.1f}" y="{b["y"]:.1f}" '
-                   f'width="{b["w"]:.1f}" height="{b["h"]:.1f}" rx="{b["rx"]}"/>')
+        x, y, w, h = b["x"], b["y"], b["w"], b["h"]
+        # 플로우차트는 **모양이 종류를 말한다** — 마름모는 갈리는 자리,
+        # 점은 갈래가 다시 만나는 자리다. 색으로 구분하면 인쇄에서 사라진다.
+        if b.get("shape") == "diamond":
+            d = (f'M{x + w / 2:.1f},{y:.1f} L{x + w:.1f},{y + h / 2:.1f} '
+                 f'L{x + w / 2:.1f},{y + h:.1f} L{x:.1f},{y + h / 2:.1f} Z')
+            out.append(f'<path class="{cls}" d="{d}"/>')
+        elif b.get("shape") == "dot":
+            out.append(f'<circle class="{cls}" cx="{x + w / 2:.1f}" '
+                       f'cy="{y + h / 2:.1f}" r="{w / 2:.1f}"/>')
+        else:
+            out.append(f'<rect class="{cls}" x="{x:.1f}" y="{y:.1f}" '
+                       f'width="{w:.1f}" height="{h:.1f}" rx="{b["rx"]}"/>')
     # 장비는 토폴로지와 같은 그림 · 같은 색으로 그린다.
     for g in s.glyphs:
         out.append(f'<g class="node" style="--f:{devices.FILL[g["role"]]}">'

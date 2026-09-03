@@ -19,7 +19,8 @@ TONE = {"":     ("#ffffff", "#b3b3b3"),
         "ok":   ("#eaf4ff", "#6c8ebf"),
         "warn": ("#fff4e0", "#d6b656"),
         "node": ("#f2f2f2", "#999999"),
-        "soft": ("#fafafa", "#cccccc")}
+        "soft": ("#fafafa", "#cccccc"),
+        "dot":  ("#666666", "#666666")}
 
 
 def drawio(spec, title="구성도"):
@@ -32,8 +33,12 @@ def drawio(spec, title="구성도"):
 
     for b in sc.boxes:
         fill, stroke = TONE.get(b["tone"], TONE[""])
+        # 플로우차트의 마름모·합류점. draw.io 에도 같은 모양으로 나가야
+        # 열어 본 사람이 화면에서 본 그림과 같은 것으로 읽는다.
+        shape = {"diamond": "shape=rhombus;", "dot": "ellipse;"}.get(b.get("shape"), "")
         cells.append(
-            f'<mxCell id="{nid()}" value="" style="rounded={1 if b["rx"] else 0};'
+            f'<mxCell id="{nid()}" value="" style="{shape}'
+            f'rounded={1 if b["rx"] and not shape else 0};'
             f'arcSize={min(50, int(b["rx"] * 6))};whiteSpace=wrap;html=1;'
             f'fillColor={fill};strokeColor={stroke};" vertex="1" parent="1">'
             f'<mxGeometry x="{b["x"]*S:.0f}" y="{b["y"]*S:.0f}" '

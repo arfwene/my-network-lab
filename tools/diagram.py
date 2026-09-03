@@ -39,6 +39,8 @@ class Scene:
     def __init__(self):
         self.boxes, self.texts, self.lines, self.glyphs = [], [], [], []
         self.w = self.h = 0
+        # 화면 낭독기에 읽히는 이름. 없으면 모든 그림이 「구성도」 하나로 들린다.
+        self.title = ""
 
     def box(self, x, y, w, h, tone="", rx=8, **kw):
         self.boxes.append({"x": x, "y": y, "w": w, "h": h, "tone": tone, "rx": rx, **kw})
@@ -240,7 +242,8 @@ def _branch(spec, S):
     if root:
         rows = _lines(spec.get("sub"))
         w = _boxw(root, rows, 34)
-        h = 30 + LH * len(rows) + (2 if rows else -6)
+        # 글자가 아래 테두리에 닿지 않게 아래 여백을 남긴다.
+        h = 32 if not rows else 30 + LH * len(rows) + 8
         S.box(x0, y, w, h, tone=spec.get("tone", ""), rx=8)
         S.text(x0 + 16, y + 21, root, cls="t b")
         for j, r in enumerate(rows):
@@ -433,12 +436,16 @@ def _spans(spec, S):
 def _checks(spec, S):
     """순서대로 밟는 점검. 각 칸마다 '아니면 여기서 끝' 이 옆으로 빠진다."""
     x, y = PAD, PAD + 8
-    W = max(_tw(f'{i.get("n","")} {i.get("title","")}   {i.get("ask","")}', FS) + 40
-            for i in spec["items"])
+    # 두 칸으로 나뉜다 — 앞은 번호·이름, 뒤는 무엇을 묻는가.
+    # 뒷칸의 시작 자리를 앞칸 길이에서 구한다. 고정값으로 두면 이름이 길 때
+    # 두 글자가 겹치고, 폭까지 그 고정값과 어긋나면 뒷글자가 상자 밖으로 나간다.
+    lead = max([108] + [_tw(f'{i.get("n","")}  {i.get("title","")}', FS) + 24
+                        for i in spec["items"]])
+    W = lead + max(_tw(i.get("ask", ""), FS) for i in spec["items"]) + 56
     for k, it in enumerate(spec["items"]):
         S.box(x, y, W, 40, rx=8)
         S.text(x + 16, y + 25, f'{it.get("n","")}  {it.get("title","")}', cls="t b")
-        S.text(x + 16 + 108, y + 25, it.get("ask", ""), cls="t")
+        S.text(x + 16 + lead, y + 25, it.get("ask", ""), cls="t")
         if it.get("tool"):
             S.text(x + W + 16, y + 25, it["tool"], cls="t seg", size=FS_SM)
         if it.get("fail"):
@@ -453,8 +460,119 @@ def _checks(spec, S):
     return S
 
 
+# ------------------------------------------------------------------ 플로우차트
+GAP_Y = 34                            # 행과 행 사이 — 화살표가 지나는 세로 길이
+GAP_X = 32                            # 같은 행의 갈래끼리 가로 간격
+DOT = 8                               # 합류점 지름
+
+
+def _fbox(it):
+    """칸 하나의 크기. 모양에 따라 다르다."""
+    rows = _lines(it.get("lines"))
+    if it.get("shape") == "dot":
+        return DOT, DOT
+    if it.get("shape") == "decision":
+        # 마름모는 가운데 높이에서만 제 폭이 나온다. 글자를 그 선에 얹으므로
+        # 폭은 글자 + 여유, 높이는 고정이다. 여러 줄은 마름모에 넣지 않는다.
+        return _tw(it.get("title", ""), FS) + 64, 52
+    return _boxw(it.get("title", ""), rows, 36, 120), (36 if not rows else 34 + LH * len(rows))
+
+
+def _flow(spec, S):
+    """플로우차트. 행을 위에서 아래로 쌓고, 행과 행 사이는 저절로 이어진다.
+
+    한 행에 칸이 여럿이면 **갈라진 것**이고, 그 다음 행이 한 칸이면 **합류**다.
+    작성자는 무엇이 무엇 다음인지만 적는다 — 선은 여기서 긋는다.
+
+    모양이 종류를 말한다 (색이 아니다).
+      start · end   양 끝이 둥근 칸    시작과 끝
+      step          네모 칸           할 일
+      decision      마름모            갈리는 자리 (갈래는 셋까지)
+      dot           작은 점           갈래가 다시 만나는 자리
+    """
+    rows = [[c if isinstance(c, dict) else {"title": c} for c in _lines(r)]
+            for r in spec["rows"]]
+    sizes = [[_fbox(c) for c in r] for r in rows]
+    roww = [sum(w for w, _ in z) + GAP_X * (len(z) - 1) for z in sizes]
+    cx = PAD + max(roww) / 2
+
+    placed, y = [], PAD
+    for i, (row, size, rw) in enumerate(zip(rows, sizes, roww)):
+        h = max(hh for _, hh in size)
+        x = cx - rw / 2
+        cells = []
+        for c, (w, hh) in zip(row, size):
+            cells.append({"it": c, "x": x, "y": y + (h - hh) / 2, "w": w, "h": hh})
+            x += w + GAP_X
+        placed.append(cells)
+        # 갈래 이름은 **다음 행 위쪽**에 앉고, 합류점은 이 행 **아래쪽**에 앉는다.
+        # 둘 다 행과 행 사이를 쓰므로 그만큼 자리를 더 준다.
+        nxt = len(rows[i + 1]) if i + 1 < len(rows) else 1
+        y += h + GAP_Y + (12 if nxt > 1 else 0) + (10 if len(cells) > 1 else 0)
+
+    def mid(c):
+        return c["x"] + c["w"] / 2
+
+    # --- 선을 먼저 긋는다. 상자가 나중에 그려져 선 끝을 덮는다.
+    for i in range(len(placed) - 1):
+        up, dn = placed[i], placed[i + 1]
+        if len(up) == 1 and len(dn) == 1:
+            a, b = up[0], dn[0]
+            S.line([(mid(a), a["y"] + a["h"]), (mid(b), b["y"])], arrow="end")
+        elif len(up) == 1:
+            a = up[0]
+            ax, ay, aw, ah = a["x"], a["y"], a["w"], a["h"]
+            acy = ay + ah / 2
+            vertex = (a["it"].get("shape") == "decision" and len(dn) <= 3
+                      and mid(dn[0]) < ax and mid(dn[-1]) > ax + aw)
+            for k, b in enumerate(dn):
+                bx = mid(b)
+                if vertex and k == 0:            # 마름모 왼쪽 꼭짓점
+                    pts = [(ax, acy), (bx, acy), (bx, b["y"])]
+                elif vertex and k == len(dn) - 1:  # 오른쪽 꼭짓점
+                    pts = [(ax + aw, acy), (bx, acy), (bx, b["y"])]
+                elif vertex:                     # 아래 꼭짓점
+                    pts = [(mid(a), ay + ah), (bx, b["y"])]
+                else:
+                    # 꼭짓점을 못 쓰면 아래 변에 자리를 나눠 붙이고,
+                    # 가로로 꺾이는 높이를 갈래마다 달리해 선끼리 겹치지 않게 한다.
+                    sx = ax + aw * (k + 1) / (len(dn) + 1)
+                    bus = ay + ah + 14 + 9 * k
+                    pts = [(sx, ay + ah), (sx, bus), (bx, bus), (bx, b["y"])]
+                S.line(pts, arrow="end")
+                if b["it"].get("label"):
+                    S.text(bx + 9, b["y"] - 9, b["it"]["label"], cls="t b", size=FS_SM)
+        else:
+            # 합류 — 갈래를 한 줄에 모아 점 하나로 만든 뒤 한 번만 내려간다.
+            b = dn[0]
+            bus = max(c["y"] + c["h"] for c in up) + 18
+            for c in up:
+                S.line([(mid(c), c["y"] + c["h"]), (mid(c), bus)])
+            S.line([(mid(up[0]), bus), (mid(up[-1]), bus)])
+            S.box(mid(b) - DOT / 2, bus - DOT / 2, DOT, DOT, tone="dot",
+                  rx=DOT / 2, shape="dot")
+            S.line([(mid(b), bus), (mid(b), b["y"])], arrow="end")
+
+    # --- 칸
+    for cells in placed:
+        for c in cells:
+            it, x, y0, w, h = c["it"], c["x"], c["y"], c["w"], c["h"]
+            shape = it.get("shape", "step")
+            rx = {"start": h / 2, "end": h / 2, "decision": 0}.get(shape, 6)
+            S.box(x, y0, w, h, tone=it.get("tone", ""), rx=rx,
+                  shape="diamond" if shape == "decision" else "")
+            rows_ = _lines(it.get("lines"))
+            ty = y0 + (h / 2 + 5 if not rows_ else 22)
+            S.text(x + w / 2, ty, it.get("title", ""), cls="t b", anchor="middle")
+            for j, r in enumerate(rows_):
+                S.text(x + w / 2, ty + LH * (j + 1), r, cls="t m",
+                       anchor="middle", size=FS_SM)
+    return S
+
+
 KINDS = {"zones": _zones, "fields": _fields, "seq": _seq, "steps": _steps,
-         "branch": _branch, "mini": _mini, "spans": _spans, "checks": _checks}
+         "branch": _branch, "mini": _mini, "spans": _spans, "checks": _checks,
+         "flow": _flow}
 
 
 def build(spec):
@@ -464,7 +582,10 @@ def build(spec):
     kind = spec.get("kind")
     if kind not in KINDS:
         raise ValueError(f"모르는 구성도 종류: {kind!r} (가능: {', '.join(KINDS)})")
-    return KINDS[kind](spec, Scene()).fit()
+    sc = KINDS[kind](spec, Scene()).fit()
+    # 이름을 따로 안 적었으면 그림이 스스로 말하는 것을 쓴다.
+    sc.title = str(spec.get("title") or spec.get("root") or "").strip()
+    return sc
 
 
 if __name__ == "__main__":

@@ -97,20 +97,33 @@ def check(stage, err):
             err(stage, f"글자가 그림 밖으로 나갔다: {tn}")
 
 
+def _doc_dirs():
+    """구성도가 든 문서가 있는 곳 — 모듈과 부록.
+
+    부록은 **수료 후에 꺼내 보는 문서**다. 여기가 검사에서 빠져 있으면 겹친
+    그림을 아무도 못 보고 넘긴다 — 부록은 과제가 없어 아무도 다시 열지 않는다.
+    부록은 랩이 완성된 상태(m11)를 전제로 쓴다 (tools/render-appendix.py 와 같다).
+    """
+    import yaml as Y
+    for d in sorted((L.ROOT / "modules").iterdir()):
+        if (d / "meta.yml").exists():
+            meta = Y.safe_load((d / "meta.yml").read_text(encoding="utf-8"))
+            yield d, meta["stage"], meta
+    apx = L.ROOT / "docs/appendix"
+    if apx.is_dir():
+        yield apx, "m11", {}
+
+
 def check_docs(err):
-    """교재 안의 작은 구성도들. 글자가 서로 겹치거나 캔버스를 벗어나지 않는지."""
+    """교재 · 부록 안의 작은 구성도들. 글자가 서로 겹치거나 캔버스를 벗어나지 않는지."""
     import re
     from jinja2 import Environment, FileSystemLoader, StrictUndefined
-    import yaml as Y
     FENCE = re.compile(r"```labdiagram\n(.*?)```", re.S)
     n = 0
-    for d in sorted((L.ROOT / "modules").iterdir()):
-        if not (d / "meta.yml").exists():
-            continue
-        meta = Y.safe_load((d / "meta.yml").read_text(encoding="utf-8"))
+    for d, stage, meta in _doc_dirs():
         env = Environment(loader=FileSystemLoader(d), undefined=StrictUndefined,
                           keep_trailing_newline=True)
-        ctx = {**L.doc_context(1, meta["stage"]), "meta": meta, "topology_full": ""}
+        ctx = {**L.doc_context(1, stage), "meta": meta, "topology_full": ""}
         for f in sorted(d.glob("*.md.j2")):
             for k, spec in enumerate(FENCE.findall(env.get_template(f.name).render(**ctx))):
                 where = f"{d.name}/{f.stem} #{k + 1}"
@@ -165,7 +178,7 @@ def main():
             print("  " + f)
         return 1
     sizes = ", ".join(f"{s} {T.layout(s)['w']}x{T.layout(s)['h']}" for s in ("m1", "m11"))
-    print(f"토폴로지 {len(L.STAGES)}단계 겹침 없음 ({sizes}) · 교재 구성도 {n}개 겹침 없음")
+    print(f"토폴로지 {len(L.STAGES)}단계 겹침 없음 ({sizes}) · 교재·부록 구성도 {n}개 겹침 없음")
     return 0
 
 
