@@ -588,9 +588,24 @@ def set_lab(username, lab_id):
         return cur.rowcount > 0
 
 
+# 사용자 한 명이 남기는 것 전부. username 을 키로 쓰는 표를 여기 모아 둔다.
+#   새 표를 만들면서 여기에 안 넣으면, 지운 사람의 흔적이 남아 **같은 이름으로
+#   다시 만들었을 때 옛 진도가 그대로 살아난다.**
+USER_OWNED = ("progress", "submissions", "attempts", "exams", "tab_seen", "login_attempts")
+
+
 def delete_user(username):
+    """사용자와 그 사람이 남긴 것 전부를 지운다.
+
+    `users` 행만 지우면 진도·제출·퀴즈 이력이 남는다. 표들이 username 을 키로
+    쓰므로, 같은 이름으로 계정을 다시 만들면 지웠다고 생각한 진도가 되살아난다.
+    한 트랜잭션으로 함께 지운다.
+    """
     with connect() as con:
         cur = con.execute("DELETE FROM users WHERE username=?", (username,))
+        if cur.rowcount:
+            for t in USER_OWNED:
+                con.execute(f"DELETE FROM {t} WHERE username=?", (username,))
         return cur.rowcount > 0
 
 
