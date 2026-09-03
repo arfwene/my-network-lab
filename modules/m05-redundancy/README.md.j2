@@ -820,15 +820,14 @@ sudo ip link set eth1.{{ vlans[10].id }} up
 > `r1` 의 `eth1.{{ vlans[10].id }}` 에 `{{ gw.vlan10 }}` 가 되살아나 있을 것입니다 —
 > 3.2 에서 손으로 지운 그 주소입니다. 부모 포트가 다시 가상 IP 를 들면 그쪽이
 > 자기 MAC 으로 ARP 에 답해 이 모듈이 만든 것이 도로 무너집니다.
->
-> ```bash
-> # r1 — 확인하고, 있으면 3.2 처럼 다시 지웁니다
-> ip -br addr show eth1.{{ vlans[10].id }}
-> sudo ip addr del {{ gw.vlan10 }}/{{ cidr.vlan10.split('/')[1] }} dev eth1.{{ vlans[10].id }}
-> ```
->
 > 선언형 설정은 이렇게 되살아납니다. 손으로 고친 것을 링크가 한 번 내려갔다
 > 올라오는 것만으로 잃는다는 것 — 실무에서 자주 겪는 자리입니다.
+
+```bash
+# r1 - linux — 확인하고, 있으면 3.2 처럼 다시 지웁니다
+ip -br addr show eth1.{{ vlans[10].id }}
+sudo ip addr del {{ gw.vlan10 }}/{{ cidr.vlan10.split('/')[1] }} dev eth1.{{ vlans[10].id }}
+```
 
 ---
 
@@ -978,15 +977,14 @@ sudo ip link set eth1.{{ vlans[10].id }} up
 > `r1` 의 `eth1.{{ vlans[10].id }}` 에 `{{ gw.vlan10 }}` 가 되살아나 있을 것입니다 —
 > 3.2 에서 손으로 지운 그 주소입니다. 부모 포트가 다시 가상 IP 를 들면 그쪽이
 > 자기 MAC 으로 ARP 에 답해 이 모듈이 만든 것이 도로 무너집니다.
->
-> ```bash
-> # r1 — 확인하고, 있으면 3.2 처럼 다시 지웁니다
-> ip -br addr show eth1.{{ vlans[10].id }}
-> sudo ip addr del {{ gw.vlan10 }}/{{ cidr.vlan10.split('/')[1] }} dev eth1.{{ vlans[10].id }}
-> ```
->
 > 선언형 설정은 이렇게 되살아납니다. 손으로 고친 것을 링크가 한 번 내려갔다
 > 올라오는 것만으로 잃는다는 것 — 실무에서 자주 겪는 자리입니다.
+
+```bash
+# r1 - linux — 확인하고, 있으면 3.2 처럼 다시 지웁니다
+ip -br addr show eth1.{{ vlans[10].id }}
+sudo ip addr del {{ gw.vlan10 }}/{{ cidr.vlan10.split('/')[1] }} dev eth1.{{ vlans[10].id }}
+```
 
 ```
 100 packets transmitted, 100 received, 0% packet loss

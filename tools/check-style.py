@@ -298,16 +298,32 @@ def measure(p):
     }
 
 
+def fenced_in_quote(mod_dir):
+    """인용구 안의 코드 블록. [(파일, 줄)] 을 돌려준다.
+
+    python-markdown 의 fenced_code 는 **인용구 안에서는 울타리를 못 알아본다.**
+    그러면 ``` 가 글자로 찍히고, `#` 로 시작한 줄이 제목이 되고, 명령 여러 줄이
+    한 문단으로 붙어 버린다 — 교육생 화면에서 그대로 깨져 보인다.
+    코드는 인용구 밖으로 뺄 것.
+    """
+    out = []
+    for f in sorted(mod_dir.glob("*.md.j2")):
+        for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith(">") and line.lstrip().lstrip(">").strip().startswith("```"):
+                out.append((f.name, i))
+    return out
+
+
 def main(only=None):
     files = sorted((ROOT / "modules").glob("*/README.md.j2"))
     if only:
         files = [f for f in files if f.parent.name.startswith(only)]
     bad = 0
-    over, leaks, backs, mds, sudos, ctxs = [], [], [], [], [], []
+    over, leaks, backs, mds, sudos, ctxs, fqs = [], [], [], [], [], [], []
     print(f"{'모듈':<6}{'퀴즈':>6}{'모양누출':>9}{'앞모듈참조':>11}{'코드속MD':>10}{'sudo빠짐':>10}"
-          f"{'라우터표시':>11}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
+          f"{'라우터표시':>11}{'인용속코드':>11}{'굵게/문장':>10}{'인용/100줄':>11}{'표%':>7}"
           f"{'작은표':>7}{'머리말없는인용':>15}{'평서형':>8}")
-    print("-" * 125)
+    print("-" * 136)
     for f in files:
         m = measure(f)
         nq = quiz_count(f.parent)
@@ -322,6 +338,10 @@ def main(only=None):
         if sd:
             marks.append("sudo빠짐")
             sudos += [(f.parent.name[:3], fn, s) for fn, s in sd]
+        fq = fenced_in_quote(f.parent)
+        if fq:
+            marks.append("인용속코드")
+            fqs += [(f.parent.name[:3], fn_, ln) for fn_, ln in fq]
         cx = ctx_missing(f.parent)
         if cx:
             marks.append("라우터표시")
@@ -343,7 +363,7 @@ def main(only=None):
         if m["bad_prefix"]: marks.append("머리말")
         col = R if marks else G
         print(f"{col}{f.parent.name[:4]:<6}{nq:>6}{len(sl):>9}{len(br):>11}{len(mc):>10}{len(sd):>10}"
-              f"{len(cx):>11}{m['bold_per_sent']:>10.2f}"
+              f"{len(cx):>11}{len(fq):>11}{m['bold_per_sent']:>10.2f}"
               f"{m['quote_per_100']:>11.1f}{m['table_pct']:>7.1f}{len(m['tiny']):>7}"
               f"{len(m['bad_prefix']):>15}{m['plain']:>8}{N}")
         if marks:
@@ -352,9 +372,9 @@ def main(only=None):
                 print(f"        {Y}머리말 없는 인용구{N}: {b[:60]}")
             for b in m["tiny"][:2]:
                 print(f"        {Y}2열 3행 이하 표{N}: {b}")
-    print("-" * 125)
+    print("-" * 136)
     print(f"기준: 퀴즈 ≤ {QUIZ_MAX}문항 · 모양누출 0 · 앞모듈참조 0 · 코드속MD 0 · sudo빠짐 0 · "
-          f"라우터표시 0 · 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · 작은표 0 · "
+          f"라우터표시 0 · 인용속코드 0 · 굵게/문장 ≤ {BOLD_MAX} · 인용/100줄 ≤ {QUOTE_MAX} · 작은표 0 · "
           f"머리말 없는 인용구 0")
     print("표% 와 평서형은 참고값이다 — 표는 찾아보는 문서면 높아도 맞고,")
     print("평서형은 아직 존댓말로 안 바꾼 모듈이 몇 문장 남았는지를 센다 (0 이 목표).")
