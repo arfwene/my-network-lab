@@ -217,6 +217,43 @@ def _rev():
 APP_REV = _rev()
 
 
+def admin_alerts(user):
+    """관리자가 **지금 해야 할 일**. 헤더 아래 띠로 모든 화면에 나온다.
+
+    설치 화면을 열어 봐야 알 수 있는 것들이 있었다. 콘솔이 대신 못 하는 일은
+    누군가 그 화면에 들어오기 전까지 아무도 모르고, 그 사이 교육생은 첫 홉에서
+    막혀 있다. 그래서 **들어오자마자 보이게** 한다.
+
+    여기 있는 것은 전부 "사람이 손대야 풀리는 것" 뿐이다. 콘솔이 스스로
+    처리하는 중인 것(setup_auto 가 다음 바퀴에 채울 것)은 넣지 않는다 —
+    할 일이 아닌 것을 할 일로 보여 주면 이 띠를 아무도 안 읽게 된다.
+
+    값은 전부 메모리이거나 이미 세고 있는 것이라 요청마다 불러도 싸다.
+    """
+    if not auth.can(user, "user.manage"):
+        return []
+    out = []
+    for step, why in (setup_auto.status().get("blocked") or {}).items():
+        out.append({"level": "warn", "href": "/admin/setup",
+                    "what": setup_auto.LABEL.get(step, step), "why": why})
+    stale = db.jump_stale_users()
+    if stale:
+        out.append({"level": "warn", "href": "/admin/setup", "what": "점프 계정",
+                    "why": f"교육생 {len(stale)}명의 키가 아직 반영되지 않았습니다 — "
+                           f"이 사람들은 ssh 첫 홉에서 막힙니다"})
+    h = pve.last() or {}
+    if h.get("level") == "error":
+        out.append({"level": "bad", "href": "/admin/settings", "what": "Proxmox 연결",
+                    "why": h.get("checks") and next(
+                        (c["detail"] for c in h["checks"] if c["status"] == "error"),
+                        "연결에 문제가 있습니다") or "연결에 문제가 있습니다"})
+    n = db.count_pending()
+    if n:
+        out.append({"level": "info", "href": "/admin/reviews", "what": "서술 검토",
+                    "why": f"{n}건이 승인을 기다립니다"})
+    return out
+
+
 def nav_ctx(user, here, lab_id=None):
     """모든 화면이 같은 헤더를 그리는 데 필요한 것.
 
@@ -230,6 +267,7 @@ def nav_ctx(user, here, lab_id=None):
         "nav_labs": auth.allowed_labs(user),
         "lab_id": lab_id,
         "pending": db.count_pending() if is_admin else 0,
+        "alerts": admin_alerts(user),
         "app_rev": APP_REV,
         "has_ssh_key": bool((user or {}).get("ssh_key")),
         "health": pve.last(),

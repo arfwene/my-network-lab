@@ -82,3 +82,16 @@
     </div>
   </details>
 </header>
+
+{# 관리자가 지금 해야 할 일. 설치 화면을 열어 봐야 알 수 있던 것들을 앞으로 꺼낸다 —
+   콘솔이 대신 못 하는 일은 아무도 모르는 채로 남고, 그 사이 교육생은 막혀 있다.
+   할 일이 없으면 아무것도 그리지 않는다. #}
+{% if alerts %}
+<div class="alerts">
+  {% for a in alerts %}
+  <a class="alert {{ a.level }}" href="{{ a.href }}">
+    <b>{{ a.what }}</b><span>{{ a.why }}</span><span class="go">→</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}

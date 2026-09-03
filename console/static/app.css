@@ -711,6 +711,19 @@ pre.code{background:var(--code-bg);padding:14px 16px;border-radius:var(--r-md);o
 }
 
 /* ---------------------------------------------------------------- 설치 화면 */
+/* 관리자 알림 띠 — 헤더 바로 아래. 할 일이 없으면 아예 안 그려진다. */
+.alerts{display:flex;flex-direction:column;gap:1px;background:var(--line)}
+.alerts .alert{display:flex;gap:10px;align-items:baseline;padding:8px 18px;
+  background:var(--panel);color:var(--body);text-decoration:none;font-size:13px}
+.alerts .alert:hover{background:var(--sunken)}
+.alerts .alert b{color:var(--ink);min-width:150px}
+.alerts .alert span{flex:1;color:var(--muted)}
+.alerts .alert .go{flex:none;color:var(--faint)}
+.alerts .alert.warn{border-left:3px solid var(--warn-line)}
+.alerts .alert.bad{border-left:3px solid var(--danger)}
+.alerts .alert.info{border-left:3px solid var(--line)}
+@media print { .alerts { display: none !important; } }
+
 /* 설치 자동 진행 상태 — 무엇이 끝났고 무엇이 막혔는가 */
 .auto-steps{width:100%;border-collapse:collapse;margin:12px 0}
 .auto-steps td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
