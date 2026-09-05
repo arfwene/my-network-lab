@@ -262,6 +262,9 @@ def build_steps(action, lab_id, stage, scenario=None, module=None):
         # 이어지는 [이 모듈 적용] 이 아직 sshd 가 안 뜬 노드에서 UNREACHABLE 로
         # 떨어진다 — 어느 노드가 걸릴지는 매번 달라서 증상이 들쭉날쭉하다.
         return [gen_tf,
+                # VM 이 들어갈 풀을 먼저 만든다. Terraform 이 pool_id 로 넣는데
+                # 풀이 없으면 그 자리에서 실패한다. 이미 있으면 확인만 한다.
+                (L.ROOT, [PY, "tools/ensure-pool.py", "--lab", str(lab_id)]),
                 (tf_env(lab_id), tf_cmd("init")),
                 (tf_env(lab_id), tf_cmd("apply", "-auto-approve")),
                 gen,

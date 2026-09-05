@@ -236,6 +236,9 @@ def admin_alerts(user):
     for step, why in (setup_auto.status().get("blocked") or {}).items():
         out.append({"level": "warn", "href": "/admin/setup",
                     "what": setup_auto.LABEL.get(step, step), "why": why})
+    for lab, why in setup_auto.acl_gap().items():
+        out.append({"level": "bad", "href": "/admin/setup",
+                    "what": f"lab{lab} 콘솔 계정 권한", "why": why})
     stale = db.jump_stale_users()
     if stale:
         out.append({"level": "warn", "href": "/admin/setup", "what": "점프 계정",
@@ -1642,7 +1645,9 @@ def _setup_manual(jump_ready=False, mgmt_ready=False):
          "where": f"Proxmox 호스트({node}) 에서 root",
          "why": ("pveum 은 Proxmox 호스트에만 있습니다 — 콘솔은 그 호스트에 셸이 없습니다. "
                  "스크립트는 이미 dist/console-access.sh 에 만들어져 있습니다(랩 수만큼). "
-                 "옮겨서 한 번 실행하면 끝이고, 교육생이 늘어도 다시 할 필요가 없습니다. "
+                 "옮겨서 한 번 실행하면 끝입니다. 권한을 랩 풀에 걸어 두므로 "
+                 "교육생이 늘어도, 랩을 지웠다 다시 만들어도 그대로 남습니다 — "
+                 "랩 수를 늘릴 때만 다시 실행합니다. "
                  "비밀번호는 교육생이 [접속 키] 화면에서 직접 봅니다."),
          "cmd": (f"scp {root}/dist/console-access.sh root@{node}:/tmp/\n"
                  f"ssh root@{node} /tmp/console-access.sh")},

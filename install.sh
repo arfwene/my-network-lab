@@ -309,7 +309,8 @@ cat <<EOF
   4. dist/console-access.sh 를 Proxmox 호스트로 옮겨 root 로 한 번 실행한다.
        scp $ROOT/dist/console-access.sh root@<노드>:/tmp/
        ssh root@<노드> /tmp/console-access.sh
-     랩당 1계정이라 교육생이 늘어도 다시 할 필요가 없다.
+     랩당 1계정이고 권한은 랩 풀에 걸린다 — 교육생이 늘어도, 랩을 지웠다
+     다시 만들어도 그대로 남는다. 랩 수를 늘릴 때만 다시 실행한다.
 
   5. 초록이 되면 랩 화면에서 [랩 생성]. make 를 칠 일은 없다.
 

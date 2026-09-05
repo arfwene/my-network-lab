@@ -50,11 +50,13 @@ NODE=$(hostname -s)
 #   VM.Config.Cloudinit  관리망 주소·SSH 키 주입
 #   VM.Config.CDROM   cloud-init 드라이브가 ide2 에 붙는다. Proxmox 는 그걸
 #                     CDROM 으로 친다 — 없으면 VM 13대가 전부 403 으로 실패한다
+#   Pool.Allocate     랩마다 풀을 하나 두고 그 안에 VM 을 넣는다. 교육생 콘솔
+#                     계정 권한이 그 풀에 걸려 있어, 랩을 지웠다 만들어도 남는다
 PRIVS="VM.Allocate,VM.Clone,VM.Config.CPU,VM.Config.Disk,VM.Config.Memory,\
 VM.Config.Network,VM.Config.Options,VM.Config.Cloudinit,VM.Config.CDROM,\
 VM.Monitor,VM.PowerMgmt,\
 VM.Audit,Datastore.Allocate,Datastore.AllocateSpace,Datastore.Audit,\
-Sys.Audit,Sys.Console,Sys.Modify,SDN.Use"
+Sys.Audit,Sys.Console,Sys.Modify,SDN.Use,Pool.Allocate"
 
 # ---------------------------------------------------------------- 확인 함수
 has_priv() {   # has_priv <경로> <권한>
@@ -70,7 +72,8 @@ verify() {
               "/vms|VM.Allocate|VM 생성" \
               "/vms|VM.Clone|템플릿 복제" \
               "/vms|VM.Config.Cloudinit|관리망·SSH 키 주입" \
-              "/vms|VM.Config.CDROM|cloud-init 드라이브(ide2)"; do
+              "/vms|VM.Config.CDROM|cloud-init 드라이브(ide2)" \
+              "/pool|Pool.Allocate|랩 풀 생성·VM 편입"; do
     IFS='|' read -r path priv why <<< "$pair"
     if has_priv "$path" "$priv"; then
       ok "$path  $priv  ($why)"

@@ -25,6 +25,12 @@ resource "proxmox_virtual_environment_vm" "node" {
   description = "[lab${var.lab_id}] ${each.value.role} — ${each.value.desc}"
   tags        = ["my-network-lab", "lab${var.lab_id}", each.value.role]
 
+  # 교육생 콘솔 계정 권한은 이 풀에 걸려 있다 (dist/console-access.sh).
+  # VMID 에 걸면 랩을 지울 때 권한도 같이 지워져, 다시 만든 뒤 VM 이 안 보인다.
+  # 풀은 랩을 지워도 남으므로 여기에 넣기만 하면 권한이 따라온다.
+  # 풀 자체는 배포 직전에 tools/ensure-pool.py 가 만들어 둔다.
+  pool_id = "lab${var.lab_id}"
+
   clone {
     vm_id = var.template_vmid
     full  = false # linked clone — 디스크 사용량을 크게 줄인다

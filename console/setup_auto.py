@@ -13,6 +13,7 @@
   ② 관리망 브리지  Proxmox 에 없으면 만든다
   ③ 관리망 연결    이 서버를 그 브리지에 붙인다
   ④ 점프 계정     아직 반영되지 않은 키가 있으면 반영한다
+  ⑤ 콘솔 계정 권한  교육생이 자기 랩 VM 을 볼 수 있는지 **재기만** 한다
 
 무엇을 **안** 하는가
   · Proxmox 호스트에 **적용되지 않은 네트워크 변경**이 남아 있으면 ② 를 건너뛴다.
@@ -21,6 +22,10 @@
     이건 콘솔이 대신 판단할 일이 아니다. 정리한 뒤 누르라고 버튼만 남긴다.
   · Proxmox 연결이 확인되기 전에는 ②③ 을 하지 않는다. 토큰이 아직 없다.
   · root 헬퍼가 없으면 ③④ 를 하지 않는다. 눌러 봐야 비밀번호를 묻다가 실패한다.
+  · ⑤ 는 고치지 않는다. 풀에 권한을 거는 것은 root 만 할 수 있다 —
+    dist/console-access.sh 가 랩을 늘릴 때 한 번 하는 일이다. 여기서는 빠진 것을
+    찾아 관리자 띠에 올린다. 로그인은 되고 화면만 비어 있는 증상이라, 알려 주지
+    않으면 교육생이 신고할 때까지 아무도 모른다.
 
 막힌 것은 감추지 않는다. 왜 못 했는지를 [설치] 화면이 그대로 보여 주고,
 그 단계에만 버튼이 남는다. "자동으로 한다"고 말해 놓고 조용히 실패하는 것이
@@ -35,6 +40,7 @@ import db
 import jobs
 import labdesign as L
 import pve
+import state
 
 FIRST = 10.0            # 콘솔이 뜨고 이만큼 뒤에 첫 바퀴 (기동 중에는 건드리지 않는다)
 EVERY = 300.0           # 그 뒤 주기
@@ -46,6 +52,10 @@ LABEL = {"access": "교육생 접속 파일", "mgmt-bridge": "관리망 브리�
 # 막힌 단계에 남길 버튼. 없는 단계는 손으로도 할 것이 없다는 뜻이다.
 BUTTON = {"access": "setup-access", "mgmt-bridge": "setup-mgmt",
           "mgmt-net": "setup-mgmt-net", "jump": "setup-jump-apply"}
+
+# 교육생 콘솔 계정 권한이 빠진 랩. 콘솔이 고칠 수 없어(root 만 가능) 알리기만 한다.
+#   랩 -> 왜. 화면마다 Proxmox 를 두드릴 수는 없으니 여기서 재어 두고 띠가 읽어 간다.
+_acl_gap: dict = {}
 
 _done: dict = {}        # 단계 -> 끝낸 시각
 _blocked: dict = {}     # 단계 -> 왜 못 했는가
@@ -170,6 +180,7 @@ async def once(runner):
             await _step_mgmt(runner)
 
         await _step_jump(runner)
+        await _step_console_acl()
     finally:
         _running = False
 
@@ -232,6 +243,34 @@ async def _step_jump(runner):
     started = await asyncio.to_thread(db.now_utc)
     if await _run(runner, "jump", "setup-jump-apply"):
         await asyncio.to_thread(db.mark_jump_applied, started)
+
+
+async def _step_console_acl():
+    """교육생 콘솔 계정이 자기 랩 VM 을 볼 수 있는가.
+
+    권한은 랩 풀(`/pool/labN`)에 걸려 있고 그것을 거는 일은 root 만 할 수 있다 —
+    콘솔은 여기서 **고치지 못한다.** 그래서 재기만 하고, 빠진 랩은 관리자 띠에 올린다.
+    조용히 두면 교육생이 신고할 때까지 아무도 모른다. 로그인은 되고 화면만 비어 있어서
+    "Proxmox 가 이상하다" 로 잘못 짚기 쉬운 증상이다.
+    """
+    if not pve.confirmed():
+        return
+    gap = {}
+    lo, _hi = L.SITE["labs"]["id_range"]
+    for lab in range(lo, L.SITE["labs"]["default_count"] + 1):
+        if not await asyncio.to_thread(state.provisioned, lab):
+            continue
+        ok = await asyncio.to_thread(pve.console_acl, lab)
+        if ok is False:
+            gap[lab] = (f"lab{lab} 교육생이 Proxmox 콘솔에 로그인해도 "
+                        "VM 이 한 대도 보이지 않습니다")
+    _acl_gap.clear()
+    _acl_gap.update(gap)
+
+
+def acl_gap():
+    """권한이 빠진 랩. {랩: 사유}"""
+    return dict(_acl_gap)
 
 
 async def worker(runner):

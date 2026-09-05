@@ -219,6 +219,8 @@ scp dist/console-access.sh root@<proxmox>:/tmp/ && ssh root@<proxmox> /tmp/conso
 ```
 
 - **랩당 1계정**이다 (1인 1계정 아님). 교육생이 늘어도 다시 하지 않고, **랩을 늘릴 때만** 한다.
+- 권한은 VMID 가 아니라 **랩 풀(`/pool/lab<N>`)** 에 건다. VMID 에 걸면 랩을 지울 때 권한도 함께 지워져, 다시 만든 뒤 교육생이 로그인은 되는데 VM 이 한 대도 안 보인다. 풀은 랩을 지워도 남는다.
+- VM 을 풀에 넣는 일은 Terraform 이 한다(`pool_id`). 풀 자체는 배포 직전에 콘솔이 만든다(`tools/ensure-pool.py`).
 - 계정 `lab<N>-console@pve` 는 **그 랩 VM 14대의 콘솔만** 열린다.
 - 로그인 화면에는 **`lab<N>-console` 만** 넣고 Realm 에서 `Proxmox VE authentication server` 를 고른다. `@pve` 를 같이 넣으면 `...@pve@pve` 가 되어 **401** 이다.
 - 비밀번호는 `var/console.db` 에 있고 교육생 `[접속 키] → 5. 콘솔` 에 자기 랩 것만 표시된다.

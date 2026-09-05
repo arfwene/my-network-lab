@@ -22,6 +22,7 @@ import ssl
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -313,6 +314,76 @@ def _api(cfg, path, envelope=False):
     with urllib.request.urlopen(req, timeout=TIMEOUT, context=_ctx(cfg)) as r:
         body = json.loads(r.read().decode("utf-8", "replace"))
     return body if envelope else body.get("data")
+
+
+def _api_write(cfg, method, path, **params):
+    """POST/PUT/DELETE. 실패는 예외로 올린다.
+
+    읽기와 굳이 나눠 둔다 — 이 파일에서 Proxmox 를 **바꾸는** 자리가 어디인지
+    한눈에 보여야 한다. 지금은 랩 풀을 만드는 데만 쓴다.
+    """
+    body = urllib.parse.urlencode(params).encode() if params else None
+    req = urllib.request.Request(endpoint(cfg).rstrip("/") + path, data=body,
+                                 method=method,
+                                 headers={"User-Agent": "my-network-lab-console"})
+    if cfg["token_id"] and cfg["token_secret"]:
+        req.add_header("Authorization",
+                       f"PVEAPIToken={cfg['token_id']}={cfg['token_secret']}")
+    with urllib.request.urlopen(req, timeout=TIMEOUT, context=_ctx(cfg)) as r:
+        return json.loads(r.read().decode("utf-8", "replace")).get("data")
+
+
+# ============================================================ 랩 풀
+#  교육생 콘솔 계정이 자기 랩 VM 을 볼 수 있게 하는 권한을 **어디에** 거는가.
+#
+#  VMID 에 걸면(`/vms/900101`) Proxmox 가 VM 을 지울 때 그 권한까지 함께 지운다.
+#  그래서 랩을 지웠다 다시 만들면 VM 은 같은 번호로 돌아오는데 권한만 안 돌아온다
+#  — 교육생은 로그인은 되고 화면은 텅 비어 있다. 원인을 짐작하기 어렵다.
+#
+#  풀은 VM 이 아니라서 랩을 지워도 남는다. 권한을 `/pool/lab1` 에 한 번 걸어 두면
+#  그 뒤로는 Terraform 이 VM 을 풀에 넣기만 하면 된다.
+#    · 풀 만들기·VM 편입  → 이 콘솔이 한다 (Pool.Allocate)
+#    · 풀에 권한 걸기      → root 만 할 수 있다. dist/console-access.sh 가 한 번 한다
+def pool_id(lab_id):
+    return f"lab{int(lab_id)}"
+
+
+def ensure_pool(lab_id, cfg=None):
+    """이 랩의 풀이 있는지 보고 없으면 만든다. (만들었는가, 풀 이름)"""
+    cfg = cfg or config()
+    pid = pool_id(lab_id)
+    pools = _api(cfg, "/api2/json/pools") or []
+    if any(p.get("poolid") == pid for p in pools):
+        return False, pid
+    _api_write(cfg, "POST", "/api2/json/pools", poolid=pid)
+    return True, pid
+
+
+def console_acl(lab_id, cfg=None):
+    """이 랩 콘솔 계정이 자기 VM 을 볼 권한을 갖고 있는가.
+
+    True 있다 · False 없다 · None 물어보지 못했다. 셋을 구분한다 —
+    "권한이 없다" 와 "확인 못 했다" 를 같이 다루면 Proxmox 가 잠깐 안 될 때마다
+    관리자에게 거짓 경보가 간다.
+    """
+    import db as _db                                       # noqa: PLC0415
+    try:
+        cfg = cfg or config()
+        uid, _pw = _db.lab_pve_account(lab_id, create=False)
+        acl = _api(cfg, "/api2/json/access/acl") or []
+    except Exception:                                      # noqa: BLE001
+        return None
+    mine = {e.get("path") for e in acl
+            if e.get("ugid") == uid and e.get("type") == "user"}
+    if f"/pool/{pool_id(lab_id)}" in mine:
+        return True
+    # 풀로 옮기기 전에 만든 랩은 VMID 마다 걸려 있다. 그것도 유효하다.
+    return all(f"/vms/{v}" in mine for v in range(*_vmid_span(lab_id)))
+
+
+def _vmid_span(lab_id):
+    lo, hi = L.vmid_range(lab_id)
+    return lo, hi + 1
 
 
 def check(cfg=None):
@@ -664,6 +735,10 @@ REQUIRED_PRIVS = [
     ("/vms",          "VM.Config.Options",       "부팅 순서·게스트 에이전트"),
     ("/vms",          "VM.PowerMgmt",            "VM 기동·정지"),
     ("/vms",          "VM.Audit",                "VM 상태 조회"),
+    # 랩마다 PVE 풀을 하나 두고 교육생 콘솔 계정 권한을 거기에 건다.
+    # VMID 에 직접 걸면 랩을 지울 때 권한도 함께 지워진다 — 다시 만든 뒤
+    # 교육생이 로그인은 되는데 VM 이 한 대도 안 보인다.
+    ("/pool",         "Pool.Allocate",           "랩 풀 생성·VM 편입"),
 ]
 
 
